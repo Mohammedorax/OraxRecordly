@@ -1,0 +1,406 @@
+#include "mf_encoder.h"
+#include <mfapi.h>
+#include <mferror.h>
+#include <codecapi.h>
+#include <algorithm>
+#include <cstdint>
+#include <iostream>
+#include <cstring>
+#include "../../common/bt709_video.h"
+
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "mf.lib")
+#pragma comment(lib, "mfuuid.lib")
+
+// Windows Graphics Capture stops delivering frames while the captured content is
+// static. To keep the MP4 timeline continuous the encoder repeats the last frame
+// across such a gap, but re-encoding every missing 1/fps interval costs roughly
+// as much as the interval itself (measured 9-40 ms per duplicated 2160x1440 NV12
+// frame against the 16.7 ms interval it represents), so the work - and the stop
+// latency - grew with the idle span: measured on the packaged helper, a 5 s idle
+// took 12.5 s to stop, a 20 s idle 37.5 s and a 40 s idle 20.8 s (it got slower
+// than the recording). The app's bounded stop then killed the helper before it
+// wrote the `moov` atom, which lost the recording.
+//
+// At most this many duplicate frames are emitted for a single gap. The remaining
+// span is closed by moving the timeline forward instead of encoding it: the last
+// written frame keeps its sample and the container's next sample sits one frame
+// interval before the target, so timestamps stay monotonic, the frozen frame is
+// shown for the skipped span and the file's duration still matches the recording.
+// 12 frames is ~0.2 s of duplicates at 60 fps (~0.5 s of encoder work at worst).
+static constexpr int64_t kMaxBackfillFrames = 12;
+
+static UINT32 calculateScreenRecordingBitrate(int width, int height, int fps) {
+    constexpr uint64_t kFourKPixels = 3840ULL * 2160ULL;
+    constexpr uint64_t kQhdPixels = 2560ULL * 1440ULL;
+    constexpr UINT32 kBitrate4K = 45000000;
+    constexpr UINT32 kBitrateQhd = 28000000;
+    constexpr UINT32 kBitrateBase = 18000000;
+    constexpr double kHighFrameRateBoost = 1.35;
+
+    const uint64_t pixels =
+        static_cast<uint64_t>((std::max)(width, 1)) *
+        static_cast<uint64_t>((std::max)(height, 1));
+    const UINT32 baseBitrate =
+        pixels >= kFourKPixels ? kBitrate4K :
+        pixels >= kQhdPixels ? kBitrateQhd :
+        kBitrateBase;
+    const double boost = fps >= 60 ? kHighFrameRateBoost : 1.0;
+    return static_cast<UINT32>(static_cast<double>(baseBitrate) * boost + 0.5);
+}
+
+MFEncoder::MFEncoder() {}
+
+MFEncoder::~MFEncoder() {
+    finalize();
+}
+
+bool MFEncoder::initialize(const std::wstring& outputPath, int width, int height, int fps,
+                           ID3D11Device* device, ID3D11DeviceContext* context) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (initialized_) return false;
+
+    if (fps <= 0) {
+        std::cerr << "ERROR: Encoder fps must be positive, got " << fps << std::endl;
+        return false;
+    }
+
+    if (width % 2 != 0 || height % 2 != 0) {
+        std::cerr << "ERROR: Encoder dimensions must be even, got " << width << "x" << height << std::endl;
+        return false;
+    }
+
+    width_ = width;
+    height_ = height;
+    fps_ = fps;
+    device_ = device;
+    context_ = context;
+
+    HRESULT hr = MFStartup(MF_VERSION);
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: MFStartup failed: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    // Output media type (H.264)
+    ComPtr<IMFMediaType> outputType;
+    hr = MFCreateMediaType(&outputType);
+    if (FAILED(hr)) return false;
+
+    outputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+    outputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
+    const UINT32 videoBitrate = calculateScreenRecordingBitrate(width_, height_, fps_);
+    outputType->SetUINT32(MF_MT_AVG_BITRATE, videoBitrate);
+    MFSetAttributeSize(outputType.Get(), MF_MT_FRAME_SIZE, width_, height_);
+    MFSetAttributeRatio(outputType.Get(), MF_MT_FRAME_RATE, fps_, 1);
+    MFSetAttributeRatio(outputType.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+    outputType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+    hr = setBt709LimitedVideoAttributes(outputType.Get());
+    if (FAILED(hr)) return false;
+    std::cerr << "Encoder bitrate: " << videoBitrate << " bps for "
+              << width_ << "x" << height_ << "@" << fps_ << "fps" << std::endl;
+
+    // Input media type (NV12)
+    ComPtr<IMFMediaType> inputType;
+    hr = MFCreateMediaType(&inputType);
+    if (FAILED(hr)) return false;
+
+    inputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+    inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
+    MFSetAttributeSize(inputType.Get(), MF_MT_FRAME_SIZE, width_, height_);
+    MFSetAttributeRatio(inputType.Get(), MF_MT_FRAME_RATE, fps_, 1);
+    MFSetAttributeRatio(inputType.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+    inputType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+    hr = setBt709LimitedVideoAttributes(inputType.Get());
+    if (FAILED(hr)) return false;
+
+    // Create SinkWriter with MPEG4 container
+    ComPtr<IMFAttributes> writerAttrs;
+    hr = MFCreateAttributes(&writerAttrs, 1);
+    if (FAILED(hr)) return false;
+
+    writerAttrs->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
+
+    hr = MFCreateSinkWriterFromURL(outputPath.c_str(), nullptr, writerAttrs.Get(), &sinkWriter_);
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: MFCreateSinkWriterFromURL failed: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    hr = sinkWriter_->AddStream(outputType.Get(), &streamIndex_);
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: AddStream failed: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    hr = sinkWriter_->SetInputMediaType(streamIndex_, inputType.Get(), nullptr);
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: SetInputMediaType failed: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    hr = sinkWriter_->BeginWriting();
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: BeginWriting failed: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    // Pre-allocate staging texture
+    D3D11_TEXTURE2D_DESC stagingDesc = {};
+    stagingDesc.Width = width_;
+    stagingDesc.Height = height_;
+    stagingDesc.MipLevels = 1;
+    stagingDesc.ArraySize = 1;
+    stagingDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    stagingDesc.SampleDesc.Count = 1;
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+    hr = device_->CreateTexture2D(&stagingDesc, nullptr, &stagingTexture_);
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: Failed to create staging texture: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    // WGC window captures can change frame size while recording. Keep the muxer
+    // output dimensions stable by compositing resized frames into this fixed
+    // BGRA surface before CPU readback.
+    D3D11_TEXTURE2D_DESC compositeDesc = {};
+    compositeDesc.Width = width_;
+    compositeDesc.Height = height_;
+    compositeDesc.MipLevels = 1;
+    compositeDesc.ArraySize = 1;
+    compositeDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    compositeDesc.SampleDesc.Count = 1;
+    compositeDesc.Usage = D3D11_USAGE_DEFAULT;
+    compositeDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+    hr = device_->CreateTexture2D(&compositeDesc, nullptr, &resizeCompositeTexture_);
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: Failed to create resize composite texture: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    hr = device_->CreateRenderTargetView(resizeCompositeTexture_.Get(), nullptr, &resizeCompositeView_);
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: Failed to create resize composite view: 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    // Pre-allocate NV12 buffer
+    const int ySize = width_ * height_;
+    const int uvSize = (width_ / 2) * (height_ / 2) * 2;
+    nv12Buffer_.resize(ySize + uvSize);
+    lastFrameBuffer_.clear();
+    firstSampleTimeHns_ = -1;
+    lastSampleTimeHns_ = -1;
+
+    initialized_ = true;
+    return true;
+}
+
+bool MFEncoder::writeFrame(ID3D11Texture2D* texture, int64_t timestampHns) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!initialized_ || !sinkWriter_) return false;
+
+    D3D11_TEXTURE2D_DESC sourceDesc = {};
+    texture->GetDesc(&sourceDesc);
+
+    if (sourceDesc.Width == static_cast<UINT>(width_) &&
+        sourceDesc.Height == static_cast<UINT>(height_)) {
+        context_->CopyResource(stagingTexture_.Get(), texture);
+    } else {
+        if (!resizeCompositeTexture_ || !resizeCompositeView_) return false;
+
+        const FLOAT clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        context_->ClearRenderTargetView(resizeCompositeView_.Get(), clearColor);
+
+        D3D11_BOX sourceBox = {};
+        sourceBox.left = 0;
+        sourceBox.top = 0;
+        sourceBox.front = 0;
+        sourceBox.right = (std::min)(sourceDesc.Width, static_cast<UINT>(width_));
+        sourceBox.bottom = (std::min)(sourceDesc.Height, static_cast<UINT>(height_));
+        sourceBox.back = 1;
+
+        if (sourceBox.right == 0 || sourceBox.bottom == 0) return false;
+
+        context_->CopySubresourceRegion(
+            resizeCompositeTexture_.Get(),
+            0,
+            0,
+            0,
+            0,
+            texture,
+            0,
+            &sourceBox);
+        context_->CopyResource(stagingTexture_.Get(), resizeCompositeTexture_.Get());
+    }
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    HRESULT hr = context_->Map(stagingTexture_.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(hr)) return false;
+
+    // Convert full-range desktop BGRA to explicitly tagged BT.709 video-range NV12.
+    const uint8_t* bgra = static_cast<const uint8_t*>(mapped.pData);
+    const int bgraPitch = static_cast<int>(mapped.RowPitch);
+    convertBgraToBt709LimitedNv12(bgra, bgraPitch, width_, height_, nv12Buffer_);
+
+    context_->Unmap(stagingTexture_.Get(), 0);
+
+    // WGC may stop delivering frames while the scene is static; keep the MP4
+    // timeline continuous by repeating the previous frame before writing a new one.
+    int64_t normalizedTimestampHns = 0;
+    normalizeWriteTimestampHnsLocked(timestampHns, normalizedTimestampHns);
+
+    if (!lastFrameBuffer_.empty() && !extendLastFrameToLocked(normalizedTimestampHns, kMaxBackfillFrames)) {
+        return false;
+    }
+
+    bool wroteSample = writeNv12SampleLocked(nv12Buffer_, normalizedTimestampHns);
+    if (wroteSample) {
+        lastFrameBuffer_ = nv12Buffer_;
+        lastSampleTimeHns_ = normalizedTimestampHns;
+    }
+    return wroteSample;
+}
+
+bool MFEncoder::extendLastFrameTo(int64_t timestampHns) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    int64_t normalizedTimestampHns = 0;
+    if (!normalizeTimelineTimestampHnsLocked(timestampHns, normalizedTimestampHns)) {
+        return false;
+    }
+
+    return extendLastFrameToLocked(normalizedTimestampHns, kMaxBackfillFrames);
+}
+
+void MFEncoder::normalizeWriteTimestampHnsLocked(int64_t timestampHns, int64_t& normalizedTimestampHns) {
+    if (firstSampleTimeHns_ < 0) {
+        firstSampleTimeHns_ = timestampHns < 0 ? 0 : timestampHns;
+    }
+
+    normalizedTimestampHns = timestampHns - firstSampleTimeHns_;
+    if (normalizedTimestampHns < 0) {
+        normalizedTimestampHns = 0;
+    }
+}
+
+bool MFEncoder::normalizeTimelineTimestampHnsLocked(
+    int64_t timestampHns,
+    int64_t& normalizedTimestampHns
+) const {
+    if (firstSampleTimeHns_ < 0) return false;
+
+    normalizedTimestampHns = timestampHns - firstSampleTimeHns_;
+    if (normalizedTimestampHns < 0) {
+        normalizedTimestampHns = 0;
+    }
+    return true;
+}
+
+bool MFEncoder::extendLastFrameToLocked(int64_t timestampHns, int64_t maxDuplicateFrames) {
+    if (!initialized_ || !sinkWriter_) return false;
+    if (lastFrameBuffer_.empty()) return false;
+    if (lastSampleTimeHns_ < 0) return false;
+
+    if (fps_ <= 0) return false;
+    const int64_t frameDurationHns = 10000000LL / fps_;
+    if (frameDurationHns <= 0) return false;
+    if (timestampHns <= lastSampleTimeHns_ + frameDurationHns) {
+        return true;
+    }
+
+    int64_t nextSampleTimeHns = lastSampleTimeHns_ + frameDurationHns;
+    int64_t duplicateFrames = 0;
+    while (nextSampleTimeHns + frameDurationHns <= timestampHns) {
+        if (maxDuplicateFrames >= 0 && duplicateFrames >= maxDuplicateFrames) {
+            // Long idle span: stop re-encoding the gap frame by frame and jump to
+            // the last frame interval that still fits before the target. The
+            // sample written there ends exactly at `timestampHns`, so the
+            // container timeline ends where the recording ended even though the
+            // skipped interval was never encoded. The sink writer keeps the
+            // timestamps monotonic and the previous frame stays on screen for the
+            // skipped span (the jump is preserved as the sample's duration).
+            nextSampleTimeHns = timestampHns - frameDurationHns;
+            if (nextSampleTimeHns <= lastSampleTimeHns_) {
+                return true;
+            }
+        }
+
+        if (!writeNv12SampleLocked(lastFrameBuffer_, nextSampleTimeHns)) {
+            return false;
+        }
+        lastSampleTimeHns_ = nextSampleTimeHns;
+        nextSampleTimeHns += frameDurationHns;
+        ++duplicateFrames;
+    }
+
+    return true;
+}
+
+bool MFEncoder::writeNv12SampleLocked(const std::vector<uint8_t>& frameBuffer, int64_t timestampHns) {
+    if (frameBuffer.empty()) return false;
+    if (fps_ <= 0) return false;
+
+    const int64_t frameDurationHns = 10000000LL / fps_;
+    if (frameDurationHns <= 0) return false;
+
+    // Create MF sample
+    DWORD bufferSize = static_cast<DWORD>(frameBuffer.size());
+    ComPtr<IMFMediaBuffer> buffer;
+    HRESULT hr = MFCreateMemoryBuffer(bufferSize, &buffer);
+    if (FAILED(hr)) return false;
+
+    BYTE* bufferData = nullptr;
+    hr = buffer->Lock(&bufferData, nullptr, nullptr);
+    if (FAILED(hr)) return false;
+
+    std::memcpy(bufferData, frameBuffer.data(), bufferSize);
+    buffer->Unlock();
+    buffer->SetCurrentLength(bufferSize);
+
+    ComPtr<IMFSample> sample;
+    hr = MFCreateSample(&sample);
+    if (FAILED(hr)) return false;
+
+    sample->AddBuffer(buffer.Get());
+    sample->SetSampleTime(timestampHns);
+    sample->SetSampleDuration(frameDurationHns);
+
+    hr = sinkWriter_->WriteSample(streamIndex_, sample.Get());
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: WriteSample failed: 0x" << std::hex << hr << std::endl;
+    }
+    return SUCCEEDED(hr);
+}
+
+bool MFEncoder::finalize() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!initialized_) return false;
+    if (!sinkWriter_) return false;
+
+    HRESULT hr = sinkWriter_->Finalize();
+    if (FAILED(hr)) {
+        std::cerr << "ERROR: SinkWriter Finalize failed: 0x" << std::hex << hr << std::endl;
+    }
+
+    initialized_ = false;
+    sinkWriter_.Reset();
+    stagingTexture_.Reset();
+    resizeCompositeView_.Reset();
+    resizeCompositeTexture_.Reset();
+    nv12Buffer_.clear();
+    lastFrameBuffer_.clear();
+    nv12Buffer_.shrink_to_fit();
+    lastFrameBuffer_.shrink_to_fit();
+    firstSampleTimeHns_ = -1;
+    lastSampleTimeHns_ = -1;
+    MFShutdown();
+    return SUCCEEDED(hr);
+}

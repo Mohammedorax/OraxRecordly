@@ -1,0 +1,63 @@
+{
+	"app": {
+		"name": "OraxRecordly",
+		"editorTitle": "محرر OraxRecordly",
+		"subtitle": "تسجيل الشاشة والتحرير",
+		"language": "اللغة",
+		"manageRecordings": "فتح مجلد التسجيلات",
+		"discord": "الانضمام إلى Discord"
+	},
+	"actions": {
+		"cancel": "إلغاء",
+		"close": "إغلاق",
+		"export": "تصدير",
+		"load": "تحميل",
+		"redo": "إعادة",
+		"reset": "إعادة تعيين",
+		"save": "حفظ",
+		"undo": "تراجع",
+		"delete": "حذف",
+		"done": "تم",
+		"rename": "إعادة تسمية",
+		"retry": "إعادة المحاولة"
+	},
+	"errors": {
+		"invalidFileType": "نوع الملف غير صالح",
+		"failedToUploadImage": "فشل رفع الصورة",
+		"fileReadError": "حدث خطأ أثناء قراءة الملف."
+	},
+	"announcements": {
+		"carousel": "الإعلانات",
+		"dismiss": "تجاهل",
+		"next": "الإعلان التالي",
+		"openFailed": "فشل فتح الرابط.",
+		"previous": "الإعلان السابق",
+		"show": "إظهار الإعلان"
+	},
+	"audioLevelMeter": {
+		"label": "مستوى الميكروفون"
+	},
+	"colorPicker": {
+		"clearBackground": "مسح الخلفية",
+		"colors": "الألوان",
+		"hexColor": "لون سداسي عشري",
+		"none": "بلا",
+		"presetColors": "ألوان معدَّة مسبقًا"
+	},
+	"dropdownMenu": {
+		"action": "إجراء",
+		"actions": "الإجراءات"
+	},
+	"popover": {
+		"options": "الخيارات"
+	},
+	"select": {
+		"select": "اختيار",
+		"selectOption": "اختر خيارًا"
+	},
+	"toast": {
+		"copy": "نسخ",
+		"copyErrorFailed": "تعذَّر نسخ الخطأ",
+		"errorCopied": "تم نسخ الخطأ"
+	}
+}

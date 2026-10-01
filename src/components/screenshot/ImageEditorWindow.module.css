@@ -1,0 +1,390 @@
+/*
+ * Lightweight image editor window.
+ *
+ * The window chrome follows the LaunchWindow conventions: the header is the
+ * drag handle (`-webkit-app-region: drag`) and every interactive control inside
+ * it opts back out via `no-drag`. Colors come from HeroUI's theme tokens.
+ */
+
+.window {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100vw;
+	height: 100vh;
+	overflow: hidden;
+	background: var(--background);
+	color: var(--foreground);
+}
+
+.shell {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	height: 44px;
+	flex: 0 0 44px;
+	padding: 0 10px;
+	border-bottom: 1px solid var(--separator);
+	background: var(--surface);
+	-webkit-app-region: drag;
+	user-select: none;
+}
+
+.headerTitle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.appName {
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.fileName {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--foreground);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 32vw;
+	direction: ltr;
+}
+
+.dirtyDot {
+	width: 7px;
+	height: 7px;
+	border-radius: 999px;
+	background: var(--accent);
+	flex: 0 0 auto;
+}
+
+.headerControls {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	-webkit-app-region: no-drag;
+}
+
+.headerDivider {
+	width: 1px;
+	height: 18px;
+	margin: 0 6px;
+	background: var(--separator);
+	flex: 0 0 auto;
+}
+
+.zoomValue {
+	min-width: 52px;
+	height: 28px;
+	padding: 0 6px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--foreground);
+	font-family: inherit;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+}
+
+.zoomValue:hover {
+	background: var(--default);
+}
+
+/* --------------------------------------------------------------- toolbar */
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--separator);
+	background: var(--background);
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: thin;
+}
+
+.toolbarSpacer {
+	flex: 1 1 auto;
+	min-width: 8px;
+}
+
+.toolButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 10px;
+	border: 1px solid transparent;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--muted);
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease;
+}
+
+.toolButton svg {
+	width: 16px;
+	height: 16px;
+	flex: 0 0 auto;
+}
+
+.toolButton:hover {
+	background: var(--default);
+	color: var(--foreground);
+}
+
+.toolButtonActive,
+.toolButtonActive:hover {
+	background: var(--accent);
+	color: var(--accent-foreground);
+}
+
+.cropActions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+/*
+ * Explains the fill used by the delete-region tool on a document that cannot
+ * store an alpha channel (the JPEG branch of the save path).
+ */
+.regionNote {
+	max-width: 38ch;
+	color: var(--muted);
+	font-size: 11px;
+	line-height: 1.3;
+}
+
+/* ---------------------------------------------------------- style controls */
+
+.styleOptions {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex: 0 0 auto;
+	padding: 0 4px;
+}
+
+.swatches {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.swatch {
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 1px solid color-mix(in oklab, var(--foreground) 25%, transparent);
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.swatchActive {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.customColor {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.customColor:hover {
+	background: var(--default);
+	color: var(--foreground);
+}
+
+.customColor input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	width: 100%;
+	height: 100%;
+	border: 0;
+	padding: 0;
+	cursor: pointer;
+}
+
+.slider {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 11px;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.slider input[type="range"] {
+	width: 96px;
+	accent-color: var(--accent);
+}
+
+.sliderValue {
+	min-width: 18px;
+	font-variant-numeric: tabular-nums;
+	color: var(--foreground);
+	text-align: center;
+}
+
+/* ----------------------------------------------------------------- stage */
+
+.stage {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	touch-action: none;
+	/* Checkerboard so transparent pixels in the screenshot stay visible. */
+	background-color: #ffffff;
+	background-image:
+		linear-gradient(45deg, #e4e4e7 25%, transparent 25%),
+		linear-gradient(-45deg, #e4e4e7 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, #e4e4e7 75%),
+		linear-gradient(-45deg, transparent 75%, #e4e4e7 75%);
+	background-size: 16px 16px;
+	background-position:
+		0 0,
+		0 8px,
+		8px -8px,
+		-8px 0;
+}
+
+.canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+.textInput {
+	position: absolute;
+	margin: 0;
+	padding: 0;
+	border: 1px dashed color-mix(in oklab, var(--accent) 80%, transparent);
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.06);
+	font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+	font-weight: 600;
+	line-height: 1.3;
+	resize: none;
+	overflow: hidden;
+	white-space: pre;
+	word-break: keep-all;
+	caret-color: currentColor;
+	outline: none;
+}
+
+.brushCursor {
+	position: absolute;
+	border: 1.5px solid var(--foreground);
+	border-radius: 999px;
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex: 0 0 auto;
+	height: 26px;
+	padding: 0 12px;
+	border-top: 1px solid var(--separator);
+	background: var(--surface);
+	color: var(--muted);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- states */
+
+.status {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 32px;
+	text-align: center;
+	color: var(--muted);
+	font-size: 13px;
+}
+
+.statusIcon {
+	color: var(--danger);
+}
+
+.statusText {
+	max-width: 60ch;
+	color: var(--danger);
+	overflow-wrap: anywhere;
+}
+
+.spinner {
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	border: 2px solid var(--separator);
+	border-top-color: var(--accent);
+	animation: editor-spin 800ms linear infinite;
+}
+
+@keyframes editor-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.spinner {
+		animation: none;
+	}
+}
+
+.dialogBody {
+	margin: 0;
+	color: var(--muted);
+	font-size: 13px;
+	line-height: 1.5;
+}

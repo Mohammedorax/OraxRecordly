@@ -1,0 +1,93 @@
+name: Bug Report
+description: Create a report to help us improve. If you are not sure what you are experiencing is a bug, report it anyway. We would rather you submit an unprofessional bug report than not report it at all.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: checkboxes
+    attributes:
+      label: Search existing issues
+      description: Please search to see if an issue already exists for the bug you encountered.
+      options:
+        - label: I have searched the existing issues
+          required: true
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: e.g., When I click submit, nothing happens...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: e.g., The form should submit and show a success message
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: To Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain your problem.
+      placeholder: Drag and drop images here or paste them
+    validations:
+      required: false
+
+  - type: dropdown
+    id: os-type
+    attributes:
+      label: OS
+      description: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: false
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      description: Please specify your OS version
+      placeholder: e.g., Windows 11, macOS Sonoma, Ubuntu 22.04
+    validations:
+      required: false
+
+  - type: input
+    id: os-other
+    attributes:
+      label: Other OS
+      description: If you selected "Other" for OS, please specify your operating system
+      placeholder: e.g., FreeBSD, Solaris
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here.
+      placeholder: Links, references, or any additional information
+    validations:
+      required: false
+

@@ -1,0 +1,63 @@
+{
+	"app": {
+		"name": "OraxRecordly",
+		"editorTitle": "OraxRecordly Editor",
+		"subtitle": "Screen recording and editing",
+		"language": "Language",
+		"manageRecordings": "Open recordings folder",
+		"discord": "Join Discord"
+	},
+	"actions": {
+		"cancel": "Cancel",
+		"close": "Close",
+		"export": "Export",
+		"load": "Load",
+		"redo": "Redo",
+		"reset": "Reset",
+		"save": "Save",
+		"undo": "Undo",
+		"delete": "Delete",
+		"done": "Done",
+		"rename": "Rename",
+		"retry": "Retry"
+	},
+	"errors": {
+		"invalidFileType": "Invalid file type",
+		"failedToUploadImage": "Failed to upload image",
+		"fileReadError": "There was an error reading the file."
+	},
+	"announcements": {
+		"carousel": "Announcements",
+		"dismiss": "Dismiss",
+		"next": "Next announcement",
+		"openFailed": "Failed to open link.",
+		"previous": "Previous announcement",
+		"show": "Show announcement"
+	},
+	"audioLevelMeter": {
+		"label": "Microphone level"
+	},
+	"colorPicker": {
+		"clearBackground": "Clear background",
+		"colors": "Colors",
+		"hexColor": "Hex color",
+		"none": "None",
+		"presetColors": "Preset colors"
+	},
+	"dropdownMenu": {
+		"action": "Action",
+		"actions": "Actions"
+	},
+	"popover": {
+		"options": "Options"
+	},
+	"select": {
+		"select": "Select",
+		"selectOption": "Select option"
+	},
+	"toast": {
+		"copy": "Copy",
+		"copyErrorFailed": "Could not copy error",
+		"errorCopied": "Error copied"
+	}
+}

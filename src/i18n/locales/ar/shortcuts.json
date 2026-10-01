@@ -1,0 +1,30 @@
+{
+	"actions": {
+		"addZoom": "إضافة تكبير",
+		"addTrim": "إضافة قص",
+		"addSpeed": "إضافة سرعة",
+		"addAnnotation": "إضافة تعليق توضيحي",
+		"addKeyframe": "إضافة إطار مفتاحي",
+		"deleteSelected": "حذف المحدد",
+		"playPause": "تشغيل / إيقاف مؤقت",
+		"cycleForward": "التنقل بين التعليقات التوضيحية للأمام",
+		"cycleBackward": "التنقل بين التعليقات التوضيحية للخلف",
+		"deleteSelectedAlt": "حذف المحدد (بديل)",
+		"panTimeline": "تحريك المخطط الزمني",
+		"zoomTimeline": "تكبير المخطط الزمني",
+		"splitClip": "تقسيم المقطع"
+	},
+	"fixed": {
+		"cycleAnnotationsForward": "التنقل بين التعليقات للأمام",
+		"cycleAnnotationsBackward": "التنقل بين التعليقات للخلف",
+		"deleteSelectedAlt": "حذف المحدد (بديل)",
+		"panTimeline": "تحريك المخطط الزمني",
+		"zoomTimeline": "تكبير المخطط الزمني"
+	},
+	"systemWide": {
+		"notSet": "غير محدَّد",
+		"screenshot": "التقاط لقطة شاشة",
+		"screenshotDescription": "اختصار التقاط على مستوى النظام: يعمل حتى عندما لا يكون Recordly في المقدمة. يمكنك تعيينه أو تغييره من الإعدادات ← لقطات الشاشة.",
+		"title": "على مستوى النظام"
+	}
+}

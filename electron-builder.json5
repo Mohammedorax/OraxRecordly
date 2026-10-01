@@ -1,0 +1,145 @@
+// @see - https://www.electron.build/configuration/configuration
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "dev.recordly.app",
+  "electronUpdaterCompatibility": ">=2.16",
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/ffmpeg-static/**",
+    "node_modules/ffprobe-static/**",
+    "node_modules/uiohook-napi/**",
+    "electron/native/bin/**"
+  ],
+  "productName": "OraxRecordly",
+  "npmRebuild": true,
+  "buildDependenciesFromSource": true,
+  "compression": "normal",
+  "directories": {
+    "output": "release"
+  },
+  // Recordly ships Arabic and English only; each extra Chromium locale pack
+  // costs ~1.5 MB in the installer.
+  "electronLanguages": ["en-US", "ar"],
+  "files": [
+    "dist",
+    "!dist/wallpapers/**",
+    "dist-electron",
+    "electron/native/bin",
+    "!electron/native/bin/**/whisper-bench*",
+    "!electron/native/bin/**/whisper-quantize*",
+    "!electron/native/bin/**/whisper-server*",
+    "!electron/native/bin/**/whisper-vad-speech-segments*",
+    "!node_modules/ffprobe-static/bin/darwin/**",
+    "!node_modules/ffprobe-static/bin/linux/**",
+    "!node_modules/ffprobe-static/bin/win32/ia32/**",
+    "!electron/native/**/build/**",
+    // The icon sets are compiled into dist/assets by Vite. Shipping their
+    // sources as well would add ~84 MB to every installer for nothing.
+    "!node_modules/@solar-icons/**",
+    "!node_modules/@phosphor-icons/**",
+    // uiohook-napi is loaded through `node-gyp-build`, which uses the shipped
+    // prebuild; only compile-time artifacts are dropped here.
+    "!node_modules/uiohook-napi/build/Release/obj/**",
+    "!node_modules/uiohook-napi/**/*.lib",
+    "!node_modules/uiohook-napi/**/*.pdb",
+    "!node_modules/uiohook-napi/**/*.exp",
+    "!node_modules/uiohook-napi/**/*.tlog",
+    "!node_modules/uiohook-napi/libuiohook/**",
+    "!*.png",
+    "!preview*.png",
+    "!*.md",
+    "!README.md",
+    "!CONTRIBUTING.md",
+    "!LICENSE"
+  ],
+  "extraResources": [
+    {
+      "from": "public/wallpapers",
+      "to": "assets/wallpapers"
+    }
+  ],
+  // GitHub Releases is the update feed. The `owner` and `repo` below — together
+  // with the matching `repository`/`homepage`/`bugs` entries in package.json —
+  // are the single place a fork must edit. An *explicit* publish target is
+  // required, not merely convenient: leaving it out let electron-builder infer
+  // a GitHub publisher from `repository` and write an `app-update.yml` pointing
+  // at upstream, which would let an upstream release replace this customized
+  // build. With the target below, packaging always writes update metadata for
+  // the repository named here and nothing else. `publishAutoUpdate` keeps the
+  // generated metadata (latest.yml / app-update.yml) alongside the installers.
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "Mohammedorax",
+      "repo": "OraxRecordly",
+      "publishAutoUpdate": true
+    }
+  ],
+
+  "mac": {
+    "hardenedRuntime": true,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["x64", "arm64"]
+      },
+      {
+        "target": "zip",
+        "arch": ["x64", "arm64"]
+      }
+    ],
+    "icon": "icons/icons/mac/icon.icns",
+    "artifactName": "${productName}-${arch}.${ext}",
+    "extendInfo": {
+      "NSAudioCaptureUsageDescription": "OraxRecordly needs audio capture permission to record system audio.",
+      "NSMicrophoneUsageDescription": "OraxRecordly needs microphone access to record voice audio.",
+      "com.apple.security.device.audio-input": true,
+      "CFBundleDocumentTypes": [
+        {
+          "CFBundleTypeName": "OraxRecordly Project",
+          "CFBundleTypeRole": "Editor",
+          "CFBundleTypeExtensions": ["recordly"],
+          "CFBundleTypeIconFile": "icon.icns",
+          "LSHandlerRank": "Owner",
+          "LSItemContentTypes": ["dev.recordly.app.project"]
+        }
+      ],
+      "UTExportedTypeDeclarations": [
+        {
+          "UTTypeIdentifier": "dev.recordly.app.project",
+          "UTTypeDescription": "OraxRecordly Project",
+          "UTTypeConformsTo": ["public.json"],
+          "UTTypeTagSpecification": {
+            "public.filename-extension": ["recordly"],
+            "public.mime-type": "application/x-recordly-project"
+          }
+        }
+      ]
+    }
+  },
+  "linux": {
+    "target": [
+      "AppImage"
+    ],
+    "icon": "icons/icons/png",
+    "artifactName": "${productName}-linux-x64.${ext}",
+    "category": "AudioVideo"
+  },
+  "win": {
+    "target": [
+      "nsis"
+    ],
+    "icon": "icons/icons/win/icon.ico",
+    "executableName": "OraxRecordly",
+    "artifactName": "${productName}-windows-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "OraxRecordly"
+  }
+}

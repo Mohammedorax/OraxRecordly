@@ -1,0 +1,196 @@
+/*
+ * Region selector overlay. The window is created transparent by the main
+ * process, so every layer here stays transparent until it paints its own dim.
+ */
+
+.overlay {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+	background: transparent;
+	overflow: hidden;
+	cursor: crosshair;
+	user-select: none;
+	-webkit-user-select: none;
+	touch-action: none;
+}
+
+.backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(8, 8, 12, 0.45);
+	pointer-events: none;
+}
+
+/*
+ * The selection itself stays clear; a huge drop shadow dims everything around
+ * it, so the dragged area is shown at full brightness without a second layer.
+ * Once the selection is frozen, its children re-enable pointer events for the
+ * move surface and the resize handles.
+ *
+ * The rectangle is reported to the main process in a physical, top-left based
+ * coordinate space (CSS pixels relative to this window). Every offset here is
+ * already a physical `left`/`top`/`right`/`bottom`, and the IDs of the resize
+ * handles name the physical corner they sit on, so the surface is pinned to
+ * LTR explicitly: the drawn rectangle then always matches the rectangle that
+ * is sent, and the handles never mirror away from their cursor, even while
+ * <html dir="rtl"> mirrors the hint text around it.
+ */
+.selection {
+	position: absolute;
+	direction: ltr;
+	border: 1px solid rgba(255, 255, 255, 0.9);
+	box-shadow: 0 0 0 9999px rgba(8, 8, 12, 0.45);
+	pointer-events: none;
+}
+
+.moveSurface {
+	position: absolute;
+	inset: 0;
+	pointer-events: auto;
+	cursor: move;
+}
+
+.handle {
+	position: absolute;
+	width: 10px;
+	height: 10px;
+	border: 1px solid rgba(15, 15, 20, 0.6);
+	border-radius: 2px;
+	background: #ffffff;
+	pointer-events: auto;
+	box-sizing: border-box;
+}
+
+.handleNw {
+	left: -5px;
+	top: -5px;
+	cursor: nwse-resize;
+}
+
+.handleN {
+	left: 50%;
+	top: -5px;
+	margin-left: -5px;
+	cursor: ns-resize;
+}
+
+.handleNe {
+	right: -5px;
+	top: -5px;
+	cursor: nesw-resize;
+}
+
+.handleE {
+	right: -5px;
+	top: 50%;
+	margin-top: -5px;
+	cursor: ew-resize;
+}
+
+.handleSe {
+	right: -5px;
+	bottom: -5px;
+	cursor: nwse-resize;
+}
+
+.handleS {
+	left: 50%;
+	bottom: -5px;
+	margin-left: -5px;
+	cursor: ns-resize;
+}
+
+.handleSw {
+	left: -5px;
+	bottom: -5px;
+	cursor: nesw-resize;
+}
+
+.handleW {
+	left: -5px;
+	top: 50%;
+	margin-top: -5px;
+	cursor: ew-resize;
+}
+
+/* Confirm bar shown under the frozen selection. */
+.actions {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	background: rgba(15, 15, 20, 0.9);
+	color: #ffffff;
+	font-size: 11px;
+	pointer-events: auto;
+}
+
+.confirmButton {
+	padding: 4px 10px;
+	border: none;
+	border-radius: 6px;
+	background: #ffffff;
+	color: #101014;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.confirmButton:focus-visible {
+	outline: 2px solid rgba(255, 255, 255, 0.9);
+	outline-offset: 1px;
+}
+
+.actionsHint {
+	color: rgba(255, 255, 255, 0.72);
+}
+
+.sizeLabel {
+	position: absolute;
+	/*
+	 * "100 × 200" is a width-first readout. With the document's RTL base
+	 * direction the bidi algorithm resolves the two number runs against that
+	 * direction and paints "200 × 100"; the label therefore carries its own LTR
+	 * base direction. The box itself stays anchored by the physical `left`
+	 * offset the component sets, so this only affects the glyph order.
+	 */
+	direction: ltr;
+	padding: 2px 6px;
+	border-radius: 4px;
+	background: rgba(15, 15, 20, 0.85);
+	color: #ffffff;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.4;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.hint {
+	position: absolute;
+	top: 24px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	max-width: min(520px, calc(100vw - 48px));
+	padding: 10px 16px;
+	border-radius: 10px;
+	background: rgba(15, 15, 20, 0.82);
+	color: #ffffff;
+	font-size: 13px;
+	line-height: 1.4;
+	text-align: center;
+	pointer-events: none;
+}
+
+.hintKeys {
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.72);
+}

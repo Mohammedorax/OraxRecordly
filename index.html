@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- Initial document language/direction. Arabic is the default startup locale;
+     src/main.tsx re-syncs both attributes synchronously from the persisted
+     language (localStorage "recordly.locale") before the first React render. -->
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/app-icons/recordly-32.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OraxRecordly</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

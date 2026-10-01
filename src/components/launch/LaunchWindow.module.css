@@ -1,0 +1,168 @@
+.electronDrag {
+	-webkit-app-region: drag;
+}
+
+.electronNoDrag {
+	-webkit-app-region: no-drag;
+}
+
+.bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: max-content;
+	max-width: 1200px;
+	background: var(--launch-bar-bg);
+	border: 1px solid var(--launch-bar-border);
+	border-radius: var(--radius-xl);
+	padding: 8px 12px;
+	box-shadow: var(--launch-bar-shadow);
+	overflow: visible;
+	position: relative;
+	transform-origin: center bottom;
+}
+
+.barStateViewport {
+	position: relative;
+	display: flex;
+	align-items: center;
+	flex: 0 1 auto;
+	min-height: 46px;
+	min-width: fit-content;
+	padding-right: 2px;
+}
+
+.barState {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 0 1 auto;
+	white-space: nowrap;
+	min-width: fit-content;
+	pointer-events: auto;
+}
+
+.sep {
+	width: 1px;
+	height: 26px;
+	background: var(--launch-border-strong);
+	margin: 0 6px;
+	flex-shrink: 0;
+}
+
+.menuCard {
+	width: 300px;
+	max-height: 400px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-width: thin;
+	scrollbar-color: var(--launch-border-strong) transparent;
+	pointer-events: auto;
+}
+
+@keyframes menuCardIn {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.menuCard::-webkit-scrollbar {
+	width: 4px;
+}
+
+.menuCard::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.menuCard::-webkit-scrollbar-thumb {
+	background: var(--launch-border-strong);
+	border-radius: 10px;
+}
+
+.ddLabel {
+	font-size: 9px;
+	font-weight: 600;
+	color: var(--launch-label);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	padding: 6px 10px 4px;
+}
+
+.finalizingState {
+	display: inline-flex;
+	align-items: center;
+	gap: 11px;
+	min-width: 238px;
+	color: var(--foreground);
+}
+
+.finalizingSpin {
+	color: var(--accent);
+	animation: finalizingSpin 0.9s linear infinite;
+}
+
+.finalizingCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.15;
+}
+
+.finalizingCopy small {
+	color: var(--muted);
+	font-size: 10px;
+	font-weight: 600;
+}
+
+@keyframes finalizingSpin {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.recDot {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #fff;
+	transition: all 0.2s ease;
+}
+
+.stopSquare {
+	width: 15px;
+	height: 15px;
+	border-radius: 3px;
+	background: #fff;
+}
+
+/*
+ * The HUD is a transparent, always-on-top window: a continuously running CSS
+ * animation keeps the compositor re-compositing that layered surface on every
+ * frame for as long as recording lasts. The recording dot is therefore toggled
+ * from component state (~2 Hz) instead, which changes the surface only when the
+ * state flips. No transition is used either, so the flip costs a single frame.
+ */
+.recDotBlink {
+	animation: none;
+	transition: none;
+	opacity: 0.2;
+}
+
+.micSelect {
+	color-scheme: dark;
+}
+
+.micSelect option {
+	background-color: var(--surface);
+	color: var(--foreground);
+}

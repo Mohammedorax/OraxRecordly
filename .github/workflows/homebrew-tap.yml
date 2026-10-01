@@ -1,0 +1,176 @@
+name: Update Homebrew Tap
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish to Homebrew tap (e.g. v1.0.5)"
+        required: true
+        type: string
+      tap_repo:
+        description: "Tap repository in owner/repo format"
+        required: false
+        default: "webadderall/homebrew-tap"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  update-tap:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      TAP_REPO: ${{ github.event.inputs.tap_repo || vars.HOMEBREW_TAP_REPO || 'webadderall/homebrew-tap' }}
+      AUTO_MERGE_TAP_PR: ${{ vars.HOMEBREW_TAP_AUTO_MERGE || 'true' }}
+    steps:
+      - name: Validate token
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "HOMEBREW_TAP_TOKEN secret is not set."
+            exit 1
+          fi
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+
+          if [ -z "$TAG" ]; then
+            echo "Release tag is empty"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/recordly-release
+          gh release download "${{ steps.tag.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --dir /tmp/recordly-release \
+            --pattern "Recordly-arm64.dmg" \
+            --pattern "Recordly-x64.dmg"
+
+      - name: Compute checksums
+        id: sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARM_FILE=$(find /tmp/recordly-release -maxdepth 1 -name 'Recordly-arm64.dmg' | head -n 1)
+          INTEL_FILE=$(find /tmp/recordly-release -maxdepth 1 -name 'Recordly-x64.dmg' | head -n 1)
+
+          if [ -z "$ARM_FILE" ] || [ -z "$INTEL_FILE" ]; then
+            echo "Unable to locate macOS release artifacts for ${{ steps.tag.outputs.tag }}"
+            exit 1
+          fi
+
+          SHA_ARM=$(sha256sum "$ARM_FILE" | awk '{print $1}')
+          SHA_INTEL=$(sha256sum "$INTEL_FILE" | awk '{print $1}')
+          echo "arm=$SHA_ARM" >> "$GITHUB_OUTPUT"
+          echo "intel=$SHA_INTEL" >> "$GITHUB_OUTPUT"
+          echo "arm_file=$(basename "$ARM_FILE")" >> "$GITHUB_OUTPUT"
+          echo "intel_file=$(basename "$INTEL_FILE")" >> "$GITHUB_OUTPUT"
+
+      - name: Clone tap repository
+        shell: bash
+        run: |
+          gh repo clone "$TAP_REPO" /tmp/homebrew-tap
+          git -C /tmp/homebrew-tap remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${TAP_REPO}.git"
+
+      - name: Update cask file
+        id: update
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/homebrew-tap
+          mkdir -p Casks
+
+          BRANCH="recordly-cask-${{ steps.tag.outputs.tag }}"
+          git checkout -B "$BRANCH"
+
+          cat > Casks/recordly.rb <<'RUBY'
+          cask "recordly" do
+            version "__VERSION__"
+
+            on_arm do
+              sha256 "__SHA_ARM__"
+              url "https://github.com/__REPO__/releases/download/__TAG__/__ARM_FILE__"
+            end
+
+            on_intel do
+              sha256 "__SHA_INTEL__"
+              url "https://github.com/__REPO__/releases/download/__TAG__/__INTEL_FILE__"
+            end
+
+            name "Recordly"
+            desc "Open-source screen recorder and editor"
+            homepage "https://www.recordly.dev"
+
+            app "Recordly.app"
+          end
+          RUBY
+
+          sed -i "s/__VERSION__/${{ steps.tag.outputs.version }}/g" Casks/recordly.rb
+          sed -i "s/__SHA_ARM__/${{ steps.sha.outputs.arm }}/g" Casks/recordly.rb
+          sed -i "s/__SHA_INTEL__/${{ steps.sha.outputs.intel }}/g" Casks/recordly.rb
+          sed -i "s#__REPO__#${{ github.repository }}#g" Casks/recordly.rb
+          sed -i "s#__TAG__#${{ steps.tag.outputs.tag }}#g" Casks/recordly.rb
+          sed -i "s#__ARM_FILE__#${{ steps.sha.outputs.arm_file }}#g" Casks/recordly.rb
+          sed -i "s#__INTEL_FILE__#${{ steps.sha.outputs.intel_file }}#g" Casks/recordly.rb
+
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/recordly.rb
+          git commit -m "chore(cask): update recordly to ${{ steps.tag.outputs.tag }}"
+          git push --force-with-lease origin "$BRANCH"
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Open pull request in tap repo
+        if: steps.update.outputs.changed == 'true'
+        id: pr
+        shell: bash
+        run: |
+          cd /tmp/homebrew-tap
+
+          PR_NUMBER=$(gh pr list --head "${{ steps.update.outputs.branch }}" --json number --jq '.[0].number // empty')
+          if [ -n "$PR_NUMBER" ]; then
+            echo "PR already exists for ${{ steps.update.outputs.branch }} (#$PR_NUMBER)"
+            echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PR_URL=$(gh pr create \
+            --title "chore(cask): update recordly to ${{ steps.tag.outputs.tag }}" \
+            --body "Automated cask update for ${{ steps.tag.outputs.tag }}.\n\n- arm64 sha256: \\`${{ steps.sha.outputs.arm }}\\`\n- x64 sha256: \\`${{ steps.sha.outputs.intel }}\\`" \
+            --head "${{ steps.update.outputs.branch }}" \
+            --base main)
+
+          PR_NUMBER=$(echo "$PR_URL" | sed -E 's#.*/pull/([0-9]+).*#\1#')
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-merge tap PR
+        if: steps.update.outputs.changed == 'true' && env.AUTO_MERGE_TAP_PR == 'true'
+        shell: bash
+        run: |
+          cd /tmp/homebrew-tap
+
+          PR_NUMBER="${{ steps.pr.outputs.number }}"
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No pull request number available; skipping auto-merge."
+            exit 0
+          fi
+
+          gh pr merge "$PR_NUMBER" --squash --delete-branch --repo "$TAP_REPO"
