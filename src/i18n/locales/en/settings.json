@@ -265,7 +265,14 @@
 		"video": "Video",
 		"videoUploadFailed": "Failed to import video background",
 		"videoUploadSuccess": "Video background added",
-		"wallpaperLabel": "Wallpaper {{number}}"
+		"wallpaperLabel": "Wallpaper {{number}}",
+		"fromDevice": "From this device",
+		"fromDeviceDescription": "Use any image from your computer as the background.",
+		"browseDeviceImage": "Browse…",
+		"loadingDeviceImages": "Looking for images…",
+		"noDeviceImages": "No images found on this device.",
+		"deviceImagesFailed": "Could not load images from this device.",
+		"deviceImageDesktop": "Current desktop wallpaper"
 	},
 	"export": {
 		"title": "Export",

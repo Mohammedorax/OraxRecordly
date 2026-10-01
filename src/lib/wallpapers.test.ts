@@ -4,6 +4,7 @@ import {
 	DEFAULT_WALLPAPER_PATH,
 	DEFAULT_WALLPAPER_RELATIVE_PATH,
 	getAvailableWallpapers,
+	isDeviceImagePath,
 	resolveAvailableWallpaperPath,
 } from "./wallpapers";
 
@@ -90,5 +91,27 @@ describe("wallpapers", () => {
 		await expect(resolveAvailableWallpaperPath("data:image/png;base64,abc")).resolves.toBe(
 			"data:image/png;base64,abc",
 		);
+	});
+});
+
+describe("isDeviceImagePath", () => {
+	it("recognises absolute local paths as images from the device", () => {
+		expect(isDeviceImagePath("C:\\Users\\Me\\Pictures\\wall.jpg")).toBe(true);
+		expect(isDeviceImagePath("D:/Wallpapers/mine.png")).toBe(true);
+		expect(isDeviceImagePath("\\\\NAS\\share\\wall.jpg")).toBe(true);
+		expect(isDeviceImagePath("/home/me/wall.jpg")).toBe(true);
+	});
+
+	it("does not treat bundled assets, URLs or styles as device images", () => {
+		expect(isDeviceImagePath("/wallpapers/sonoma-light.jpg")).toBe(false);
+		expect(isDeviceImagePath("/app-icons/example.png")).toBe(false);
+		expect(isDeviceImagePath("wallpapers/sonoma-light.jpg")).toBe(false);
+		expect(isDeviceImagePath("data:image/png;base64,abc")).toBe(false);
+		expect(isDeviceImagePath("file:///C:/Users/Me/wall.jpg")).toBe(false);
+		expect(isDeviceImagePath("http://127.0.0.1:1234/video?path=x")).toBe(false);
+		expect(isDeviceImagePath("blob:http://localhost/abc")).toBe(false);
+		expect(isDeviceImagePath("#123456")).toBe(false);
+		expect(isDeviceImagePath("linear-gradient(90deg, #000, #fff)")).toBe(false);
+		expect(isDeviceImagePath("")).toBe(false);
 	});
 });

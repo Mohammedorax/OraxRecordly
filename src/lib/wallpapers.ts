@@ -92,6 +92,37 @@ export function isVideoWallpaperSource(value: string): boolean {
 	return VIDEO_FILE_PATTERN.test(normalizedValue);
 }
 
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
+const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\\]+\\[^\\]+/;
+const NON_FILE_URL_PATTERN = /^(data:|blob:|https?:|file:)/i;
+
+/**
+ * True when a wallpaper value is an image file on the user's own machine
+ * (chosen through the "From this device" picker) rather than a bundled asset,
+ * a colour/gradient or a data URL. Bundled paths such as `/wallpapers/x.jpg`
+ * are excluded on purpose.
+ */
+export function isDeviceImagePath(value: string): boolean {
+	if (!value) {
+		return false;
+	}
+
+	const candidate = value.trim();
+	if (!candidate || NON_FILE_URL_PATTERN.test(candidate)) {
+		return false;
+	}
+
+	if (candidate.startsWith("/wallpapers/") || candidate.startsWith("/app-icons/")) {
+		return false;
+	}
+
+	return (
+		WINDOWS_ABSOLUTE_PATH_PATTERN.test(candidate) ||
+		WINDOWS_UNC_PATH_PATTERN.test(candidate) ||
+		(candidate.startsWith("/") && !candidate.startsWith("//"))
+	);
+}
+
 function toWallpaperId(fileName: string) {
 	return fileName
 		.replace(/\.[^.]+$/, "")

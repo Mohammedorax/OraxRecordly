@@ -27,6 +27,7 @@ import {
 import {
 	DEFAULT_WALLPAPER_PATH,
 	DEFAULT_WALLPAPER_RELATIVE_PATH,
+	isDeviceImagePath,
 	isVideoWallpaperSource,
 } from "@/lib/wallpapers";
 import { type AspectRatio, formatAspectRatioForCSS } from "@/utils/aspectRatioUtils";
@@ -2271,6 +2272,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					}
 
 					if (
+						isDeviceImagePath(wallpaper) ||
 						wallpaper.startsWith("http") ||
 						wallpaper.startsWith("file://") ||
 						wallpaper.startsWith("/")

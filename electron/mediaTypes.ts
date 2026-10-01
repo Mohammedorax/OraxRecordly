@@ -12,6 +12,11 @@ export const MEDIA_CONTENT_TYPES: Record<string, string> = {
 	".png": "image/png",
 	".jpg": "image/jpeg",
 	".jpeg": "image/jpeg",
+	// Wallpapers picked from the user's machine may use these formats; without a
+	// content type the loopback media server would serve them as octet-stream.
+	".webp": "image/webp",
+	".bmp": "image/bmp",
+	".gif": "image/gif",
 };
 
 export function getMediaContentType(filePath: string): string {

@@ -39,6 +39,7 @@ import {
 	getMatchingCursorMotionPresetId,
 } from "./cursorMotionPresets";
 import { loadEditorPreferences, saveEditorPreferences } from "./editorPreferences";
+import { DeviceWallpaperSection } from "./DeviceWallpaperSection";
 import { ScreenshotSettingsSection } from "./ScreenshotSettingsSection";
 import { getDefaultBorderRadiusPercent } from "./projectPersistence";
 import { SliderControl } from "./SliderControl";
@@ -1639,6 +1640,13 @@ export function SettingsPanel({
 											: videoWallpaperTiles),
 									]}
 								/>
+								{backgroundTab === "image" && (
+									<DeviceWallpaperSection
+										selected={selected}
+										onSelect={onWallpaperChange}
+										isSelected={getWallpaperTileState}
+									/>
+								)}
 							</>
 						) : backgroundTab === "color" ? (
 							<div className="mt-0 space-y-4">

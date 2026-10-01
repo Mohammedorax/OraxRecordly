@@ -229,6 +229,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	generateWallpaperThumbnail: (filePath: string) => {
 		return ipcRenderer.invoke("generate-wallpaper-thumbnail", filePath);
 	},
+	/** Lazily scans the user's machine for usable background images. */
+	listSystemWallpapers: () => {
+		return ipcRenderer.invoke("list-system-wallpapers") as Promise<
+			import("./ipc/types").SystemWallpaperListResult
+		>;
+	},
+	/** Native open dialog restricted to image files. */
+	pickSystemWallpaperImage: () => {
+		return ipcRenderer.invoke("pick-system-wallpaper-image") as Promise<
+			import("./ipc/types").SystemWallpaperPickResult
+		>;
+	},
 	probeNativeVideoMetadata: (filePath: string) => {
 		return ipcRenderer.invoke("probe-native-video-metadata", filePath) as Promise<{
 			success: boolean;

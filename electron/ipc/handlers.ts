@@ -13,6 +13,7 @@ import { registerScreenshotSettingsHandlers } from "./register/screenshots";
 import { registerSettingsHandlers } from "./register/settings";
 import { registerSourceHandlers } from "./register/sources";
 import { registerStartupHandlers } from "./register/startup";
+import { registerSystemWallpaperHandlers } from "./register/systemWallpapers";
 import {
 	selectedSource,
 	setNativeScreenRecordingActive,
@@ -76,6 +77,7 @@ export function registerIpcHandlers(
 	registerPermissionHandlers();
 	registerAnnouncementHandlers();
 	registerAssetHandlers();
+	registerSystemWallpaperHandlers();
 	registerExportHandlers();
 	registerCaptionHandlers();
 	registerProjectHandlers();

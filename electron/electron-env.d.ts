@@ -382,6 +382,10 @@ interface Window {
 		generateWallpaperThumbnail: (
 			filePath: string,
 		) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>;
+		/** Lazily scans the user's machine for usable background images. */
+		listSystemWallpapers: () => Promise<import("./ipc/types").SystemWallpaperListResult>;
+		/** Native open dialog restricted to image files. */
+		pickSystemWallpaperImage: () => Promise<import("./ipc/types").SystemWallpaperPickResult>;
 		probeNativeVideoMetadata: (filePath: string) => Promise<{
 			success: boolean;
 			metadata?: RendererNativeVideoMetadataProbe;

@@ -76,6 +76,34 @@ export type SystemCursorAsset = {
 	height: number;
 };
 
+/** Where a picker image found on the user's machine came from. */
+export type SystemWallpaperSource = "desktop" | "themes" | "system" | "pictures" | "browse";
+
+export type SystemWallpaperEntry = {
+	/** Absolute path on disk; this is the value persisted in the project. */
+	path: string;
+	/** Humanised file name; the renderer localises the `desktop` source label. */
+	name: string;
+	source: SystemWallpaperSource;
+	/** Loopback media-server URL, or an empty string when the server is unavailable. */
+	url: string;
+};
+
+export type SystemWallpaperListResult = {
+	success: boolean;
+	images: SystemWallpaperEntry[];
+	/** True when a safety cap stopped the scan before it examined everything. */
+	truncated?: boolean;
+	error?: string;
+};
+
+export type SystemWallpaperPickResult = {
+	success: boolean;
+	image?: SystemWallpaperEntry;
+	canceled?: boolean;
+	error?: string;
+};
+
 export type CursorVisualType =
 	| "arrow"
 	| "text"

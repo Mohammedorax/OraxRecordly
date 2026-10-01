@@ -1,5 +1,5 @@
 import { getLocalMediaServerPath } from "./localMediaUrl";
-import { resolveAvailableWallpaperPath } from "./wallpapers";
+import { isDeviceImagePath, resolveAvailableWallpaperPath } from "./wallpapers";
 
 function encodeRelativeAssetPath(relativePath: string): string {
 	return relativePath
@@ -277,6 +277,7 @@ export async function getWallpaperThumbnailUrl(asset: string): Promise<string> {
 	if (cached) return cached;
 
 	const localFilePath =
+		(isDeviceImagePath(asset) ? asset : null) ??
 		(asset.startsWith("/wallpapers/") ? asset : null) ??
 		toLocalFilePath(
 			asset.startsWith("/") && !asset.startsWith("//")

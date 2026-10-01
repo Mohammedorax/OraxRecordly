@@ -265,7 +265,14 @@
 		"video": "فيديو",
 		"videoUploadFailed": "فشل استيراد خلفية الفيديو",
 		"videoUploadSuccess": "تمت إضافة خلفية الفيديو",
-		"wallpaperLabel": "خلفية {{number}}"
+		"wallpaperLabel": "خلفية {{number}}",
+		"fromDevice": "من جهازك",
+		"fromDeviceDescription": "استخدم أي صورة من جهازك كخلفية.",
+		"browseDeviceImage": "استعراض…",
+		"loadingDeviceImages": "جارٍ البحث عن الصور…",
+		"noDeviceImages": "لم يتم العثور على صور في هذا الجهاز.",
+		"deviceImagesFailed": "تعذّر تحميل الصور من هذا الجهاز.",
+		"deviceImageDesktop": "خلفية سطح المكتب الحالية"
 	},
 	"export": {
 		"title": "تصدير",
