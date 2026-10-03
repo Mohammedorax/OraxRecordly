@@ -56,3 +56,7 @@ playwright-report/
 # swept into a commit of the app repo; commit landing-page changes inside that
 # folder instead.
 OraxRecordly_WEB/
+
+# Browser test output
+test-results/
+playwright-report/
