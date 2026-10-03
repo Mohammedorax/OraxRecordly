@@ -738,9 +738,18 @@ jobs:
     steps:
       - name: Dispatch Homebrew tap workflow
         shell: bash
-        run: |
-          gh workflow run homebrew-tap.yml \
-            --repo "${{ github.repository }}" \
-            -f tag="${{ needs.prepare-release.outputs.tag_name }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HOMEBREW_TAP_REPO}" ]; then
+            echo "::notice::HOMEBREW_TAP_REPO is not set, so no Homebrew cask update was dispatched. Set that repository variable (owner/repo) to enable the tap workflow."
+            exit 0
+          fi
+
+          gh workflow run homebrew-tap.yml \
+            --repo "${{ github.repository }}" \
+            -f tag="${{ needs.prepare-release.outputs.tag_name }}" \
+            -f tap_repo="${HOMEBREW_TAP_REPO}"

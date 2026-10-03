@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { installDesktopBridge } from "./bridge";
+import { filmstripFrameSignatures, filmstripFrames } from "./filmstrip";
 
 async function expectButtonsFit(container: Locator) {
 	const issues = await container.evaluate((root) => {
@@ -28,13 +29,10 @@ test("clip filmstrip decodes different source frames and zoom blocks use the ava
 	test.setTimeout(60000);
 	await installDesktopBridge(page, "filmstrip.mp4");
 	await page.goto("/?windowType=editor");
-	const frames = page.getByTestId("clip-filmstrip").locator("img");
+	const frames = filmstripFrames(page.locator('[data-variant="clip"]'));
 	await expect.poll(() => frames.count(), { timeout: 20000 }).toBeGreaterThan(2);
-	expect(
-		await frames.evaluateAll(
-			(images) => new Set(images.map((image) => (image as HTMLImageElement).src)).size,
-		),
-	).toBeGreaterThan(2);
+	const signatures = await filmstripFrameSignatures(frames);
+	expect(new Set(signatures).size).toBeGreaterThan(2);
 	await page.getByRole("button", { name: "Add Zoom (Z)", exact: true }).click();
 	const zoom = page.locator('[data-timeline-item][data-variant="zoom"] .timeline-block');
 	await expect(zoom).toBeVisible();

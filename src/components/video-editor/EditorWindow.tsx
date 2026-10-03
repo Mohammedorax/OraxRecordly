@@ -3,6 +3,7 @@ import { ShortcutsProvider } from "../../contexts/ShortcutsContext";
 import { loadAllCustomFonts } from "../../lib/customFonts";
 import { AnnouncementDialog } from "../announcements/AnnouncementDialog";
 import { LiveAnnouncementNotifications } from "../announcements/LiveAnnouncementNotifications";
+import { AboutDialogProvider } from "./AboutDialog";
 import { ShortcutsConfigDialog } from "./ShortcutsConfigDialog";
 import VideoEditor from "./VideoEditor";
 
@@ -16,7 +17,9 @@ export default function EditorWindow() {
 	return (
 		<>
 			<ShortcutsProvider>
-				<VideoEditor />
+				<AboutDialogProvider>
+					<VideoEditor />
+				</AboutDialogProvider>
 				<ShortcutsConfigDialog />
 			</ShortcutsProvider>
 			<AnnouncementDialog audience="editor" />

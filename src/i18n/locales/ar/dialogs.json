@@ -118,5 +118,26 @@
 		"unsavedSave": "حفظ وإغلاق",
 		"unsavedDiscard": "تجاهل وإغلاق",
 		"hint": "Ctrl+عجلة الفأرة للتكبير · مسافة أو السحب الأوسط للتحريك"
+	},
+	"about": {
+		"title": "حول OraxRecordly",
+		"versionLabel": "الإصدار {{version}}",
+		"description": "OraxRecordly تطبيق مجاني لتسجيل الشاشة موجَّه لصنّاع المحتوى، مع التكبير التلقائي وتأثيرات المؤشر والخلفيات والملاحظات.",
+		"attributionTitle": "حقوق النسب",
+		"attribution": "OraxRecordly مشروع متفرّع ومشتقّ من Recordly من إعداد webadderall، مستخدَم ومعدَّل بموجب الترخيص الأصلي. وحقوق نشر Recordly محفوظة © 2026 لـ webadderall.",
+		"attributionLink": "Recordly على GitHub",
+		"licenceTitle": "الترخيص",
+		"licenceName": "رخصة جنو أفيرو العمومية العامة الإصدار 3.0 (AGPL-3.0)",
+		"licenceDescription": "OraxRecordly برنامج حرّ يُنشر بموجب رخصة جنو أفيرو العمومية العامة الإصدار 3.0. والشيفرة المصدرية الكاملة المقابلة لهذا التطبيق متاحة في مستودع المشروع.",
+		"licenceLink": "اطّلاع على نص الترخيص كاملًا",
+		"thirdPartyTitle": "مكوّنات الأطراف الثالثة",
+		"thirdPartyNotice": "يتضمّن OraxRecordly مكوّنات من أطراف ثالثة، منها Electron وChromium وFFmpeg وخط Thmanyah Serif Display. ويبقى كل مكوّن خاضعًا لترخيصه الخاص.",
+		"linksTitle": "روابط",
+		"repositoryLink": "مستودع الشيفرة المصدرية",
+		"releasesLink": "الإصدارات وسجلّ التغييرات",
+		"thirdPartyLink": "إشعارات الأطراف الثالثة",
+		"warrantyTitle": "إخلاء الضمان",
+		"warranty": "يُقدَّم هذا البرنامج دون أي ضمان على الإطلاق. وهو موزَّع على أمل أن يكون مفيدًا، لكن دون أي ضمان ضمني بقابلية التسويق أو الملاءمة لغرض معيّن. راجع رخصة جنو أفيرو العمومية العامة الإصدار 3.0 للتفاصيل.",
+		"openLinkFailed": "تعذَّر فتح الرابط"
 	}
 }

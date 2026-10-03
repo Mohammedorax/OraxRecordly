@@ -1183,6 +1183,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("update-ready-toast", listener);
 		return () => ipcRenderer.removeListener("update-ready-toast", listener);
 	},
+	onMenuAbout: (callback: () => void) => {
+		const listener = () => callback();
+		ipcRenderer.on("menu-about", listener);
+		return () => ipcRenderer.removeListener("menu-about", listener);
+	},
 	onMenuLoadProject: (callback: () => void) => {
 		const listener = () => callback();
 		ipcRenderer.on("menu-load-project", listener);

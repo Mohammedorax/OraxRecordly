@@ -318,6 +318,9 @@
 		"whisperModelSelected": "تم اختيار نموذج Whisper"
 	},
 	"dashboard": {
+		"aboutDescription": "الإصدار والترخيص وحقوق النسب وإشعارات الأطراف الثالثة.",
+		"aboutOpen": "عرض",
+		"aboutTitle": "حول OraxRecordly",
 		"actionFailed": "تعذَّر إكمال الإجراء",
 		"addFolder": "إضافة مجلد",
 		"addFolderTo": "إضافة مجلد إلى {{name}}",

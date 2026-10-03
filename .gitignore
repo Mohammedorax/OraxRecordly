@@ -49,3 +49,10 @@ gpu-export-probe.mp4
 # Browser test output
 test-results/
 playwright-report/
+
+# Nested landing-page repository. OraxRecordly_WEB/ is a SEPARATE git repository
+# (its own history, pushed to github.com/Mohammedorax/OraxRecordly_WEB) that only
+# happens to sit inside this working tree. It is ignored here so it can never be
+# swept into a commit of the app repo; commit landing-page changes inside that
+# folder instead.
+OraxRecordly_WEB/

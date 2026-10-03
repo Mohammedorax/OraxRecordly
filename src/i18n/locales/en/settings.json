@@ -372,6 +372,7 @@
 		"saveFailed": "Could not save the screenshot settings"
 	},
 	"categories": {
+		"about": "About",
 		"advanced": "Advanced",
 		"ariaLabel": "Settings sections",
 		"files": "Files",

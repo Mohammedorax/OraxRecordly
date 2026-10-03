@@ -1,5 +1,9 @@
 # These are supported funding model platforms
 
+# The two accounts below are the original Recordly author's (@webadderall),
+# kept on purpose: the app and most of this code are his work — see
+# "نسبة العمل إلى المشروع الأصلي" / upstream attribution in README.md.
+# Replace them with the fork owner's own accounts to collect sponsorship here.
 github: webadderall
 patreon: # Replace with a single Patreon username
 open_collective: # Replace with a single Open Collective username

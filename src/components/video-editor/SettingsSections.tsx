@@ -2,13 +2,14 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { ChoiceGroup, ChoiceItem } from "@/components/ui/choice-group";
 import { useScopedT } from "@/contexts/I18nContext";
 
-type Category = "general" | "motion" | "recording" | "files" | "advanced";
+type Category = "general" | "motion" | "recording" | "files" | "advanced" | "about";
 const labels: Record<Category, { key: string; fallback: string }> = {
 	general: { key: "categories.general", fallback: "General" },
 	motion: { key: "categories.motion", fallback: "Motion" },
 	recording: { key: "categories.recording", fallback: "Recording" },
 	files: { key: "categories.files", fallback: "Files" },
 	advanced: { key: "categories.advanced", fallback: "Advanced" },
+	about: { key: "categories.about", fallback: "About" },
 };
 const SettingsCategoryContext = createContext<Category | null>(null);
 

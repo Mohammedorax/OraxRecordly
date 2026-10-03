@@ -40,8 +40,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_REPOSITORY,,}" != "webadderallorg/recordly" ]]; then
-            echo "This workflow may run only in webadderallorg/Recordly."
+          if [[ "${GITHUB_REPOSITORY,,}" != "mohammedorax/oraxrecordly" ]]; then
+            echo "This workflow may run only in Mohammedorax/OraxRecordly."
             exit 1
           fi
 
@@ -153,8 +153,8 @@ jobs:
             exit 1
           fi
 
-          cert_path="$RUNNER_TEMP/recordly-developer-id.p12"
-          cert_pem_path="$RUNNER_TEMP/recordly-developer-id.pem"
+          cert_path="$RUNNER_TEMP/oraxrecordly-developer-id.p12"
+          cert_pem_path="$RUNNER_TEMP/oraxrecordly-developer-id.pem"
           printf '%s' "$APPLE_SIGNING_CERTIFICATE_P12_BASE64" | base64 --decode > "$cert_path"
           if ! openssl pkcs12 \
             -in "$cert_path" \
@@ -223,7 +223,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_SIGNING_CERTIFICATE_PASSWORD }}
-          CSC_LINK: ${{ runner.temp }}/recordly-developer-id.p12
+          CSC_LINK: ${{ runner.temp }}/oraxrecordly-developer-id.p12
         run: |
           set -euo pipefail
           npx electron-builder \
@@ -238,8 +238,8 @@ jobs:
         shell: bash
         run: |
           rm -f \
-            "$RUNNER_TEMP/recordly-developer-id.p12" \
-            "$RUNNER_TEMP/recordly-developer-id.pem"
+            "$RUNNER_TEMP/oraxrecordly-developer-id.p12" \
+            "$RUNNER_TEMP/oraxrecordly-developer-id.pem"
 
       - name: Smoke test packaged binary paths
         env:

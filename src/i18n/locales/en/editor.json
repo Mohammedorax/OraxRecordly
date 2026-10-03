@@ -318,6 +318,9 @@
 		"whisperModelSelected": "Whisper model selected"
 	},
 	"dashboard": {
+		"aboutDescription": "Version, licence, attribution and third-party notices.",
+		"aboutOpen": "View",
+		"aboutTitle": "About OraxRecordly",
 		"actionFailed": "Could not complete action",
 		"addFolder": "Add folder",
 		"addFolderTo": "Add folder to {{name}}",

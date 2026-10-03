@@ -1,5 +1,6 @@
 import { SettingsSections, SettingsCategory } from "../SettingsSections";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useAboutDialog } from "../AboutDialog";
 import { SettingsRow } from "../SettingsRow";
 import { Switch } from "@/components/ui/switch";
 import { supportsHudCaptureProtection } from "@/lib/hudCaptureProtection";
@@ -9,6 +10,7 @@ import { useScopedT } from "@/contexts/I18nContext";
 export const DashboardSettingsContext = createContext<ReactNode>(null);
 export function DashboardSettings({ onImportFile }: { onImportFile: () => Promise<void> }) {
 	const t = useScopedT("editor");
+	const { openAbout } = useAboutDialog();
 	const settingsContent = useContext(DashboardSettingsContext);
 	const [directory, setDirectory] = useState("");
 	const [recordings, setRecordings] = useState("");
@@ -101,7 +103,9 @@ export function DashboardSettings({ onImportFile }: { onImportFile: () => Promis
 			<h1 className="mb-8 text-lg font-semibold">
 				{t("dashboard.settingsTitle", "Settings")}
 			</h1>
-			<SettingsSections categories={["general", "motion", "recording", "files", "advanced"]}>
+			<SettingsSections
+				categories={["general", "motion", "recording", "files", "advanced", "about"]}
+			>
 				<SettingsCategory category={["general", "motion", "advanced"]}>
 					{settingsContent}
 				</SettingsCategory>
@@ -289,6 +293,19 @@ export function DashboardSettings({ onImportFile }: { onImportFile: () => Promis
 							"Named projects save automatically. Previews refresh when you return to Projects.",
 						)}
 					</p>
+				</SettingsCategory>
+				<SettingsCategory category="about">
+					<SettingsRow
+						title={t("dashboard.aboutTitle", "About OraxRecordly")}
+						description={t(
+							"dashboard.aboutDescription",
+							"Version, licence, attribution and third-party notices.",
+						)}
+					>
+						<Button variant="secondary" size="sm" onClick={openAbout}>
+							{t("dashboard.aboutOpen", "View")}
+						</Button>
+					</SettingsRow>
 				</SettingsCategory>
 			</SettingsSections>
 		</section>

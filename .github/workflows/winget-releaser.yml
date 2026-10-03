@@ -1,26 +1,69 @@
+# Publishes this repository's latest release to winget-pkgs.
+#
+# The WinGet package identifier is the maintainer's own package on
+# microsoft/winget-pkgs: it is deliberately NOT hard-coded here, because the
+# upstream Recordly project owns `Webadderall.Recordly` and a fork must never
+# open a pull request against it. Configure `WINGET_IDENTIFIER` as a repository
+# variable (or pass `winget_identifier` on a manual run); the very first
+# submission of that identifier to winget-pkgs still has to be done by hand.
 name: Publish release to WinGet
 on:
   workflow_run:
     workflows: ["Publish Release"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      winget_identifier:
+        description: "Your own WinGet package identifier in Publisher.Package form (e.g. Mohammedorax.OraxRecordly). Required unless the WINGET_IDENTIFIER repository variable is set."
+        required: false
+        type: string
 jobs:
   publish:
     runs-on: windows-latest
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
+      - name: Resolve WinGet package identifier
+        id: identifier
+        shell: bash
+        env:
+          INPUT_IDENTIFIER: ${{ github.event.inputs.winget_identifier }}
+          CONFIGURED_IDENTIFIER: ${{ vars.WINGET_IDENTIFIER }}
+        run: |
+          set -euo pipefail
+
+          IDENTIFIER="${INPUT_IDENTIFIER:-${CONFIGURED_IDENTIFIER:-}}"
+
+          if [ -z "$IDENTIFIER" ]; then
+            echo "::error::No WinGet package identifier configured. Pass winget_identifier (Publisher.Package, e.g. Mohammedorax.OraxRecordly) or set the WINGET_IDENTIFIER repository variable. This workflow refuses to guess: without an explicit identifier it would push this fork's release into a package that is not yours."
+            exit 1
+          fi
+
+          if [ "$IDENTIFIER" = "Webadderall.Recordly" ]; then
+            echo "::error::Webadderall.Recordly is the upstream Recordly package on winget-pkgs and must never be updated from this fork. Publish under your own identifier."
+            exit 1
+          fi
+
+          if [[ ! "$IDENTIFIER" =~ ^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9][A-Za-z0-9-]*)+$ ]]; then
+            echo "::error::winget_identifier must be in Publisher.Package form, got '$IDENTIFIER'."
+            exit 1
+          fi
+
+          echo "identifier=$IDENTIFIER" >> "$GITHUB_OUTPUT"
       - name: Get release tag
         id: tag
         shell: bash
         run: |
           TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name')
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # WinGet versions are plain dotted numbers; release tags carry a "v".
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: vedantmgoyal9/winget-releaser@v2
         with:
-          identifier: Webadderall.Recordly
+          identifier: ${{ steps.identifier.outputs.identifier }}
+          # The Windows installer is `OraxRecordly-windows-x64.exe`.
           installers-regex: 'windows\-x64\.exe$'
-          version: ${{ steps.tag.outputs.tag }}
+          version: ${{ steps.tag.outputs.version }}
           release-tag: ${{ steps.tag.outputs.tag }}
           token: ${{ secrets.WINGET_ACC_TOKEN }}

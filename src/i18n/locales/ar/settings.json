@@ -372,6 +372,7 @@
 		"saveFailed": "تعذَّر حفظ إعدادات لقطات الشاشة"
 	},
 	"categories": {
+		"about": "حول",
 		"advanced": "متقدم",
 		"ariaLabel": "أقسام الإعدادات",
 		"files": "الملفات",

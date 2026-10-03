@@ -498,6 +498,38 @@ function sendEditorMenuAction(
 	targetWindow.webContents.send(channel);
 }
 
+/**
+ * Ask the editor window to show its in-app About surface. Unlike the project
+ * menu actions this also has to work when an editor window already exists but is
+ * not focused, because loading is finished and `did-finish-load` will not fire
+ * again — in that case the channel is delivered immediately.
+ */
+function sendEditorAboutAction() {
+	const channel = "menu-about";
+	const focusedWindow = BrowserWindow.getFocusedWindow();
+
+	if (focusedWindow && !focusedWindow.isDestroyed() && isEditorWindow(focusedWindow)) {
+		focusedWindow.webContents.send(channel);
+		return;
+	}
+
+	const existingEditorWindow = getExistingEditorWindow();
+	if (existingEditorWindow) {
+		mainWindow = existingEditorWindow;
+		restoreWindowSafely(existingEditorWindow);
+		existingEditorWindow.webContents.send(channel);
+		return;
+	}
+
+	createEditorWindowWrapper();
+	const targetWindow = mainWindow;
+	if (!targetWindow || targetWindow.isDestroyed()) return;
+
+	targetWindow.webContents.once("did-finish-load", () => {
+		if (!targetWindow.isDestroyed()) targetWindow.webContents.send(channel);
+	});
+}
+
 function setupApplicationMenu() {
 	const isMac = process.platform === "darwin";
 	const template: Electron.MenuItemConstructorOptions[] = [];
@@ -505,7 +537,10 @@ function setupApplicationMenu() {
 		template.push({
 			label: app.name,
 			submenu: [
-				{ role: "about" },
+				{
+					label: "About OraxRecordly",
+					click: () => sendEditorAboutAction(),
+				},
 				{ type: "separator" },
 				{ role: "services" },
 				{ type: "separator" },
@@ -585,6 +620,11 @@ function setupApplicationMenu() {
 					click: () => {
 						void checkForAppUpdates(getUpdateDialogWindow, { manual: true });
 					},
+				},
+				{ type: "separator" },
+				{
+					label: "About OraxRecordly",
+					click: () => sendEditorAboutAction(),
 				},
 			],
 		},

@@ -1061,6 +1061,7 @@ interface Window {
 				isPreview?: boolean;
 			}) => void,
 		) => () => void;
+		onMenuAbout: (callback: () => void) => () => void;
 		onMenuLoadProject: (callback: () => void) => () => void;
 		onMenuSaveProject: (callback: () => void) => () => void;
 		onMenuSaveProjectAs: (callback: () => void) => () => void;

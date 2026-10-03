@@ -8,9 +8,8 @@ on:
         required: true
         type: string
       tap_repo:
-        description: "Tap repository in owner/repo format"
-        required: false
-        default: "webadderall/homebrew-tap"
+        description: "Your own tap repository in owner/repo format (e.g. Mohammedorax/homebrew-tap). Required: this workflow deliberately has no default, because the tap must belong to whoever publishes the release."
+        required: true
         type: string
 
 permissions:
@@ -21,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-      TAP_REPO: ${{ github.event.inputs.tap_repo || vars.HOMEBREW_TAP_REPO || 'webadderall/homebrew-tap' }}
+      TAP_REPO: ${{ github.event.inputs.tap_repo || vars.HOMEBREW_TAP_REPO }}
       AUTO_MERGE_TAP_PR: ${{ vars.HOMEBREW_TAP_AUTO_MERGE || 'true' }}
     steps:
       - name: Validate token
@@ -30,6 +29,28 @@ jobs:
             echo "HOMEBREW_TAP_TOKEN secret is not set."
             exit 1
           fi
+
+      - name: Resolve tap repository
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TAP_REPO}" ]; then
+            echo "::error::No Homebrew tap configured. Pass tap_repo as a workflow input, or set the HOMEBREW_TAP_REPO repository variable, to your own tap in owner/repo form (e.g. Mohammedorax/homebrew-tap). This workflow refuses to guess: without an explicit destination it would publish into a tap that is not yours."
+            exit 1
+          fi
+
+          if [[ ! "${TAP_REPO}" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::tap_repo must look like owner/repo, got '${TAP_REPO}'."
+            exit 1
+          fi
+
+          if [[ "${TAP_REPO,,}" == "webadderall/homebrew-tap" ]]; then
+            echo "::error::webadderall/homebrew-tap is the upstream Recordly tap and must never receive this fork's cask. Point tap_repo at your own tap."
+            exit 1
+          fi
+
+          echo "Homebrew tap resolved to ${TAP_REPO}."
 
       - name: Resolve release tag
         id: tag
@@ -50,20 +71,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/recordly-release
+          mkdir -p /tmp/oraxrecordly-release
           gh release download "${{ steps.tag.outputs.tag }}" \
             --repo "${{ github.repository }}" \
-            --dir /tmp/recordly-release \
-            --pattern "Recordly-arm64.dmg" \
-            --pattern "Recordly-x64.dmg"
+            --dir /tmp/oraxrecordly-release \
+            --pattern "OraxRecordly-arm64.dmg" \
+            --pattern "OraxRecordly-x64.dmg"
 
       - name: Compute checksums
         id: sha
         shell: bash
         run: |
           set -euo pipefail
-          ARM_FILE=$(find /tmp/recordly-release -maxdepth 1 -name 'Recordly-arm64.dmg' | head -n 1)
-          INTEL_FILE=$(find /tmp/recordly-release -maxdepth 1 -name 'Recordly-x64.dmg' | head -n 1)
+          ARM_FILE=$(find /tmp/oraxrecordly-release -maxdepth 1 -name 'OraxRecordly-arm64.dmg' | head -n 1)
+          INTEL_FILE=$(find /tmp/oraxrecordly-release -maxdepth 1 -name 'OraxRecordly-x64.dmg' | head -n 1)
 
           if [ -z "$ARM_FILE" ] || [ -z "$INTEL_FILE" ]; then
             echo "Unable to locate macOS release artifacts for ${{ steps.tag.outputs.tag }}"
@@ -91,11 +112,11 @@ jobs:
           cd /tmp/homebrew-tap
           mkdir -p Casks
 
-          BRANCH="recordly-cask-${{ steps.tag.outputs.tag }}"
+          BRANCH="oraxrecordly-cask-${{ steps.tag.outputs.tag }}"
           git checkout -B "$BRANCH"
 
-          cat > Casks/recordly.rb <<'RUBY'
-          cask "recordly" do
+          cat > Casks/oraxrecordly.rb <<'RUBY'
+          cask "oraxrecordly" do
             version "__VERSION__"
 
             on_arm do
@@ -108,21 +129,21 @@ jobs:
               url "https://github.com/__REPO__/releases/download/__TAG__/__INTEL_FILE__"
             end
 
-            name "Recordly"
+            name "OraxRecordly"
             desc "Open-source screen recorder and editor"
-            homepage "https://www.recordly.dev"
+            homepage "https://mohammedorax.github.io/OraxRecordly_WEB/"
 
-            app "Recordly.app"
+            app "OraxRecordly.app"
           end
           RUBY
 
-          sed -i "s/__VERSION__/${{ steps.tag.outputs.version }}/g" Casks/recordly.rb
-          sed -i "s/__SHA_ARM__/${{ steps.sha.outputs.arm }}/g" Casks/recordly.rb
-          sed -i "s/__SHA_INTEL__/${{ steps.sha.outputs.intel }}/g" Casks/recordly.rb
-          sed -i "s#__REPO__#${{ github.repository }}#g" Casks/recordly.rb
-          sed -i "s#__TAG__#${{ steps.tag.outputs.tag }}#g" Casks/recordly.rb
-          sed -i "s#__ARM_FILE__#${{ steps.sha.outputs.arm_file }}#g" Casks/recordly.rb
-          sed -i "s#__INTEL_FILE__#${{ steps.sha.outputs.intel_file }}#g" Casks/recordly.rb
+          sed -i "s/__VERSION__/${{ steps.tag.outputs.version }}/g" Casks/oraxrecordly.rb
+          sed -i "s/__SHA_ARM__/${{ steps.sha.outputs.arm }}/g" Casks/oraxrecordly.rb
+          sed -i "s/__SHA_INTEL__/${{ steps.sha.outputs.intel }}/g" Casks/oraxrecordly.rb
+          sed -i "s#__REPO__#${{ github.repository }}#g" Casks/oraxrecordly.rb
+          sed -i "s#__TAG__#${{ steps.tag.outputs.tag }}#g" Casks/oraxrecordly.rb
+          sed -i "s#__ARM_FILE__#${{ steps.sha.outputs.arm_file }}#g" Casks/oraxrecordly.rb
+          sed -i "s#__INTEL_FILE__#${{ steps.sha.outputs.intel_file }}#g" Casks/oraxrecordly.rb
 
           if git diff --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -131,8 +152,8 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/recordly.rb
-          git commit -m "chore(cask): update recordly to ${{ steps.tag.outputs.tag }}"
+          git add Casks/oraxrecordly.rb
+          git commit -m "chore(cask): update oraxrecordly to ${{ steps.tag.outputs.tag }}"
           git push --force-with-lease origin "$BRANCH"
 
           echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -153,7 +174,7 @@ jobs:
           fi
 
           PR_URL=$(gh pr create \
-            --title "chore(cask): update recordly to ${{ steps.tag.outputs.tag }}" \
+            --title "chore(cask): update oraxrecordly to ${{ steps.tag.outputs.tag }}" \
             --body "Automated cask update for ${{ steps.tag.outputs.tag }}.\n\n- arm64 sha256: \\`${{ steps.sha.outputs.arm }}\\`\n- x64 sha256: \\`${{ steps.sha.outputs.intel }}\\`" \
             --head "${{ steps.update.outputs.branch }}" \
             --base main)

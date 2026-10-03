@@ -95,6 +95,7 @@ export async function installDesktopBridge(page: Page, videoFixture = "preview.m
 				onMenuSaveProject: subscribe,
 				onMenuSaveProjectAs: subscribe,
 				onMenuLoadProject: subscribe,
+				onMenuAbout: subscribe,
 				onRequestSaveBeforeClose: subscribe,
 				onRecordingSessionChanged: subscribe,
 				onWhisperSmallModelDownloadProgress: subscribe,
