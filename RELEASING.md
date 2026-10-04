@@ -70,6 +70,20 @@ Optional repository variables:
 
 ## Release flow
 
+### Windows releases (the fork's normal path)
+
+Pushing a version tag is enough: `.github/workflows/windows-release.yml` builds the Windows installer on `windows-latest` and publishes the release with `OraxRecordly-windows-x64.exe` and `latest.yml`.
+
+1. Bump `package.json` to the version you want to ship (`npm pkg set version=1.4.1`).
+2. Commit and push that version to `main`.
+3. Create a Git tag in the form `vX.Y.Z` and push it (`git tag v1.4.1 && git push origin v1.4.1`).
+
+The workflow refuses to run outside `Mohammedorax/OraxRecordly`, fails if the tag does not match `package.json`, and fails if `latest.yml` was not produced. See [docs/updates.md](docs/updates.md) for the full procedure.
+
+### Full multi-platform releases
+
+The steps below build and publish macOS, Windows and Linux together. They require the Apple signing and notarization secrets listed further down; without them the `Publish Release` workflow cannot publish.
+
 1. Bump `package.json` to the version you want to ship.
 2. Commit and push that version.
 3. Create a Git tag in the form `vX.Y.Z`.
@@ -89,11 +103,11 @@ This uses `gh release create --generate-notes`, which keeps GitHub's generated c
 
 5. The `Publish Release` workflow builds, signs, notarizes, uploads, and publishes update metadata.
 
-That is the normal path if you want “click new release and let CI do the rest.”
+That is the multi-platform path when the signing secrets are configured and you want “click new release and let CI do the rest.”
 
 ## Rebuilding an existing release
 
-If you need to rerun publishing for an existing tag, use the manual dispatch for `.github/workflows/release.yml` and provide the existing tag.
+If you need to rerun publishing for an existing tag, use the manual dispatch for `.github/workflows/release.yml` and provide the existing tag. For a Windows-only rebuild, run *Actions → Publish Windows Release → Run workflow* with that tag instead; it refreshes `OraxRecordly-windows-x64.exe` and `latest.yml` on the existing release.
 
 ## Notes
 

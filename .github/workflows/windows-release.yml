@@ -1,0 +1,175 @@
+# Publishes a Windows release for this fork from a version tag.
+#
+# A tag push is the whole release procedure: bump `version` in package.json,
+# commit it, tag `vX.Y.Z`, push the tag. This workflow builds the NSIS
+# installer on windows-latest and publishes the GitHub release with the two
+# assets the auto-updater needs, every time:
+#
+#   OraxRecordly-windows-x64.exe   the installer electron-updater downloads
+#   latest.yml                     the feed it reads to find the new version
+#
+# Why this is a separate workflow instead of a job in `release.yml`:
+# `release.yml` runs only on an already *published* GitHub release (or a manual
+# dispatch) and, for a stable release, its publish job requires the signed and
+# notarized macOS builds. Without the Apple signing secrets that job can never
+# succeed, so a Windows-only fork release cannot be published by it. Keeping
+# the fork's release path in its own small, readable workflow means a tag push
+# always ships an installer plus update metadata; `release.yml` stays as the
+# full multi-platform path for maintainers who do have those secrets.
+#
+# Releases created here use the workflow's own GITHUB_TOKEN. GitHub does not
+# start new workflow runs for events caused by that token, so this does *not*
+# re-trigger the `release: published` workflow in `release.yml`.
+name: Publish Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Existing tag to rebuild and publish (e.g. v1.4.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release-${{ github.event.inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Build and publish Windows installer
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
+    steps:
+      - name: Refuse to publish outside the fork
+        shell: pwsh
+        env:
+          RUNNING_REPOSITORY: ${{ github.repository }}
+        run: |
+          if ($env:RUNNING_REPOSITORY -ne 'Mohammedorax/OraxRecordly') {
+            throw "This workflow publishes only for Mohammedorax/OraxRecordly, but it is running in '$env:RUNNING_REPOSITORY'."
+          }
+
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag_name || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          $tag = $env:RELEASE_TAG.Trim()
+
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw 'A release tag is required.'
+          }
+
+          if (-not $tag.StartsWith('v')) {
+            throw "Release tags must look like v1.2.3, but got '$tag'."
+          }
+
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne "v$version") {
+            throw "Tag '$tag' does not match the package.json version '$version'. Bump package.json, commit it, then re-tag."
+          }
+
+          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_TAG=$tag"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install bundled FFmpeg binary
+        run: node scripts/install-ffmpeg-static.mjs
+
+      - name: Verify bundled FFmpeg binary
+        run: |
+          node -e "const fs=require('node:fs'); const ffmpeg=require('ffmpeg-static'); if (typeof ffmpeg !== 'string' || !fs.existsSync(ffmpeg)) { throw new Error('Bundled ffmpeg-static binary is missing: ' + ffmpeg); } console.log('Using bundled ffmpeg binary: ' + ffmpeg);"
+
+      - name: Remove stale uiohook build output
+        shell: pwsh
+        run: |
+          if (Test-Path node_modules/uiohook-napi/build) {
+            Remove-Item node_modules/uiohook-napi/build -Recurse -Force
+          }
+
+      - name: Install app dependencies
+        run: npx electron-builder install-app-deps
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          npm run build:platform-native-helpers
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx tsc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx vite build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run normalize:electron-main-cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run smoke:electron-main-cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # `--publish never` is deliberate: electron-builder auto-publishes on
+          # CI once a `publish` target is configured. The release is created by
+          # the publishing step below instead, after latest.yml is verified.
+          npx electron-builder --win --x64 --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify installer and update metadata
+        shell: pwsh
+        run: |
+          $installer = 'release/OraxRecordly-windows-x64.exe'
+          $metadata = 'release/latest.yml'
+
+          if (-not (Test-Path $installer)) {
+            throw "Missing installer: $installer"
+          }
+
+          # Without latest.yml an installed app never learns that this release
+          # exists, so publishing must fail loudly instead of shipping a release
+          # that silently breaks updates.
+          if (-not (Test-Path $metadata)) {
+            throw "Missing $metadata. electron-updater reads it to discover new versions, so a release without it would silently stop update notifications."
+          }
+
+          $latest = Get-Content $metadata -Raw
+          Write-Host $latest
+
+          if ($latest -notmatch 'OraxRecordly-windows-x64\.exe') {
+            throw "latest.yml does not point at $installer. Contents:`n$latest"
+          }
+
+          $expectedVersion = $env:RELEASE_TAG.Trim().Substring(1)
+          $versionLine = '(?m)^version:\s*' + [regex]::Escape($expectedVersion) + '\s*$'
+          if ($latest -notmatch $versionLine) {
+            throw "latest.yml does not declare version $expectedVersion. Contents:`n$latest"
+          }
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          # Missing files are already a hard failure in the step above; the
+          # blockmap is optional, so do not let its absence fail the publish.
+          fail_on_unmatched_files: false
+          files: |
+            release/OraxRecordly-windows-x64.exe
+            release/OraxRecordly-windows-x64.exe.blockmap
+            release/latest.yml
