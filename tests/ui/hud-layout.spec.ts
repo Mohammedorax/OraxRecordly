@@ -46,10 +46,21 @@ test("recording HUD uses uniform controls and a readable timer", async ({ page }
 	await expect(controls.getByRole("status")).toContainText("00:00");
 	await expect(controls.getByRole("button", { name: "Home", exact: true })).toBeVisible();
 	const sizes = await controls.getByRole("button").evaluateAll((buttons) =>
-		buttons.map((button) => {
-			return [(button as HTMLElement).offsetWidth, (button as HTMLElement).offsetHeight];
-		}),
+		buttons.map((button) => ({
+			label: button.getAttribute("aria-label"),
+			width: (button as HTMLElement).offsetWidth,
+			height: (button as HTMLElement).offsetHeight,
+		})),
 	);
-	for (const size of sizes) expect(size).toEqual([36, 36]);
+	// The screenshot split control's caret ("Choose a capture mode") is its own
+	// documented 24x24 target (size-6 min-w-6 in ScreenshotButton.tsx); every
+	// other control in the group is a uniform 36x36 action button.
+	const caret = sizes.filter((button) => button.label === "Choose a capture mode");
+	expect(caret).toEqual([{ label: "Choose a capture mode", width: 24, height: 24 }]);
+	const actions = sizes.filter((button) => button.label !== "Choose a capture mode");
+	expect(actions.length).toBeGreaterThan(0);
+	for (const action of actions) {
+		expect(action).toMatchObject({ width: 36, height: 36 });
+	}
 	await page.screenshot({ path: "test-results/hud-recording.png" });
 });

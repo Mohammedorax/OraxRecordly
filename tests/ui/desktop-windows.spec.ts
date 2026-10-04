@@ -35,7 +35,11 @@ test("editor inspector and playback controls fit a smaller desktop", async ({ pa
 		page.getByRole("radiogroup", { name: "Motion Presets", exact: true }),
 	).toBeVisible();
 	await page.getByText("Smooth", { exact: true }).click();
-	await expect(page.getByRole("radio", { name: "Smooth", exact: true })).toBeChecked();
+	// The accessible name of the radio input is the whole Radio.Content text
+	// ("Smooth" plus its description), so assert on the radio's real value
+	// instead of an exact-name role query that can never match.
+	await expect(page.locator('input[type="radio"][value="smooth"]')).toBeChecked();
+	await expect(page.locator('input[type="radio"][value="focused"]')).not.toBeChecked();
 	await expect
 		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
 		.toBe(true);

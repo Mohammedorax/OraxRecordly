@@ -26,6 +26,15 @@
 		"failedToUploadImage": "Failed to upload image",
 		"fileReadError": "There was an error reading the file."
 	},
+	"errorBoundary": {
+		"title": "Something went wrong",
+		"description": "OraxRecordly hit an unexpected error and could not finish drawing this window. Reloading usually fixes it.",
+		"details": "Technical details",
+		"reload": "Reload",
+		"copyDetails": "Copy details",
+		"copied": "Details copied",
+		"copyFailed": "Could not copy the details"
+	},
 	"announcements": {
 		"carousel": "Announcements",
 		"dismiss": "Dismiss",

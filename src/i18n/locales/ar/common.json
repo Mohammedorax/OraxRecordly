@@ -26,6 +26,15 @@
 		"failedToUploadImage": "فشل رفع الصورة",
 		"fileReadError": "حدث خطأ أثناء قراءة الملف."
 	},
+	"errorBoundary": {
+		"title": "حدث خطأ ما",
+		"description": "واجه OraxRecordly خطأً غير متوقع وتعذَّر عرض هذه النافذة. غالبًا ما تحل إعادة التحميل المشكلة.",
+		"details": "التفاصيل التقنية",
+		"reload": "إعادة التحميل",
+		"copyDetails": "نسخ التفاصيل",
+		"copied": "تم نسخ التفاصيل",
+		"copyFailed": "تعذَّر نسخ التفاصيل"
+	},
 	"announcements": {
 		"carousel": "الإعلانات",
 		"dismiss": "تجاهل",

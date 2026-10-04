@@ -635,9 +635,29 @@ test("folder actions stay inside narrow project cards without clipping", async (
 		card.getByRole("button", { name: "Remove Project 1 from Work", exact: true }),
 	).toBeVisible();
 	await expect(card.locator('[aria-label="1 more folders: Work"]')).toHaveCount(0);
-	await card.evaluate((element) => {
-		element.style.width = "340px";
+	// Derive the width at which the counter must appear instead of guessing a
+	// magic card width: measure the real chip widths and the card chrome, then
+	// set the card just narrow enough that both chips cannot share the row.
+	const folderRow = await card.evaluate((element) => {
+		const host = element.querySelector('[aria-label^="Folders for"]') as HTMLElement;
+		const chips = Array.from(
+			element.querySelectorAll('button[aria-label^="Remove Project 1 from"]'),
+			(chip) => chip.getBoundingClientRect().width,
+		);
+		return {
+			chipWidths: chips.slice(0, 2),
+			gap: Number.parseFloat(getComputedStyle(host).columnGap) || 0,
+			hostWidth: host.clientWidth,
+			cardWidth: element.getBoundingClientRect().width,
+		};
 	});
+	const bothChipsWidth = folderRow.chipWidths[0] + folderRow.gap + folderRow.chipWidths[1];
+	const narrowCardWidth = Math.round(
+		bothChipsWidth - 20 + (folderRow.cardWidth - folderRow.hostWidth),
+	);
+	await card.evaluate((element, width) => {
+		element.style.width = `${width}px`;
+	}, narrowCardWidth);
 	await expect(card.locator('[aria-label="1 more folders: Work"]')).toBeVisible();
 	await add.click();
 	await expect(page.getByRole("menuitem", { name: "Work", exact: true })).toBeVisible();

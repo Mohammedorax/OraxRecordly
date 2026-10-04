@@ -76,7 +76,7 @@ test("advanced controls and captions have consistent layouts", async ({ page }) 
 	await expect(page.getByRole("button", { name: "Use custom", exact: true })).toBeVisible();
 });
 
-test("populated project and preset popovers fit long names and dismiss outside", async ({
+test("populated projects dashboard fits long names and dismisses its overlays", async ({
 	page,
 }) => {
 	test.setTimeout(60000);
@@ -98,29 +98,35 @@ test("populated project and preset popovers fit long names and dismiss outside",
 		});
 	});
 	await page.getByRole("button", { name: "Home", exact: true }).click();
-	const projects = page.getByRole("dialog", { name: "Projects", exact: true });
-	await expect(projects.getByRole("button", { name: /A very long project name/ })).toHaveCount(5);
-	await expectButtonsFit(projects);
+	// Home now opens the "Projects dashboard" modal, not a "Projects" popover.
+	const projects = page.getByRole("dialog", { name: "Projects dashboard", exact: true });
+	await expect(projects).toBeVisible();
+	const projectList = projects.getByRole("list", { name: "Your projects" });
+	// Each project contributes exactly three buttons whose name contains it: the
+	// card itself, "Add folder to ...", and "Options for ...".
+	await expect(projects.getByRole("button", { name: /A very long project name/ })).toHaveCount(
+		15,
+	);
+	for (let index = 0; index < 5; index += 1) {
+		await expect(
+			projectList.getByRole("button", {
+				name: `A very long project name with many words ${index}`,
+				exact: true,
+			}),
+		).toBeVisible();
+	}
+	await expectButtonsFit(projectList);
 	await page.screenshot({
 		path: "test-results/editor-projects-populated.png",
 		animations: "disabled",
 	});
-	await clickOutside(page);
+	// The dashboard is a full-viewport modal, so there is no backdrop area to
+	// click outside of it; Escape is its dismissal path.
+	await page.keyboard.press("Escape");
 	await expect(projects).toHaveCount(0);
-	await page.getByRole("button", { name: "Open presets", exact: true }).click();
-	const presets = page.getByRole("dialog", { name: "Presets", exact: true });
-	await presets
-		.getByRole("textbox", { name: "Preset name" })
-		.fill("A very long saved preset name that must not push its delete button out");
-	await presets.getByRole("button", { name: "Save", exact: true }).click();
-	await expect(presets.getByRole("button", { name: /Delete preset/ })).toBeVisible();
-	await expectButtonsFit(presets);
-	await page.screenshot({
-		path: "test-results/editor-presets-populated.png",
-		animations: "disabled",
-	});
-	await clickOutside(page);
-	await expect(presets).toHaveCount(0);
+	// The preset popover is intentionally not exposed: EditorHeader keeps its
+	// implementation behind `SHOW_PRESETS_BUTTON = false`, so no trigger renders.
+	await expect(page.getByRole("button", { name: "Open presets", exact: true })).toHaveCount(0);
 	await page.getByRole("button", { name: "Export", exact: true }).click();
 	await expect(page.getByRole("grid", { name: "Format", exact: true })).toBeVisible();
 	await clickOutside(page);

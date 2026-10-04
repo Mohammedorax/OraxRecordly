@@ -90,6 +90,14 @@ function PhaseIcon({ payload }: { payload: UpdateToastPayload }) {
 	}
 }
 
+// The main process pushes "update-toast-state" on every change, but only on
+// macOS (`sendUpdateToastToWindows` is a no-op elsewhere). A slow fallback poll
+// is therefore kept so a payload can still be discovered, while the fast
+// cadence is reserved for the only phase whose progress moves on its own: a
+// hidden, idle toast window no longer polls every 750 ms for the whole session.
+const ACTIVE_POLL_INTERVAL_MS = 750;
+const IDLE_POLL_INTERVAL_MS = 2000;
+
 export function UpdateToastWindow({
 	payload: suppliedPayload,
 }: {
@@ -97,6 +105,7 @@ export function UpdateToastWindow({
 } = {}) {
 	const [livePayload, setPayload] = useState<UpdateToastPayload | null>(null);
 	const payload = suppliedPayload ?? livePayload;
+	const livePhase = livePayload?.phase;
 	const { t } = useI18n();
 
 	useEffect(() => {
@@ -109,7 +118,10 @@ export function UpdateToastWindow({
 		};
 
 		refresh();
-		const pollTimer = setInterval(refresh, 750);
+		const pollTimer = setInterval(
+			refresh,
+			livePhase === "downloading" ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS,
+		);
 		const dispose = window.electronAPI.onUpdateToastStateChanged(setPayload);
 
 		return () => {
@@ -117,7 +129,7 @@ export function UpdateToastWindow({
 			clearInterval(pollTimer);
 			dispose();
 		};
-	}, [suppliedPayload]);
+	}, [suppliedPayload, livePhase]);
 
 	if (!payload) {
 		return <div className={styles.window} />;

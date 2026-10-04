@@ -1,38 +1,51 @@
 import { Card } from "@heroui/react";
 import { lazy, Suspense, useEffect, useState } from "react";
+import { AppErrorBoundary } from "./components/system/AppErrorBoundary";
 import { useI18n } from "./contexts/I18nContext";
+import { APP_ICON_128_SRC } from "./lib/appAssets";
+import { loadWithRetry } from "./lib/lazyWithRetry";
 
-const HudWindow = lazy(() => import("./components/launch/HudWindow"));
+// Every lazy window goes through `loadWithRetry`, which retries a failed
+// dynamic import once. If it still fails, the rejection surfaces to
+// `<AppErrorBoundary>` below (it wraps `<Suspense>`) instead of leaving the
+// window on `fallback={null}` forever.
+const HudWindow = lazy(() => loadWithRetry(() => import("./components/launch/HudWindow")));
 const SourceSelector = lazy(() =>
-	import("./components/launch/SourceSelector").then((module) => ({
-		default: module.SourceSelector,
-	})),
+	loadWithRetry(() =>
+		import("./components/launch/SourceSelector").then((module) => ({
+			default: module.SourceSelector,
+		})),
+	),
 );
 const CountdownOverlay = lazy(() =>
-	import("./components/countdown/CountdownOverlay").then((module) => ({
-		default: module.CountdownOverlay,
-	})),
+	loadWithRetry(() =>
+		import("./components/countdown/CountdownOverlay").then((module) => ({
+			default: module.CountdownOverlay,
+		})),
+	),
 );
 const UpdateToastWindow = lazy(() =>
-	import("./components/launch/UpdateToastWindow").then((module) => ({
-		default: module.UpdateToastWindow,
-	})),
+	loadWithRetry(() =>
+		import("./components/launch/UpdateToastWindow").then((module) => ({
+			default: module.UpdateToastWindow,
+		})),
+	),
 );
-const EditorWindow = lazy(() => import("./components/video-editor/EditorWindow"));
-const ScreenshotRegionOverlay = lazy(
-	() => import("./components/screenshot-region/ScreenshotRegionOverlay"),
+const EditorWindow = lazy(() =>
+	loadWithRetry(() => import("./components/video-editor/EditorWindow")),
 );
-const ImageEditorWindow = lazy(() => import("./components/screenshot/ImageEditorWindow"));
+const ScreenshotRegionOverlay = lazy(() =>
+	loadWithRetry(() => import("./components/screenshot-region/ScreenshotRegionOverlay")),
+);
+const ImageEditorWindow = lazy(() =>
+	loadWithRetry(() => import("./components/screenshot/ImageEditorWindow")),
+);
 
 export default function App() {
 	const [windowType] = useState(
 		() => new URLSearchParams(window.location.search).get("windowType") || "",
 	);
 	const { t } = useI18n();
-	// Square app icon: this is rendered at 48x48 with `rounded-xl` next to the
-	// product name, so the full "Orax" lockup would be unreadable here. The
-	// lockup lives at `icons/brand/orax-logo.png` for external use.
-	const appIconSrc = "/app-icons/recordly-128.png";
 
 	useEffect(() => {
 		document.documentElement.dataset.windowType = windowType;
@@ -95,8 +108,15 @@ export default function App() {
 			content = (
 				<div className="flex h-full w-full items-center justify-center bg-editor-bg text-foreground">
 					<Card className="flex-row items-center gap-4 px-6 py-5">
+						{/*
+						 * Square app icon: this is rendered at 48x48 with `rounded-xl` next
+						 * to the product name, so the full "Orax" lockup would be unreadable
+						 * here. The lockup lives at `icons/brand/orax-logo.png` for external
+						 * use. `APP_ICON_128_SRC` resolves through `import.meta.env.BASE_URL`,
+						 * so it works both in the dev server and under `file://`.
+						 */}
 						<img
-							src={appIconSrc}
+							src={APP_ICON_128_SRC}
 							alt={t("app.name", "Recordly")}
 							className="h-12 w-12 rounded-xl"
 						/>
@@ -113,5 +133,11 @@ export default function App() {
 			);
 	}
 
-	return <Suspense fallback={null}>{content}</Suspense>;
+	return (
+		// The boundary wraps `Suspense`, so it catches both render/lifecycle
+		// errors inside a window component and a lazy() import that rejected.
+		<AppErrorBoundary windowType={windowType}>
+			<Suspense fallback={null}>{content}</Suspense>
+		</AppErrorBoundary>
+	);
 }

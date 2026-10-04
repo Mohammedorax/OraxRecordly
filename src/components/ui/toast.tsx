@@ -1,6 +1,7 @@
 import { Toast, toast as heroToast } from "@heroui/react";
 import { isValidElement, type ComponentProps, type ReactNode } from "react";
 import { translateForActiveLocale } from "@/contexts/I18nContext";
+import { writeClipboardText } from "@/lib/clipboard";
 
 type Options = {
 	id?: string | number;
@@ -17,22 +18,6 @@ function plainText(value: ReactNode): string {
 	if (Array.isArray(value)) return value.map(plainText).join("");
 	if (isValidElement<{ children?: ReactNode }>(value)) return plainText(value.props.children);
 	return "";
-}
-
-/**
- * Copy through Electron's native clipboard first. Toasts are raised from
- * background work in windows that are not focused, where Chromium refuses
- * `navigator.clipboard` writes; the web Clipboard API remains the fallback so
- * the browser build keeps working.
- */
-async function writeClipboardText(text: string): Promise<void> {
-	const bridge = typeof window === "undefined" ? undefined : window.electronAPI;
-	if (typeof bridge?.writeClipboardText === "function") {
-		const result = await bridge.writeClipboardText(text);
-		if (result?.success) return;
-		throw new Error(result?.error || "The native clipboard write failed");
-	}
-	await navigator.clipboard.writeText(text);
 }
 
 // Keep existing callers compatible while HeroUI owns the queue and presentation.
