@@ -33,5 +33,30 @@ function pinUserDataPath(): void {
 
 pinUserDataPath();
 
-export const USER_DATA_PATH = app.getPath("userData");
+/**
+ * `app.getPath` is unavailable when this module is imported outside a real
+ * Electron main process — the unit-test electron mocks, and (reproducibly) a
+ * packaged launch whose environment carries `ELECTRON_RUN_AS_NODE=1`, where
+ * `require("electron")` resolves to the npm shim and `app` is `undefined`.
+ *
+ * Calling it unguarded threw `TypeError: Cannot read properties of undefined
+ * (reading 'getPath')` at import time. Electron then exited with code 0, no
+ * window and no diagnostic, which is indistinguishable from "the app didn't
+ * launch". Fall back to the same pinned directory the real process uses so the
+ * import can never be the thing that kills a launch.
+ */
+function readUserDataPath(): string {
+	try {
+		if (typeof app?.getPath === "function") {
+			return app.getPath("userData");
+		}
+	} catch {
+		// Fall through to the pinned path below.
+	}
+
+	const appDataRoot = process.env.APPDATA ?? process.env.HOME ?? process.cwd();
+	return path.join(appDataRoot, "Recordly");
+}
+
+export const USER_DATA_PATH = readUserDataPath();
 export const RECORDINGS_DIR = path.join(USER_DATA_PATH, "recordings");

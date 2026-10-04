@@ -41,6 +41,26 @@ const ImageEditorWindow = lazy(() =>
 	loadWithRetry(() => import("./components/screenshot/ImageEditorWindow")),
 );
 
+/**
+ * Window types whose `BrowserWindow` is created with `transparent: true` by the
+ * main process (`electron/windows.ts`). Their page must stay transparent so the
+ * desktop shows through the parts of the window that hold no content.
+ *
+ * The trade-off is that such a window has no opaque background of its own: if
+ * the window component never mounts, the app renders *nothing at all* on screen
+ * while the process keeps running — the "invisible window" failure mode. The
+ * effect below therefore undoes this transparency as soon as the renderer
+ * reports an error, so any fallback surface (the error boundary, a chunk-load
+ * failure message) is actually readable.
+ */
+const TRANSPARENT_WINDOW_TYPES = new Set([
+	"hud-overlay",
+	"source-selector",
+	"countdown",
+	"update-toast",
+	"screenshot-region",
+]);
+
 export default function App() {
 	const [windowType] = useState(
 		() => new URLSearchParams(window.location.search).get("windowType") || "",
@@ -50,13 +70,7 @@ export default function App() {
 	useEffect(() => {
 		document.documentElement.dataset.windowType = windowType;
 
-		if (
-			windowType === "hud-overlay" ||
-			windowType === "source-selector" ||
-			windowType === "countdown" ||
-			windowType === "update-toast" ||
-			windowType === "screenshot-region"
-		) {
+		if (TRANSPARENT_WINDOW_TYPES.has(windowType)) {
 			document.body.style.background = "transparent";
 			document.documentElement.style.background = "transparent";
 			document.getElementById("root")?.style.setProperty("background", "transparent");
@@ -72,6 +86,30 @@ export default function App() {
 			document.body.style.overflow = "visible";
 			document.getElementById("root")?.style.setProperty("overflow", "visible");
 		}
+	}, [windowType]);
+
+	useEffect(() => {
+		if (!TRANSPARENT_WINDOW_TYPES.has(windowType)) {
+			return;
+		}
+
+		// A lazy window chunk that fails to load leaves a transparent window with
+		// nothing in it, so the user sees an app that "did not start". Restore the
+		// stylesheet background on the first renderer error so whatever surface
+		// mounts afterwards is visible.
+		const restoreOpaqueBackground = () => {
+			document.documentElement.style.removeProperty("background");
+			document.body.style.removeProperty("background");
+			document.getElementById("root")?.style.removeProperty("background");
+		};
+
+		window.addEventListener("error", restoreOpaqueBackground);
+		window.addEventListener("unhandledrejection", restoreOpaqueBackground);
+
+		return () => {
+			window.removeEventListener("error", restoreOpaqueBackground);
+			window.removeEventListener("unhandledrejection", restoreOpaqueBackground);
+		};
 	}, [windowType]);
 
 	useEffect(() => {

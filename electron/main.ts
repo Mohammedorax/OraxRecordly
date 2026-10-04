@@ -31,6 +31,12 @@ import { ensureMediaServer } from "./mediaServer";
 import { hardenWebContentsNavigation, shouldHardenWebContentsType } from "./navigationPolicy";
 import { shouldGrantDisplayCapture, shouldGrantMediaPermission } from "./permissionPolicy";
 import { ensurePackagedRendererServer, getPackagedRendererBaseUrl } from "./rendererServer";
+import {
+	decideStartupVisibility,
+	describeStartupVisibility,
+	getWindowTypeFromUrl,
+	type StartupWindowSnapshot,
+} from "./startupVisibility";
 import { captureScreenshotFromGlobalShortcut } from "./ipc/register/screenshot";
 import {
 	registerScreenshotGlobalShortcut,
@@ -399,6 +405,100 @@ function createWindow() {
 	isCreatingMainWindow = false;
 }
 
+/**
+ * Cold-launch visibility watchdog.
+ *
+ * The HUD overlay is Recordly's only cold-launch surface, and it is a
+ * transparent always-on-top window: if its renderer never presents a frame (a
+ * compositor that cannot present a transparent surface, a renderer that dies
+ * during startup, a chunk that fails to load) the process keeps running with a
+ * taskbar entry and *nothing on screen*. The owner's bug report is exactly that.
+ *
+ * The watchdog closes that hole: if no window is visible shortly after launch it
+ * asks the HUD to show itself, and if that still does not produce a visible
+ * window it opens the editor window, which is a normal opaque window. Either way
+ * a cold launch ends with something the user can see and interact with.
+ *
+ * Logging goes through `console.error` on purpose: the production renderer build
+ * strips `console.log`/`console.debug` (`drop_console` in vite.config.ts), so a
+ * "loud" startup diagnostic has to use warn/error to survive into the shipped
+ * app.
+ */
+const STARTUP_VISIBILITY_TICK_MS = 1500;
+let startupVisibilityWatchdog: NodeJS.Timeout | null = null;
+
+function snapshotWindowsForVisibility(): StartupWindowSnapshot[] {
+	return BrowserWindow.getAllWindows().map((window) => ({
+		windowType: window.isDestroyed()
+			? "unknown"
+			: getWindowTypeFromUrl(window.webContents.getURL()),
+		visible: !window.isDestroyed() && window.isVisible(),
+		destroyed: window.isDestroyed(),
+	}));
+}
+
+function stopStartupVisibilityWatchdog() {
+	if (startupVisibilityWatchdog) {
+		clearInterval(startupVisibilityWatchdog);
+		startupVisibilityWatchdog = null;
+	}
+}
+
+export function startColdLaunchVisibilityWatchdog() {
+	if (startupVisibilityWatchdog) {
+		return;
+	}
+
+	// "Start minimized" is a deliberate choice and the tray icon is the
+	// documented way back to the UI, so do not override it where a tray exists.
+	if (startMinimizedLaunchActive) {
+		return;
+	}
+
+	const startedAt = Date.now();
+	let hudShowAttempted = false;
+
+	const tick = () => {
+		const elapsedMs = Date.now() - startedAt;
+		const input = {
+			windows: snapshotWindowsForVisibility(),
+			elapsedMs,
+			hudShowAttempted,
+		};
+		const action = decideStartupVisibility(input);
+
+		if (action === "wait") {
+			return;
+		}
+
+		console.warn(`[startup] ${describeStartupVisibility(action, input)}`);
+
+		if (action === "none") {
+			stopStartupVisibilityWatchdog();
+			return;
+		}
+
+		if (action === "show-hud") {
+			hudShowAttempted = true;
+			if (!showHudOverlayFromTray()) {
+				console.error(
+					"[startup] No visible window and no HUD overlay to show; opening the editor window instead.",
+				);
+				stopStartupVisibilityWatchdog();
+				createEditorWindowWrapper();
+			}
+			return;
+		}
+
+		stopStartupVisibilityWatchdog();
+		createEditorWindowWrapper();
+	};
+
+	startupVisibilityWatchdog = setInterval(tick, STARTUP_VISIBILITY_TICK_MS);
+	// The watchdog must never be the reason the process stays alive.
+	startupVisibilityWatchdog.unref?.();
+}
+
 function focusOrCreateMainWindow() {
 	if (!app.isReady()) {
 		void app.whenReady().then(() => {
@@ -671,6 +771,25 @@ function shouldUseTray() {
 	// macOS and Windows expose Recordly through their Dock/taskbar. Keep the
 	// tray entry only on Linux, where it remains the primary app entry point.
 	return process.platform === "linux";
+}
+
+/**
+ * "Start minimized" is only safe where the app keeps an affordance the user can
+ * use to bring the UI back. On Windows and macOS Recordly deliberately has no
+ * tray icon (see {@link shouldUseTray}), which leaves a minimized launch with no
+ * way back: the process runs, no window is visible, and nothing on screen hints
+ * that Recordly is alive. That dead end is worse than ignoring the preference,
+ * so where there is no tray the launch stays visible.
+ */
+function canStartMinimizedWithoutStrandingTheUser(startMinimizedRequested: boolean) {
+	if (!startMinimizedRequested || shouldUseTray()) {
+		return startMinimizedRequested;
+	}
+
+	console.warn(
+		`[startup] Ignoring "start minimized" on ${process.platform}: this platform has no tray icon to restore the UI from, so the launch stays visible.`,
+	);
+	return false;
 }
 
 function getPublicAssetPath(filename: string) {
@@ -1155,10 +1274,12 @@ app.whenReady().then(async () => {
 		return;
 	}
 
-	beginStartMinimizedLaunch(
-		shouldStartMinimizedOnLaunch((await readStartupPreferences()).startMinimized),
+	const startMinimizedRequested = shouldStartMinimizedOnLaunch(
+		(await readStartupPreferences()).startMinimized,
 	);
+	beginStartMinimizedLaunch(canStartMinimizedWithoutStrandingTheUser(startMinimizedRequested));
 	createWindow();
+	startColdLaunchVisibilityWatchdog();
 	setupAutoUpdates(getUpdateDialogWindow, sendUpdateToastToWindows);
 	if (IS_DEV && process.env.RECORDLY_DEV_PREVIEW_UPDATE === "1") {
 		setTimeout(() => {
