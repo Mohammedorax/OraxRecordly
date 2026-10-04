@@ -168,6 +168,21 @@
 		"nativeCaptureWarningTesterUnavailable": "This project is currently marked as native capture unavailable.",
 		"openNativeCaptureWarning": "Open warning"
 	},
+	"keycast": {
+		"title": "Keyboard shortcuts on screen",
+		"description": "Show the keys you press as a key-cap badge on the recording, so viewers can follow the shortcut.",
+		"position": "Position",
+		"positionTopLeft": "Top left",
+		"positionTopCenter": "Top center",
+		"positionTopRight": "Top right",
+		"positionBottomLeft": "Bottom left",
+		"positionBottomCenter": "Bottom center",
+		"positionBottomRight": "Bottom right",
+		"size": "Size",
+		"opacity": "Opacity",
+		"hold": "Display duration",
+		"platformNote": "Keystrokes come from the global input hook, which Recordly only starts on Windows and Linux."
+	},
 	"sections": {
 		"scene": "Scene",
 		"captions": "Captions",

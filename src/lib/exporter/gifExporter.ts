@@ -14,6 +14,7 @@ import type {
 	ZoomRegion,
 	ZoomTransitionEasing,
 } from "@/components/video-editor/types";
+import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { FrameRenderer } from "./frameRenderer";
 import { calculateOutputDimensions } from "./outputDimensions";
 import { StreamingVideoDecoder } from "./streamingDecoder";
@@ -60,6 +61,9 @@ interface GifExporterConfig {
 	autoCaptions?: CaptionCue[];
 	autoCaptionSettings?: AutoCaptionSettings;
 	cursorTelemetry?: CursorTelemetryPoint[];
+	/** Recorded keystrokes for the optional on-screen key badge. */
+	keycastEvents?: KeycastKeystroke[];
+	keycastSettings?: KeycastSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -128,6 +132,8 @@ export function buildGifFrameRendererConfig(
 		previewWidth: config.previewWidth,
 		previewHeight: config.previewHeight,
 		cursorTelemetry: config.cursorTelemetry,
+		keycastEvents: config.keycastEvents,
+		keycastSettings: config.keycastSettings,
 		showCursor: config.showCursor,
 		cursorStyle: config.cursorStyle,
 		cursorSize: config.cursorSize,

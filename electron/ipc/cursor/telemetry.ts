@@ -1,5 +1,9 @@
 import fs from "node:fs/promises";
 import {
+	type KeycastKeystroke,
+	normalizeKeycastKeystrokes,
+} from "../../../src/lib/keycast/keycastModel";
+import {
 	CURSOR_SAMPLE_INTERVAL_MS,
 	CURSOR_TELEMETRY_VERSION,
 	MAX_CURSOR_SAMPLES,
@@ -14,6 +18,7 @@ import {
 	isCursorCaptureActive,
 	linuxCursorScreenPoint,
 	pendingCursorSamples,
+	pendingKeycastEvents,
 	selectedSource,
 	selectedWindowBounds,
 	setActiveCursorSamples,
@@ -21,9 +26,11 @@ import {
 	setCursorCaptureInterval,
 	setCursorCapturePauseStartedAtMs,
 	setPendingCursorSamples,
+	setPendingKeycastEvents,
 } from "../state";
 import type { CursorInteractionType, CursorTelemetryPoint, CursorVisualType } from "../types";
 import { getScreen, getTelemetryPathForVideo } from "../utils";
+import { snapshotKeycastTelemetryForPersistence } from "./keycast";
 
 export function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
@@ -80,18 +87,58 @@ export function normalizeCursorTelemetrySamples(rawSamples: unknown): CursorTele
 		.sort((a, b) => a.timeMs - b.timeMs);
 }
 
-export async function writeCursorTelemetry(videoPath: string, samples: unknown) {
+export function normalizeKeycastTelemetry(rawSamples: unknown): KeycastKeystroke[] {
+	const events = Array.isArray(rawSamples)
+		? rawSamples
+		: Array.isArray((rawSamples as { keyEvents?: unknown[] } | null | undefined)?.keyEvents)
+			? ((rawSamples as { keyEvents: unknown[] }).keyEvents ?? [])
+			: [];
+
+	return normalizeKeycastKeystrokes(events);
+}
+
+/**
+ * Existing keystrokes on disk, if any. Used when a caller rewrites only the
+ * cursor samples (manual telemetry edits, concatenated imports) and must not
+ * silently drop the overlay data recorded with the video.
+ */
+async function readExistingKeycastTelemetry(telemetryPath: string): Promise<KeycastKeystroke[]> {
+	try {
+		const content = await fs.readFile(telemetryPath, "utf-8");
+		return normalizeKeycastTelemetry(JSON.parse(content));
+	} catch {
+		return [];
+	}
+}
+
+export async function writeCursorTelemetry(
+	videoPath: string,
+	samples: unknown,
+	keyEvents?: unknown,
+) {
 	const telemetryPath = getTelemetryPathForVideo(videoPath);
 	const normalizedSamples = normalizeCursorTelemetrySamples(samples);
+	const normalizedKeyEvents =
+		keyEvents === undefined
+			? await readExistingKeycastTelemetry(telemetryPath)
+			: normalizeKeycastTelemetry(keyEvents);
 
-	if (normalizedSamples.length === 0) {
+	if (normalizedSamples.length === 0 && normalizedKeyEvents.length === 0) {
 		await fs.rm(telemetryPath, { force: true });
 		return normalizedSamples;
 	}
 
 	await fs.writeFile(
 		telemetryPath,
-		JSON.stringify({ version: CURSOR_TELEMETRY_VERSION, samples: normalizedSamples }, null, 2),
+		JSON.stringify(
+			{
+				version: CURSOR_TELEMETRY_VERSION,
+				samples: normalizedSamples,
+				keyEvents: normalizedKeyEvents,
+			},
+			null,
+			2,
+		),
 		"utf-8",
 	);
 
@@ -267,11 +314,16 @@ export function sampleCursorPoint() {
 
 export async function persistPendingCursorTelemetry(videoPath: string) {
 	const telemetryPath = getTelemetryPathForVideo(videoPath);
-	if (pendingCursorSamples.length > 0) {
+	const keyEvents = normalizeKeycastTelemetry(pendingKeycastEvents);
+	if (pendingCursorSamples.length > 0 || keyEvents.length > 0) {
 		await fs.writeFile(
 			telemetryPath,
 			JSON.stringify(
-				{ version: CURSOR_TELEMETRY_VERSION, samples: pendingCursorSamples },
+				{
+					version: CURSOR_TELEMETRY_VERSION,
+					samples: pendingCursorSamples,
+					keyEvents,
+				},
 				null,
 				2,
 			),
@@ -279,9 +331,14 @@ export async function persistPendingCursorTelemetry(videoPath: string) {
 		);
 	}
 	setPendingCursorSamples([]);
+	setPendingKeycastEvents([]);
 }
 
 export function snapshotCursorTelemetryForPersistence() {
+	// Keycast rides on the cursor snapshot so every pause boundary and stop that
+	// already flushes cursor samples flushes keystrokes too.
+	snapshotKeycastTelemetryForPersistence();
+
 	if (activeCursorSamples.length === 0) {
 		return;
 	}

@@ -47,6 +47,12 @@ import {
 } from "@/components/video-editor/videoPlayback/zoomTransform";
 import { getAssetPath, getExportableVideoUrl, getRenderableAssetUrl } from "@/lib/assetPath";
 import { drawSquircleOnGraphics } from "@/lib/geometry/squircle";
+import {
+	type KeycastKeystroke,
+	type KeycastSettings,
+	normalizeKeycastSettings,
+} from "@/lib/keycast/keycastModel";
+import { detectMacPlatform, renderKeycastBadge } from "@/lib/keycast/keycastRenderer";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import {
 	destroyPixiApplication,
@@ -91,6 +97,9 @@ interface FrameRenderConfig {
 	previewWidth?: number;
 	previewHeight?: number;
 	cursorTelemetry?: CursorTelemetryPoint[];
+	/** Recorded keystrokes for the optional on-screen key badge. */
+	keycastEvents?: KeycastKeystroke[];
+	keycastSettings?: KeycastSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -1234,6 +1243,19 @@ export class FrameRenderer {
 				this.config.height,
 				timestamp / 1000,
 			);
+		}
+
+		// Key badge last so it stays legible above captions and annotations, and
+		// driven by the source timeline like the cursor overlay.
+		if (this.compositeCtx && (this.config.keycastEvents?.length ?? 0) > 0) {
+			renderKeycastBadge(this.compositeCtx, {
+				events: this.config.keycastEvents ?? [],
+				settings: normalizeKeycastSettings(this.config.keycastSettings ?? {}),
+				width: this.config.width,
+				height: this.config.height,
+				timeMs: cursorTimeMs,
+				isMac: detectMacPlatform(),
+			});
 		}
 	}
 

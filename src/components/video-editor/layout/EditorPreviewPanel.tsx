@@ -206,6 +206,8 @@ export function EditorPreviewPanel(props: Props) {
 									audio={audio}
 									effectiveZoomRegions={projection.effectiveZoomRegions}
 									effectiveCursorTelemetry={effectiveCursorTelemetry}
+									effectiveKeycastEvents={timeline.keycastEvents}
+									keycastSettings={appearance.keycastSettings}
 									effectiveShowCursor={effectiveShowCursor}
 									setDuration={setDuration}
 									setIsPreviewReady={setIsPreviewReady}

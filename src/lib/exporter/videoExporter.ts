@@ -16,6 +16,7 @@ import type {
 	ZoomRegion,
 	ZoomTransitionEasing,
 } from "@/components/video-editor/types";
+import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import { AudioProcessor, isAacAudioEncodingSupported } from "./audioEncoder";
 import { buildEditedTrackSourceSegments, classifyEditedTrackStrategy } from "./editedTrackStrategy";
@@ -73,6 +74,9 @@ interface VideoExporterConfig extends ExportConfig {
 	autoCaptions?: CaptionCue[];
 	autoCaptionSettings?: AutoCaptionSettings;
 	cursorTelemetry?: CursorTelemetryPoint[];
+	/** Recorded keystrokes for the optional on-screen key badge. */
+	keycastEvents?: KeycastKeystroke[];
+	keycastSettings?: KeycastSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -253,6 +257,8 @@ export class VideoExporter {
 				previewWidth: this.config.previewWidth,
 				previewHeight: this.config.previewHeight,
 				cursorTelemetry: this.config.cursorTelemetry,
+				keycastEvents: this.config.keycastEvents,
+				keycastSettings: this.config.keycastSettings,
 				showCursor: this.config.showCursor,
 				cursorStyle: this.config.cursorStyle,
 				cursorSize: this.config.cursorSize,

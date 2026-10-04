@@ -18,9 +18,11 @@ import { getHudOverlayCaptureProtectionEnabled, beginHudCaptureProtection } from
 import { ALLOW_RECORDLY_WINDOW_CAPTURE } from "../constants";
 import { startWindowBoundsCapture, stopWindowBoundsCapture } from "../cursor/bounds";
 import { startInteractionCapture, stopInteractionCapture } from "../cursor/interaction";
+import { resetKeycastCapture } from "../cursor/keycast";
 import { startNativeCursorMonitor, stopNativeCursorMonitor } from "../cursor/monitor";
 import {
 	normalizeCursorTelemetrySamples,
+	normalizeKeycastTelemetry,
 	pauseCursorCaptureAtBoundary,
 	persistPendingCursorTelemetry,
 	resetCursorCaptureClock,
@@ -1963,6 +1965,7 @@ export function registerRecordingHandlers(
 			setIsCursorCaptureActive(true);
 			setActiveCursorSamples([]);
 			setPendingCursorSamples([]);
+			resetKeycastCapture();
 			setCursorCaptureStartTimeMs(Date.now());
 			resetCursorCaptureClock();
 			setLinuxCursorScreenPoint(null);
@@ -2012,7 +2015,7 @@ export function registerRecordingHandlers(
 	ipcMain.handle("get-cursor-telemetry", async (_, videoPath?: string) => {
 		const targetVideoPath = normalizeVideoSourcePath(videoPath ?? currentVideoPath);
 		if (!targetVideoPath) {
-			return { success: true, samples: [] };
+			return { success: true, samples: [], keyEvents: [] };
 		}
 
 		const telemetryPath = getTelemetryPathForVideo(targetVideoPath);
@@ -2020,12 +2023,13 @@ export function registerRecordingHandlers(
 			const content = await fs.readFile(telemetryPath, "utf-8");
 			const parsed = parseJsonWithByteOrderMark<unknown>(content);
 			const samples = normalizeCursorTelemetrySamples(parsed);
+			const keyEvents = normalizeKeycastTelemetry(parsed);
 
-			return { success: true, samples };
+			return { success: true, samples, keyEvents };
 		} catch (error) {
 			const nodeError = error as NodeJS.ErrnoException;
 			if (nodeError.code === "ENOENT") {
-				return { success: true, samples: [] };
+				return { success: true, samples: [], keyEvents: [] };
 			}
 			console.error("Failed to load cursor telemetry:", error);
 			return {
@@ -2033,6 +2037,7 @@ export function registerRecordingHandlers(
 				message: "Failed to load cursor telemetry",
 				error: String(error),
 				samples: [],
+				keyEvents: [],
 			};
 		}
 	});

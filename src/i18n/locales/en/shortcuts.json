@@ -21,6 +21,12 @@
 		"panTimeline": "Pan Timeline",
 		"zoomTimeline": "Zoom Timeline"
 	},
+	"keycast": {
+		"title": "Show shortcuts on screen",
+		"description": "Record the keys you press as a key-cap badge on the video, so a lesson can teach the shortcut itself. It is off by default and stays on your machine.",
+		"enableHint": "Turn it on in Settings → Cursor.",
+		"positionHint": "Position, size, opacity and how long the badge stays visible are all in Settings → Cursor."
+	},
 	"systemWide": {
 		"notSet": "Not set",
 		"screenshot": "Capture Screenshot",

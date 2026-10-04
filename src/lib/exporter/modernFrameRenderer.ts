@@ -57,6 +57,7 @@ import {
 } from "@/components/video-editor/videoPlayback/zoomTransform";
 import { getAssetPath, getExportableVideoUrl, getRenderableAssetUrl } from "@/lib/assetPath";
 import { drawSquircleOnCanvas, drawSquircleOnGraphics } from "@/lib/geometry/squircle";
+import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import {
 	destroyPixiApplication,
@@ -70,6 +71,7 @@ import {
 	renderAnnotationToCanvas,
 } from "./annotationRenderer";
 import { ForwardFrameSource } from "./forwardFrameSource";
+import { KeycastOverlayLayer } from "./keycastLayer";
 import { resolveMediaElementSource } from "./localMediaSource";
 import { getShadowFilterPadding, VIDEO_SHADOW_LAYER_PROFILES } from "./shadowProfile";
 import type { ExportRenderBackend } from "./types";
@@ -107,6 +109,10 @@ interface FrameRenderConfig {
 	previewWidth?: number;
 	previewHeight?: number;
 	cursorTelemetry?: CursorTelemetryPoint[];
+	/** Recorded keystrokes for the optional on-screen key badge. */
+	keycastEvents?: KeycastKeystroke[];
+	/** Keystroke badge appearance; disabled means nothing is drawn. */
+	keycastSettings?: Partial<KeycastSettings>;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -366,6 +372,7 @@ export class FrameRenderer {
 	private lastContentTimeMs: number | null = null;
 	private layoutCache: LayoutCache | null = null;
 	private cursorOverlay: PixiCursorOverlay | null = null;
+	private keycastLayer: KeycastOverlayLayer | null = null;
 	private videoTextureUsesStartupStaging = false;
 	private retainedSceneSourceFrame: VideoFrame | null = null;
 	private retainedSceneTextureFrame: VideoFrame | null = null;
@@ -463,6 +470,15 @@ export class FrameRenderer {
 
 		this.cameraContainer.addChild(this.annotationContainer);
 		this.overlayContainer.addChild(this.captionContainer);
+
+		// Keystroke badge sits on top of every other overlay, exactly where the
+		// preview's DOM badge sits above the caption box.
+		this.keycastLayer = new KeycastOverlayLayer(this.overlayContainer, {
+			width: this.config.width,
+			height: this.config.height,
+			events: this.config.keycastEvents,
+			settings: this.config.keycastSettings,
+		});
 
 		this.videoMaskGraphics = new Graphics();
 		this.videoEffectsContainer.addChild(this.videoMaskGraphics);
@@ -2058,6 +2074,7 @@ export class FrameRenderer {
 				await this.syncBackgroundFrame(backgroundTimelineTimestamp / 1_000_000);
 			}
 			if (this.captionContainer) this.captionContainer.visible = false;
+			this.keycastLayer?.hide();
 			// Gap frames must bypass canvas annotation compositing as well as Pixi layers.
 			this.outputCanvasOverride = null;
 			this.app.render();
@@ -2143,6 +2160,10 @@ export class FrameRenderer {
 
 		this.updateAnnotationLayer(timeMs);
 		this.updateCaptionLayer(timestamp / 1000);
+		// Keystrokes are recorded on the source timeline like cursor telemetry, so
+		// they follow `cursorTimeMs` (not the edited timeline) and stay in sync with
+		// trim and speed regions.
+		this.keycastLayer?.update(cursorTimeMs);
 		await this.renderOutput(timeMs);
 	}
 
@@ -2409,6 +2430,13 @@ export class FrameRenderer {
 		if (this.cursorOverlay) {
 			this.cursorOverlay.destroy();
 			this.cursorOverlay = null;
+		}
+
+		if (this.keycastLayer) {
+			const keycastTexture = this.keycastLayer.texture;
+			if (keycastTexture) texturesToDestroy.add(keycastTexture);
+			this.keycastLayer.destroy();
+			this.keycastLayer = null;
 		}
 
 		if (this.videoEffectsContainer) {

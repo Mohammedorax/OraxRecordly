@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { loadKeycastSettings, saveKeycastSettings } from "@/lib/keycast/keycastSettings";
+import type { KeycastSettings } from "@/lib/keycast/keycastModel";
 import type { EditorPreferences } from "../editorPreferences";
 import type {
 	CropRegion,
@@ -108,6 +110,21 @@ export function useAppearanceState(preferences: EditorPreferences) {
 	const [borderRadius, setBorderRadius] = useState(preferences.borderRadius);
 	const [padding, setPadding] = useState(preferences.padding);
 	const [cropRegion, setCropRegion] = useState<CropRegion>(DEFAULT_CROP_REGION);
+	/**
+	 * Keystroke overlay settings are app-level (not part of the project), so they
+	 * load from the persisted app settings and every change is written back
+	 * immediately — the same lifecycle the editor preferences use.
+	 */
+	const [keycastSettings, setKeycastSettingsState] = useState<KeycastSettings>(() =>
+		loadKeycastSettings(),
+	);
+	const setKeycastSettings = useCallback((next: KeycastSettings) => {
+		const saved = saveKeycastSettings(next);
+		setKeycastSettingsState(saved);
+		// Mirror the opt-in flag into the main process so the global input hook
+		// knows whether it may record keys during a recording.
+		void window.electronAPI?.setKeycastSettings?.(saved);
+	}, []);
 
 	return {
 		wallpaper,
@@ -190,5 +207,7 @@ export function useAppearanceState(preferences: EditorPreferences) {
 		setPadding,
 		cropRegion,
 		setCropRegion,
+		keycastSettings,
+		setKeycastSettings,
 	};
 }

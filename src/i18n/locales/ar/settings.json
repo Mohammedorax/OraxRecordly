@@ -168,6 +168,21 @@
 		"nativeCaptureWarningTesterUnavailable": "هذا المشروع مصنَّف حاليًا بأن الالتقاط الأصلي غير متاح.",
 		"openNativeCaptureWarning": "فتح التحذير"
 	},
+	"keycast": {
+		"title": "اختصارات لوحة المفاتيح على الشاشة",
+		"description": "أظهر المفاتيح التي تضغطها كشارة مفاتيح على التسجيل، ليتمكن المشاهد من متابعة الاختصار.",
+		"position": "الموضع",
+		"positionTopLeft": "أعلى اليسار",
+		"positionTopCenter": "أعلى الوسط",
+		"positionTopRight": "أعلى اليمين",
+		"positionBottomLeft": "أسفل اليسار",
+		"positionBottomCenter": "أسفل الوسط",
+		"positionBottomRight": "أسفل اليمين",
+		"size": "الحجم",
+		"opacity": "الشفافية",
+		"hold": "مدة الظهور",
+		"platformNote": "تُلتقط ضغطات المفاتيح من خطاف الإدخال العام، ولا يبدأه Recordly إلا على ويندوز ولينكس."
+	},
 	"sections": {
 		"scene": "المشهد",
 		"captions": "الترجمات النصية",

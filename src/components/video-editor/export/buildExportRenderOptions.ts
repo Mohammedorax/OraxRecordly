@@ -58,6 +58,8 @@ export function buildExportRenderOptions({
 		autoCaptionSettings: timeline.autoCaptionSettings,
 		zoomRegions: effectiveZoomRegions,
 		cursorTelemetry: effectiveCursorTelemetry,
+		keycastEvents: timeline.keycastEvents,
+		keycastSettings: appearance.keycastSettings,
 		showCursor: effectiveShowCursor,
 		cursorStyle: appearance.cursorStyle,
 		cursorSize: appearance.cursorSize,

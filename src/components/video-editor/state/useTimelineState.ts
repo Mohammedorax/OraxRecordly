@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { KeycastKeystroke } from "@/lib/keycast/keycastModel";
 import type { SourceAudioTrackSettings } from "../audio/audioTypes";
 import type {
 	AnnotationRegion,
@@ -17,6 +18,8 @@ export function useTimelineState() {
 	const [zoomRegions, setZoomRegions] = useState<ZoomRegion[]>([]);
 	const [cursorTelemetry, setCursorTelemetry] = useState<CursorTelemetryPoint[]>([]);
 	const [cursorTelemetrySourcePath, setCursorTelemetrySourcePath] = useState<string | null>(null);
+	/** Keystrokes recorded with the same telemetry file as `cursorTelemetry`. */
+	const [keycastEvents, setKeycastEvents] = useState<KeycastKeystroke[]>([]);
 	const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
 	const [trimRegions, setTrimRegions] = useState<TrimRegion[]>([]);
 	const [clipRegions, setClipRegions] = useState<ClipRegion[]>([]);
@@ -45,6 +48,8 @@ export function useTimelineState() {
 		setCursorTelemetry,
 		cursorTelemetrySourcePath,
 		setCursorTelemetrySourcePath,
+		keycastEvents,
+		setKeycastEvents,
 		selectedZoomId,
 		setSelectedZoomId,
 		trimRegions,

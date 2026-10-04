@@ -145,7 +145,7 @@ export type NativeMacWindowSource = {
 	height?: number;
 };
 
-export type HookEventName = "mousedown" | "mouseup" | "mousemove";
+export type HookEventName = "mousedown" | "mouseup" | "mousemove" | "keydown" | "keyup";
 
 export type HookMouseEvent = {
 	button?: number;
@@ -164,7 +164,23 @@ export type HookMouseEvent = {
 	};
 };
 
-export type HookEventListener = (event: HookMouseEvent) => void;
+/**
+ * uiohook keyboard payload. `keycode`/`rawcode` are both exposed by the native
+ * module and either may be the one populated depending on the platform, so the
+ * recorder accepts both.
+ */
+export type HookKeyboardEvent = {
+	keycode?: number;
+	rawcode?: number;
+	data?: {
+		keycode?: number;
+		rawcode?: number;
+	};
+};
+
+export type HookEvent = HookMouseEvent & HookKeyboardEvent;
+
+export type HookEventListener = (event: HookEvent) => void;
 
 export type UiohookLike = {
 	on: (eventName: HookEventName, listener: HookEventListener) => void;

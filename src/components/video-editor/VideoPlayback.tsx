@@ -15,6 +15,13 @@ import { useScopedT } from "@/contexts/I18nContext";
 import { getAssetPath, getRenderableAssetUrl, getRenderableVideoUrl } from "@/lib/assetPath";
 import { getSquircleSvgPath } from "@/lib/geometry/squircle";
 import {
+	DEFAULT_KEYCAST_SETTINGS,
+	type KeycastKeystroke,
+	type KeycastSettings,
+} from "@/lib/keycast/keycastModel";
+import { detectMacPlatform } from "@/lib/keycast/keycastRenderer";
+import { KeycastBadgeOverlay } from "./keycast/KeycastBadge";
+import {
 	clampMediaTimeToDuration,
 	enablePitchPreservingPlayback,
 	getMediaSyncPlaybackRate,
@@ -378,6 +385,9 @@ interface VideoPlaybackProps {
 	onAnnotationPositionChange?: (id: string, position: { x: number; y: number }) => void;
 	onAnnotationSizeChange?: (id: string, size: { width: number; height: number }) => void;
 	cursorTelemetry?: CursorTelemetryPoint[];
+	/** Recorded keystrokes for the optional on-screen key badge. */
+	keycastEvents?: KeycastKeystroke[];
+	keycastSettings?: KeycastSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -462,6 +472,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			onAnnotationPositionChange,
 			onAnnotationSizeChange,
 			cursorTelemetry = [],
+			keycastEvents = [],
+			keycastSettings = DEFAULT_KEYCAST_SETTINGS,
 			showCursor = false,
 			cursorStyle = DEFAULT_CURSOR_STYLE,
 			cursorSize = DEFAULT_CURSOR_SIZE,
@@ -513,6 +525,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const videoReady = usePreviewVideoReady(videoRef, videoPath);
 
 		const [previewViewportWidth, setPreviewViewportWidth] = useState(640);
+		// Modifier glyphs in the key badge follow the host OS (⌃⌥⇧⌘ vs words).
+		const isMacPlatform = useMemo(() => detectMacPlatform(), []);
 		const [annotationSceneTransform, setAnnotationSceneTransform] =
 			useState<SceneTransformState>({
 				scale: 1,
@@ -2689,6 +2703,18 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								</div>
 							</div>
 						) : null}
+						{/*
+						 * Keystroke badge: DOM in preview (like captions) and burned in by
+						 * the canvas renderer at export. The same model drives both, so the
+						 * visible timing matches the recorded result.
+						 */}
+						<KeycastBadgeOverlay
+							events={keycastEvents}
+							settings={keycastSettings}
+							isMac={isMacPlatform}
+							containerWidth={previewViewportWidth}
+							timeMs={currentTime * 1000}
+						/>
 						<div
 							className="absolute inset-0"
 							style={{

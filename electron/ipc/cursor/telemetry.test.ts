@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CURSOR_TELEMETRY_VERSION } from "../constants";
 
-const { writeFile, rm } = vi.hoisted(() => ({
+const { writeFile, rm, readFile } = vi.hoisted(() => ({
 	writeFile: vi.fn(),
 	rm: vi.fn(),
+	readFile: vi.fn(),
 }));
 
 vi.mock("node:fs/promises", () => ({
 	default: {
 		writeFile,
 		rm,
+		readFile,
 	},
 }));
 
@@ -45,6 +47,9 @@ describe("cursor telemetry pause clock", () => {
 	beforeEach(() => {
 		writeFile.mockReset();
 		rm.mockReset();
+		readFile.mockReset();
+		// No sidecar on disk unless a test says otherwise.
+		readFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
 		setCursorCaptureStartTimeMs(1_000);
 		setActiveCursorSamples([]);
 		resetCursorCaptureClock();
@@ -104,6 +109,7 @@ describe("cursor telemetry pause clock", () => {
 				{
 					version: CURSOR_TELEMETRY_VERSION,
 					samples,
+					keyEvents: [],
 				},
 				null,
 				2,
@@ -111,6 +117,47 @@ describe("cursor telemetry pause clock", () => {
 			"utf-8",
 		);
 		expect(rm).not.toHaveBeenCalled();
+	});
+
+	it("persists keycast keystrokes next to the cursor samples", async () => {
+		await writeCursorTelemetry(
+			"/tmp/recording.mp4",
+			[],
+			[
+				{ timeMs: 40, keys: ["Ctrl", "A"] },
+				{ timeMs: 5, keys: ["Ctrl", "A"] },
+				{ timeMs: "nope", keys: ["Ctrl", "A"] },
+			],
+		);
+
+		expect(writeFile).toHaveBeenCalledWith(
+			"/tmp/recording.cursor.json",
+			JSON.stringify(
+				{
+					version: CURSOR_TELEMETRY_VERSION,
+					samples: [],
+					// Sorted, invalid entries dropped, and the rapid repeat coalesced
+					// onto the newest press by the shared keycast model.
+					keyEvents: [{ timeMs: 40, keys: ["Ctrl", "A"] }],
+				},
+				null,
+				2,
+			),
+			"utf-8",
+		);
+	});
+
+	it("keeps keycast keystrokes already on disk when only samples are rewritten", async () => {
+		readFile.mockResolvedValue(
+			JSON.stringify({ keyEvents: [{ timeMs: 12, keys: ["Ctrl", "Shift", "T"] }] }),
+		);
+
+		await writeCursorTelemetry("/tmp/recording.mp4", [{ timeMs: 1, cx: 0.5, cy: 0.5 }]);
+
+		const [, payload] = writeFile.mock.calls[0];
+		expect(JSON.parse(payload).keyEvents).toEqual([
+			{ timeMs: 12, keys: ["Ctrl", "Shift", "T"] },
+		]);
 	});
 
 	it("removes the sidecar when saving an empty cursor telemetry payload", async () => {

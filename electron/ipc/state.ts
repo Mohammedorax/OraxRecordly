@@ -1,4 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { KeycastKeystroke } from "../../src/lib/keycast/keycastModel";
 import type {
 	CursorInteractionType,
 	CursorTelemetryPoint,
@@ -91,6 +92,18 @@ export let lastLeftClick: { timeMs: number; cx: number; cy: number } | null = nu
 export let linuxCursorScreenPoint: { x: number; y: number; updatedAt: number } | null = null;
 export let selectedWindowBounds: WindowBounds | null = null;
 export let windowBoundsCaptureInterval: NodeJS.Timeout | null = null;
+
+// ── Keycast (keystroke overlay) telemetry ─────────────────────────────────────
+/**
+ * Keystrokes recorded alongside the cursor samples in the same
+ * `*.cursor.json` file. Capture is opt-in: nothing is pushed here unless the
+ * keycast overlay is enabled in settings, and the data never leaves the
+ * machine (there is no network reporting anywhere in the app).
+ */
+export let activeKeycastEvents: KeycastKeystroke[] = [];
+export let pendingKeycastEvents: KeycastKeystroke[] = [];
+export let keycastCaptureEnabled = false;
+export let keycastModifierState: string[] = [];
 
 // ── Native macOS window source cache ─────────────────────────────────────────
 export let cachedNativeMacWindowSources: import("./types").NativeMacWindowSource[] | null = null;
@@ -278,6 +291,19 @@ export function setSelectedWindowBounds(v: WindowBounds | null) {
 }
 export function setWindowBoundsCaptureInterval(v: NodeJS.Timeout | null) {
 	windowBoundsCaptureInterval = v;
+}
+
+export function setActiveKeycastEvents(v: KeycastKeystroke[]) {
+	activeKeycastEvents = v;
+}
+export function setPendingKeycastEvents(v: KeycastKeystroke[]) {
+	pendingKeycastEvents = v;
+}
+export function setKeycastCaptureEnabled(v: boolean) {
+	keycastCaptureEnabled = v;
+}
+export function setKeycastModifierState(v: string[]) {
+	keycastModifierState = v;
 }
 
 export function setCachedNativeMacWindowSources(

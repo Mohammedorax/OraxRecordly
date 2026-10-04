@@ -33,6 +33,7 @@ import { getSceneEffectMetrics } from "@/components/video-editor/videoPlayback/s
 import { resolveSceneZoomTarget } from "@/components/video-editor/videoPlayback/sceneMotion";
 import { getCursorStyleSizeMultiplier } from "@/components/video-editor/videoPlayback/uploadedCursorAssets";
 import { computeZoomTransform } from "@/components/video-editor/videoPlayback/zoomTransform";
+import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import {
 	DEFAULT_WALLPAPER_PATH,
@@ -112,6 +113,9 @@ interface VideoExporterConfig extends ExportConfig {
 	autoCaptions?: CaptionCue[];
 	autoCaptionSettings?: AutoCaptionSettings;
 	cursorTelemetry?: CursorTelemetryPoint[];
+	/** Recorded keystrokes for the optional on-screen key badge. */
+	keycastEvents?: KeycastKeystroke[];
+	keycastSettings?: KeycastSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -620,6 +624,8 @@ export class ModernVideoExporter {
 					previewWidth: this.config.previewWidth,
 					previewHeight: this.config.previewHeight,
 					cursorTelemetry: this.config.cursorTelemetry,
+					keycastEvents: this.config.keycastEvents,
+					keycastSettings: this.config.keycastSettings,
 					showCursor: this.config.showCursor,
 					cursorStyle: this.config.cursorStyle,
 					cursorSize: this.config.cursorSize,
@@ -1715,6 +1721,11 @@ export class ModernVideoExporter {
 		}
 		if ((this.config.autoCaptions ?? []).length > 0) {
 			reasons.push("unsupported-caption-overlay");
+		}
+		// The native static-layout path composites its overlays in GPU code, so a
+		// key badge has to fall back to the Pixi renderer that can burn it in.
+		if ((this.config.keycastEvents ?? []).length > 0 && this.config.keycastSettings?.enabled) {
+			reasons.push("unsupported-keycast-overlay");
 		}
 		const crop = this.config.cropRegion;
 		if (

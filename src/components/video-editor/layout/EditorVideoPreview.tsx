@@ -1,4 +1,5 @@
 import type { ComponentProps, Dispatch, RefObject, SetStateAction } from "react";
+import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 import type { useVideoEditorAudio } from "../audio/useVideoEditorAudio";
 import type { useAppearanceState } from "../state/useAppearanceState";
@@ -31,6 +32,8 @@ type Props = {
 	audio: ReturnType<typeof useVideoEditorAudio>;
 	effectiveZoomRegions: ZoomRegion[];
 	effectiveCursorTelemetry: CursorTelemetryPoint[];
+	effectiveKeycastEvents: KeycastKeystroke[];
+	keycastSettings: KeycastSettings;
 	effectiveShowCursor: boolean;
 	setDuration: Dispatch<SetStateAction<number>>;
 	setIsPreviewReady: Dispatch<SetStateAction<boolean>>;
@@ -54,6 +57,8 @@ export function EditorVideoPreview({
 	audio,
 	effectiveZoomRegions,
 	effectiveCursorTelemetry,
+	effectiveKeycastEvents,
+	keycastSettings,
 	effectiveShowCursor,
 	setDuration,
 	setIsPreviewReady,
@@ -99,6 +104,8 @@ export function EditorVideoPreview({
 			autoCaptionSettings={timeline.autoCaptionSettings}
 			selectedAnnotationId={timeline.selectedAnnotationId}
 			cursorTelemetry={effectiveCursorTelemetry}
+			keycastEvents={effectiveKeycastEvents}
+			keycastSettings={keycastSettings}
 			showCursor={effectiveShowCursor}
 			cursorStyle={appearance.cursorStyle}
 			cursorSize={appearance.cursorSize}

@@ -614,6 +614,8 @@ interface Window {
 		getCursorTelemetry: (videoPath?: string) => Promise<{
 			success: boolean;
 			samples: CursorTelemetryPoint[];
+			/** Keystroke overlay telemetry stored next to the cursor samples. */
+			keyEvents?: import("../src/lib/keycast/keycastModel").KeycastKeystroke[];
 			message?: string;
 			error?: string;
 		}>;
@@ -643,6 +645,22 @@ interface Window {
 		) => () => void;
 		onCursorStateChanged: (
 			callback: (state: { cursorType: CursorTelemetryPoint["cursorType"] }) => void,
+		) => () => void;
+		getKeycastSettings: () => Promise<{
+			success: boolean;
+			settings: import("../src/lib/keycast/keycastModel").KeycastSettings;
+		}>;
+		setKeycastSettings: (
+			settings: import("../src/lib/keycast/keycastModel").KeycastSettings,
+		) => Promise<{
+			success: boolean;
+			settings: import("../src/lib/keycast/keycastModel").KeycastSettings;
+		}>;
+		onKeycastKeystroke: (
+			callback: (stroke: import("../src/lib/keycast/keycastModel").KeycastKeystroke) => void,
+		) => () => void;
+		onKeycastSettingsChanged: (
+			callback: (settings: import("../src/lib/keycast/keycastModel").KeycastSettings) => void,
 		) => () => void;
 		openExternalUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
 		getAccessibilityPermissionStatus: () => Promise<{

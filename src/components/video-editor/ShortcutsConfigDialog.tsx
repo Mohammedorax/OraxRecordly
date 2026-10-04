@@ -322,6 +322,22 @@ export function ShortcutsConfigDialog() {
 						</p>
 					</div>
 
+					{/*
+					 * Discoverability for the keystroke overlay: it is not a binding,
+					 * so it is described here and configured in Settings → Cursor.
+					 */}
+					<div className="space-y-0.5 mt-2">
+						<p className="mb-3 text-[13px] font-medium text-foreground">
+							{tShortcuts("keycast.title", "Show shortcuts on screen")}
+						</p>
+						<p className="text-xs text-muted-foreground">
+							{tShortcuts("keycast.description")}
+						</p>
+						<p className="text-xs text-muted-foreground">
+							{tShortcuts("keycast.enableHint")}
+						</p>
+					</div>
+
 					<Description className="mt-2 text-xs">
 						{t("shortcutsConfig.instructions")}
 					</Description>

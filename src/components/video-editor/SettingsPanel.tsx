@@ -19,6 +19,15 @@ import { Switch } from "@/components/ui/switch";
 import { ChoiceGroup, ChoiceItem } from "@/components/ui/choice-group";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getAssetPath, getRenderableVideoUrl, getWallpaperThumbnailUrl } from "@/lib/assetPath";
+import {
+	DEFAULT_KEYCAST_SETTINGS,
+	KEYCAST_SIZE_MAX,
+	KEYCAST_SIZE_MIN,
+	type KeycastPosition,
+	type KeycastSettings,
+	MAX_KEYCAST_HOLD_MS,
+	MIN_KEYCAST_HOLD_MS,
+} from "@/lib/keycast/keycastModel";
 import { cn } from "@/lib/utils";
 import type { BuiltInWallpaper } from "@/lib/wallpapers";
 import {
@@ -40,6 +49,7 @@ import {
 } from "./cursorMotionPresets";
 import { loadEditorPreferences, saveEditorPreferences } from "./editorPreferences";
 import { DeviceWallpaperSection } from "./DeviceWallpaperSection";
+import { KeycastKeyCaps } from "./keycast/KeycastBadge";
 import { ScreenshotSettingsSection } from "./ScreenshotSettingsSection";
 import { getDefaultBorderRadiusPercent } from "./projectPersistence";
 import { SliderControl } from "./SliderControl";
@@ -506,6 +516,9 @@ interface SettingsPanelProps {
 	onCursorClickBounceDurationChange?: (duration: number) => void;
 	cursorSway?: number;
 	onCursorSwayChange?: (amount: number) => void;
+	/** Keystroke overlay (opt-in) settings. */
+	keycastSettings?: KeycastSettings;
+	onKeycastSettingsChange?: (settings: KeycastSettings) => void;
 	borderRadius?: number;
 	onBorderRadiusChange?: (radius: number) => void;
 	padding?: Padding;
@@ -574,6 +587,20 @@ const BUILTIN_CURSOR_STYLE_OPTIONS: CursorStyleOption[] = [
 	{ value: "windows11", label: "Windows 11" },
 	{ value: "dot", label: "Dot" },
 	{ value: "figma", label: "Minimal" },
+];
+
+/** Corner choices for the keystroke badge, in display order. */
+const KEYCAST_POSITION_OPTIONS: Array<{
+	value: KeycastPosition;
+	labelKey: string;
+	label: string;
+}> = [
+	{ value: "top-left", labelKey: "keycast.positionTopLeft", label: "Top left" },
+	{ value: "top-center", labelKey: "keycast.positionTopCenter", label: "Top center" },
+	{ value: "top-right", labelKey: "keycast.positionTopRight", label: "Top right" },
+	{ value: "bottom-left", labelKey: "keycast.positionBottomLeft", label: "Bottom left" },
+	{ value: "bottom-center", labelKey: "keycast.positionBottomCenter", label: "Bottom center" },
+	{ value: "bottom-right", labelKey: "keycast.positionBottomRight", label: "Bottom right" },
 ];
 
 const CAPTION_LANGUAGE_OPTIONS = [
@@ -921,6 +948,8 @@ export function SettingsPanel({
 	onCursorClickBounceDurationChange,
 	cursorSway = DEFAULT_CURSOR_SWAY,
 	onCursorSwayChange,
+	keycastSettings = DEFAULT_KEYCAST_SETTINGS,
+	onKeycastSettingsChange,
 	borderRadius = getDefaultBorderRadiusPercent(),
 	onBorderRadiusChange,
 	padding = DEFAULT_PADDING,
@@ -975,7 +1004,7 @@ export function SettingsPanel({
 	);
 	const [experimentalUpdatesEnabled, setExperimentalUpdatesEnabled] = useState(false);
 	const [savingExperimentalUpdates, setSavingExperimentalUpdates] = useState(false);
-	const { openConfig: openShortcutsConfig } = useShortcuts();
+	const { openConfig: openShortcutsConfig, isMac } = useShortcuts();
 	const [internalActiveEffectSection] = useState<EditorEffectSection>("scene");
 	const activeEffectSection = activeEffectSectionProp ?? internalActiveEffectSection;
 	const removeBackgroundStateRef = useRef<{
@@ -991,6 +1020,12 @@ export function SettingsPanel({
 	const updateAutoCaptionSettings = (partial: Partial<AutoCaptionSettings>) => {
 		onAutoCaptionSettingsChange?.({
 			...autoCaptionSettings,
+			...partial,
+		});
+	};
+	const updateKeycastSettings = (partial: Partial<KeycastSettings>) => {
+		onKeycastSettingsChange?.({
+			...keycastSettings,
 			...partial,
 		});
 	};
@@ -2951,6 +2986,102 @@ export function SettingsPanel({
 										)}
 									</div>
 								</div>
+							) : null}
+						</div>
+						<div className="flex flex-col gap-3 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
+							<label className="flex items-center justify-between gap-3 text-xs">
+								<span className="font-medium text-foreground">
+									{tSettings("keycast.title", "Keyboard shortcuts on screen")}
+								</span>
+								<Switch
+									aria-label={tSettings(
+										"keycast.title",
+										"Keyboard shortcuts on screen",
+									)}
+									checked={keycastSettings.enabled}
+									onCheckedChange={(enabled) =>
+										updateKeycastSettings({ enabled })
+									}
+								/>
+							</label>
+							<p className="text-xs text-muted-foreground">
+								{tSettings(
+									"keycast.description",
+									"Show the keys you press as a badge on the recording, so viewers can follow the shortcut.",
+								)}
+							</p>
+							{keycastSettings.enabled ? (
+								<>
+									<div className="flex justify-center py-1">
+										<KeycastKeyCaps
+											keys={["Ctrl", "Shift", "A"]}
+											settings={keycastSettings}
+											isMac={isMac}
+											containerWidth={720}
+										/>
+									</div>
+									<div className="grid gap-1.5">
+										<div className="text-xs text-muted-foreground">
+											{tSettings("keycast.position", "Position")}
+										</div>
+										<ChoiceGroup
+											type="single"
+											value={keycastSettings.position}
+											onValueChange={(value) => {
+												if (value) {
+													updateKeycastSettings({
+														position: value as KeycastPosition,
+													});
+												}
+											}}
+											className="grid grid-cols-3 gap-2"
+											aria-label={tSettings("keycast.position", "Position")}
+										>
+											{KEYCAST_POSITION_OPTIONS.map((option) => (
+												<ChoiceItem
+													key={option.value}
+													value={option.value}
+													className="min-w-0 px-2 py-1.5 text-center text-xs"
+												>
+													{tSettings(option.labelKey, option.label)}
+												</ChoiceItem>
+											))}
+										</ChoiceGroup>
+									</div>
+									<SliderControl
+										label={tSettings("keycast.size", "Size")}
+										value={keycastSettings.size}
+										min={KEYCAST_SIZE_MIN}
+										max={KEYCAST_SIZE_MAX}
+										step={0.05}
+										onChange={(size) => updateKeycastSettings({ size })}
+										formatValue={(v) => `${v.toFixed(2)}×`}
+									/>
+									<SliderControl
+										label={tSettings("keycast.opacity", "Opacity")}
+										value={keycastSettings.opacity}
+										min={0}
+										max={1}
+										step={0.01}
+										onChange={(opacity) => updateKeycastSettings({ opacity })}
+										formatValue={(v) => `${Math.round(v * 100)}%`}
+									/>
+									<SliderControl
+										label={tSettings("keycast.hold", "Display duration")}
+										value={keycastSettings.holdMs}
+										min={MIN_KEYCAST_HOLD_MS}
+										max={MAX_KEYCAST_HOLD_MS}
+										step={100}
+										onChange={(holdMs) => updateKeycastSettings({ holdMs })}
+										formatValue={(v) => `${Math.round(v)} ms`}
+									/>
+									<p className="text-xs text-muted-foreground">
+										{tSettings(
+											"keycast.platformNote",
+											"Keystrokes come from the global input hook, which Recordly only starts on Windows and Linux.",
+										)}
+									</p>
+								</>
 							) : null}
 						</div>
 					</section>

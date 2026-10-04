@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { KeycastKeystroke, KeycastSettings } from "../src/lib/keycast/keycastModel";
 import type { RecordingSessionData } from "./ipc/types";
 
 type NativeVideoExportWriteResult = { success: boolean; error?: string };
@@ -904,6 +905,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		) => callback(payload);
 		ipcRenderer.on("cursor-state-changed", listener);
 		return () => ipcRenderer.removeListener("cursor-state-changed", listener);
+	},
+	getKeycastSettings: () => {
+		return ipcRenderer.invoke("get-keycast-settings");
+	},
+	setKeycastSettings: (settings: KeycastSettings) => {
+		return ipcRenderer.invoke("set-keycast-settings", settings);
+	},
+	onKeycastKeystroke: (callback: (stroke: KeycastKeystroke) => void) => {
+		const listener = (_event: Electron.IpcRendererEvent, payload: KeycastKeystroke) =>
+			callback(payload);
+		ipcRenderer.on("keycast-keystroke", listener);
+		return () => ipcRenderer.removeListener("keycast-keystroke", listener);
+	},
+	onKeycastSettingsChanged: (callback: (settings: KeycastSettings) => void) => {
+		const listener = (_event: Electron.IpcRendererEvent, payload: KeycastSettings) =>
+			callback(payload);
+		ipcRenderer.on("keycast-settings-changed", listener);
+		return () => ipcRenderer.removeListener("keycast-settings-changed", listener);
 	},
 	openExternalUrl: (url: string) => {
 		return ipcRenderer.invoke("open-external-url", url);

@@ -1,4 +1,5 @@
 import { type MutableRefObject, useEffect, useMemo, useRef } from "react";
+import { normalizeKeycastKeystrokes } from "@/lib/keycast/keycastModel";
 import type { useTimelineState } from "../state/useTimelineState";
 import { normalizeCursorTelemetry } from "../timeline/zoomSuggestionUtils";
 import type { CursorTelemetryPoint } from "../types";
@@ -27,7 +28,7 @@ export function useCursorTelemetry({
 	autoSuggestedVideoPathRef,
 }: UseCursorTelemetryInput) {
 	const pendingRetryTimeoutRef = useRef<number | null>(null);
-	const { setCursorTelemetry, setCursorTelemetrySourcePath } = timeline;
+	const { setCursorTelemetry, setCursorTelemetrySourcePath, setKeycastEvents } = timeline;
 
 	useEffect(() => {
 		let mounted = true;
@@ -50,6 +51,7 @@ export function useCursorTelemetry({
 			if (!videoPath || !videoSourcePath) {
 				if (mounted) {
 					setCursorTelemetry([]);
+					setKeycastEvents([]);
 					setCursorTelemetrySourcePath(null);
 				}
 				return;
@@ -58,12 +60,16 @@ export function useCursorTelemetry({
 				const result = await window.electronAPI.getCursorTelemetry(videoSourcePath);
 				if (!mounted) return;
 				setCursorTelemetry(result.success ? result.samples : []);
+				setKeycastEvents(
+					result.success ? normalizeKeycastKeystrokes(result.keyEvents ?? []) : [],
+				);
 				setCursorTelemetrySourcePath(videoSourcePath);
 				if (!result.success || result.samples.length === 0) scheduleRetry();
 			} catch (error) {
 				console.warn("Unable to load cursor telemetry:", error);
 				if (!mounted) return;
 				setCursorTelemetry([]);
+				setKeycastEvents([]);
 				setCursorTelemetrySourcePath(videoSourcePath);
 				scheduleRetry();
 			}
@@ -86,6 +92,7 @@ export function useCursorTelemetry({
 		videoSourcePath,
 		setCursorTelemetry,
 		setCursorTelemetrySourcePath,
+		setKeycastEvents,
 		pendingFreshRecordingAutoZoomPathRef,
 		autoSuggestedVideoPathRef,
 	]);
@@ -121,5 +128,13 @@ export function useCursorTelemetry({
 		);
 	}, [loopCursor, normalized, displayedWindow]);
 
-	return { normalizedCursorTelemetry: normalized, effectiveCursorTelemetry: effective };
+	return {
+		normalizedCursorTelemetry: normalized,
+		effectiveCursorTelemetry: effective,
+		/**
+		 * Keystrokes are not looped with the cursor: a repeated badge from a
+		 * looping cursor would be noise, so the raw (normalised) list is used.
+		 */
+		keycastEvents: timeline.keycastEvents,
+	};
 }

@@ -10,8 +10,13 @@ import { getFfmpegBinaryPath } from "../ffmpeg/binary";
 import { rememberApprovedLocalReadPath, resolveApprovedLocalMediaPath } from "../project/manager";
 import { getRecordingsDir, getTelemetryPathForVideo } from "../utils";
 import { getUsableCompanionAudioCandidates } from "./diagnostics";
-import { normalizeCursorTelemetrySamples, writeCursorTelemetry } from "../cursor/telemetry";
+import {
+	normalizeCursorTelemetrySamples,
+	normalizeKeycastTelemetry,
+	writeCursorTelemetry,
+} from "../cursor/telemetry";
 import { listRecordings } from "./library";
+import type { KeycastKeystroke } from "../../../src/lib/keycast/keycastModel";
 import type { RecordingImportResult } from "../../../src/types/recordingLibrary";
 
 const run = promisify(execFile);
@@ -187,14 +192,24 @@ export async function importRecording(
 		);
 		const sourceStartMs = Math.round(baseMeta.duration * 1000);
 		const samples = [];
+		const keyEvents: KeycastKeystroke[] = [];
 		for (const [file, offset, meta] of [
 			[current, 0, base],
 			[entry.path, sourceStartMs, await probe(entry.path, signal)],
 		] as const) {
 			let points: ReturnType<typeof normalizeCursorTelemetrySamples> = [];
 			try {
-				points = normalizeCursorTelemetrySamples(
-					JSON.parse(await fs.readFile(getTelemetryPathForVideo(file), "utf8")),
+				const parsed = JSON.parse(
+					await fs.readFile(getTelemetryPathForVideo(file), "utf8"),
+				);
+				points = normalizeCursorTelemetrySamples(parsed);
+				// Keystrokes ride along with the samples, shifted onto the combined
+				// timeline the same way, so the overlay survives an import.
+				keyEvents.push(
+					...normalizeKeycastTelemetry(parsed).map((event) => ({
+						...event,
+						timeMs: event.timeMs + offset,
+					})),
 				);
 			} catch {
 				/* Recording may not contain cursor telemetry. */
@@ -214,7 +229,7 @@ export async function importRecording(
 				})),
 			);
 		}
-		await writeCursorTelemetry(output, samples);
+		await writeCursorTelemetry(output, samples, keyEvents);
 		signal?.throwIfAborted();
 		await rememberApprovedLocalReadPath(output);
 		return {

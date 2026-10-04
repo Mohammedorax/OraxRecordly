@@ -36,6 +36,8 @@ Recording, the timeline, cursor tooling, frame styling, and MP4/GIF export are t
 
 - **Backgrounds from your own machine**: built-in wallpapers, solid colours and gradients, plus automatic discovery of any wallpaper you drop into the wallpapers folder.
 
+- **Keyboard-shortcut overlay (keycast)**: opt-in and off by default. While you record, the keys you press are drawn on the video as a key-cap badge — `Ctrl` `A`, `Ctrl` `Shift` `T` — so a lesson can teach the shortcut itself. Position, size, opacity and how long the badge stays are in **Settings → Cursor**; the badge fades out on its own, modifier-only presses are ignored, and repeated keys collapse into one badge. Keystrokes are recorded locally through the same input hook as cursor telemetry (Windows and Linux) and are never uploaded. Details and behaviour rules: [docs/keycast-overlay.md](docs/keycast-overlay.md).
+
 - **Recording stop fix**: the Windows capture helper used to re-encode one duplicate frame for every idle gap, so stopping after a static screen took as long as the idle span itself — 20 s of idle meant 23–42 s to stop — and the helper was killed before it could write the file's tail, losing the recording. A stop now takes **0.1–1.3 s regardless of idle length**, and files are an order of magnitude smaller: **a 20 s clip is 3.1 MB instead of 57.9 MB**.
 
 - **Performance work**: code-splitting cut the editor bundle from 1347 kB to 938 kB, and the repeated window-bounds probes during recording are gone.
