@@ -160,6 +160,7 @@ function createRegionSelectorWindow(display: Electron.Display): BrowserWindow {
 export function selectRegionOnDisplay(
 	display: Electron.Display,
 	safetyTimeoutMs = REGION_OVERLAY_SAFETY_TIMEOUT_MS,
+	platform: NodeJS.Platform = process.platform,
 ): Promise<RegionSelectionRect | null> {
 	return new Promise<RegionSelectionRect | null>((resolve) => {
 		let settled = false;
@@ -216,12 +217,12 @@ export function selectRegionOnDisplay(
 				return;
 			}
 
-			if (process.platform === "darwin") {
+			if (platform === "darwin") {
 				// Cover the menu bar/dock area on macOS.
 				win.setSimpleFullScreen(true);
 			}
 
-			if (process.platform === "win32") {
+			if (platform === "win32") {
 				win.showInactive();
 			} else {
 				win.show();

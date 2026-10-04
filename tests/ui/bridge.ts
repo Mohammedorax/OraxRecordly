@@ -104,6 +104,26 @@ export async function installDesktopBridge(page: Page, videoFixture = "preview.m
 				selectSource: success,
 				onSelectedSourceChanged: subscribe,
 				getRecordingsDirectory: async () => ({ success: true, path: "/recordings" }),
+				// The dashboard settings section calls these on mount; without a stub
+				// it throws "getStartupPreferences is not a function" and React drops
+				// the whole section, which looked like a product regression.
+				getStartupPreferences: async () => ({
+					success: true,
+					supported: false,
+					openAtLogin: false,
+					startMinimized: false,
+				}),
+				setStartupPreferences: async (patch: {
+					openAtLogin?: boolean;
+					startMinimized?: boolean;
+				}) => ({
+					success: true,
+					supported: false,
+					openAtLogin: Boolean(patch?.openAtLogin),
+					startMinimized: Boolean(patch?.startMinimized),
+				}),
+				getProjectsDirectory: async () => ({ success: true, path: "/projects" }),
+				revealInFolder: async () => ({ success: true }),
 				getHudOverlayMousePassthroughSupported: async () => ({
 					success: true,
 					supported: true,

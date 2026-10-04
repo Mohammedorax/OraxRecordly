@@ -86,12 +86,14 @@ export function isAcceptedSystemWallpaperFile(
 /**
  * File name -> display name. Windows theme caches are named
  * `CachedImage_<width>_<height>_<n>.jpg`, so that prefix is dropped first.
+ *
+ * The input may be a full path from the Windows registry (`C:\...\x.jpg`), which
+ * must be split on `\` even when these tests run on a POSIX host, so the leaf is
+ * extracted without the platform-dependent `path.basename`.
  */
 export function humanizeSystemWallpaperName(fileName: string): string {
-	const baseName = path
-		.basename(fileName)
-		.replace(/\.[^.]+$/, "")
-		.trim();
+	const leafName = fileName.split(/[\\/]/).pop() ?? "";
+	const baseName = leafName.replace(/\.[^.]+$/, "").trim();
 	if (!baseName) {
 		return "Wallpaper image";
 	}

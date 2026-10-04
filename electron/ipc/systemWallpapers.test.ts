@@ -62,6 +62,11 @@ describe("system wallpaper filtering", () => {
 		expect(humanizeSystemWallpaperName("C:\\Wallpapers\\CachedImage_1920_1080_4.jpg")).toBe(
 			"1920 1080 4",
 		);
+		// The leaf must also be found with forward slashes so the helper behaves
+		// the same on a POSIX host as it does on Windows.
+		expect(humanizeSystemWallpaperName("/usr/share/backgrounds/adwaita-d.jpg")).toBe(
+			"Adwaita D",
+		);
 		expect(humanizeSystemWallpaperName(".jpg")).toBe("Wallpaper image");
 	});
 

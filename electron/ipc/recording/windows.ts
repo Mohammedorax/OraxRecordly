@@ -254,10 +254,11 @@ function readWindowsCaptureStopOutputPath(): string | null {
  */
 export async function killWindowsCaptureProcessTree(
 	proc: ChildProcessWithoutNullStreams,
+	platform: NodeJS.Platform = process.platform,
 ): Promise<void> {
 	const pid = proc.pid;
 	const treeKill =
-		process.platform === "win32" && typeof pid === "number" && pid > 0
+		platform === "win32" && typeof pid === "number" && pid > 0
 			? execFileAsync("taskkill", ["/pid", String(pid), "/T", "/F"], {
 					timeout: WINDOWS_CAPTURE_FORCE_KILL_TIMEOUT_MS,
 					windowsHide: true,
@@ -285,10 +286,11 @@ export async function killWindowsCaptureProcessTree(
  */
 export async function stopWindowsCaptureProcess(
 	proc: ChildProcessWithoutNullStreams,
-	options: { graceMs?: number; killWaitMs?: number } = {},
+	options: { graceMs?: number; killWaitMs?: number; platform?: NodeJS.Platform } = {},
 ): Promise<WindowsCaptureStopOutcome> {
 	const graceMs = Math.max(0, options.graceMs ?? WINDOWS_CAPTURE_STOP_GRACE_MS);
 	const killWaitMs = Math.max(0, options.killWaitMs ?? WINDOWS_CAPTURE_STOP_KILL_WAIT_MS);
+	const platform = options.platform ?? process.platform;
 
 	// Idempotency: a second stop for an already-exited helper resolves
 	// immediately instead of waiting out another budget.
@@ -335,7 +337,7 @@ export async function stopWindowsCaptureProcess(
 	// The helper is stuck (typically the encoder catch-up burst). Terminate the
 	// tree now, then give the handles a brief moment to settle so the caller can
 	// still read whatever the helper flushed.
-	await killWindowsCaptureProcessTree(proc);
+	await killWindowsCaptureProcessTree(proc, platform);
 	const afterKill = await waitForWindowsCaptureExit(proc, killWaitMs);
 
 	return {

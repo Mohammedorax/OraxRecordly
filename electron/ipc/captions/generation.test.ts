@@ -1,3 +1,4 @@
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -63,7 +64,11 @@ beforeEach(() => {
 	mocks.rm.mockResolvedValue(undefined);
 });
 
-const whisperCalls = () => mocks.exec.mock.calls.filter(([file]) => file === "/whisper");
+// `resolveWhisperExecutablePath` resolves every candidate to an absolute host
+// path, so the expected executable must be derived the same way instead of
+// asserting the POSIX literal from the mock.
+const whisperExecutable = path.resolve("/whisper");
+const whisperCalls = () => mocks.exec.mock.calls.filter(([file]) => file === whisperExecutable);
 
 describe("caption generation pipeline", () => {
 	it("transcribes both sidecars independently, preserving the microphone delay", async () => {

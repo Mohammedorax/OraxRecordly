@@ -144,6 +144,9 @@ describe("stopWindowsCaptureProcess", () => {
 		const stopped = stopWindowsCaptureProcess(asProcess(proc), {
 			graceMs: 20,
 			killWaitMs: 20,
+			// Inject the platform so the Windows-only taskkill tree kill is
+			// exercised even when the suite runs on Linux.
+			platform: "win32",
 		});
 
 		await expect(stopped).resolves.toEqual({
@@ -153,15 +156,30 @@ describe("stopWindowsCaptureProcess", () => {
 			error: "Native Windows capture did not exit after being terminated",
 		});
 
+		expect(childProcessMocks.execFile).toHaveBeenCalledTimes(1);
 		const [taskkillBinary, taskkillArgs, taskkillOptions] = childProcessMocks.execFile.mock
 			.calls[0] as unknown as [string, string[], { windowsHide?: boolean }];
-		expect(childProcessMocks.execFile).toHaveBeenCalledTimes(1);
 		expect(taskkillBinary).toBe("taskkill");
 		expect(taskkillArgs).toEqual(["/pid", "4242", "/T", "/F"]);
 		expect(taskkillOptions.windowsHide).toBe(true);
 		expect(proc.kill).toHaveBeenCalledTimes(1);
 		// The whole stop must stay in the seconds range, not the old 45 s budget.
 		expect(Date.now() - startedAt).toBeLessThan(2000);
+	});
+
+	it("kills only the direct child on non-Windows platforms", async () => {
+		const proc = fakeProc();
+		setWindowsCaptureTargetPath("C:\\Recordly\\recoverable.mp4");
+
+		const stopped = stopWindowsCaptureProcess(asProcess(proc), {
+			graceMs: 20,
+			killWaitMs: 20,
+			platform: "linux",
+		});
+
+		await expect(stopped).resolves.toMatchObject({ forced: true, timedOut: true });
+		expect(childProcessMocks.execFile).not.toHaveBeenCalled();
+		expect(proc.kill).toHaveBeenCalledTimes(1);
 	});
 
 	it("is idempotent for a helper that already exited", async () => {

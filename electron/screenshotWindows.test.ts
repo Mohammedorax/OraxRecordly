@@ -110,6 +110,9 @@ beforeEach(() => {
 	windowOptions.last = null;
 	mocks.loadURL.mockReset();
 	mocks.destroy.mockReset();
+	mocks.show.mockReset();
+	mocks.showInactive.mockReset();
+	mocks.moveTop.mockReset();
 });
 
 afterEach(() => {
@@ -195,12 +198,28 @@ describe("selectRegionOnDisplay", () => {
 	});
 
 	it("shows the overlay once the renderer finishes loading", async () => {
-		const selection = selectRegionOnDisplay(display, 10_000);
+		// Windows shows the overlay without stealing focus from the app underneath.
+		const selection = selectRegionOnDisplay(display, 10_000, "win32");
 		mocks.webContentsHandlers.get("did-finish-load")?.();
 
 		expect(mocks.showInactive).toHaveBeenCalledTimes(1);
+		expect(mocks.show).not.toHaveBeenCalled();
 		expect(mocks.moveTop).toHaveBeenCalledTimes(1);
 		expect(mocks.ipcHandlers.has("screenshot-region-cancel")).toBe(true);
+
+		mocks.ipcHandlers.get("screenshot-region-complete")?.({}, null);
+		await expect(selection).resolves.toBeNull();
+	});
+
+	it("shows the overlay with the plain show call on non-Windows platforms", async () => {
+		// Every other platform uses show(): the overlay must still become visible
+		// exactly once and be raised to the top.
+		const selection = selectRegionOnDisplay(display, 10_000, "linux");
+		mocks.webContentsHandlers.get("did-finish-load")?.();
+
+		expect(mocks.show).toHaveBeenCalledTimes(1);
+		expect(mocks.showInactive).not.toHaveBeenCalled();
+		expect(mocks.moveTop).toHaveBeenCalledTimes(1);
 
 		mocks.ipcHandlers.get("screenshot-region-complete")?.({}, null);
 		await expect(selection).resolves.toBeNull();
