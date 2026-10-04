@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { installDesktopBridge } from "./bridge";
+import { filmstripFrames } from "./filmstrip";
 
 test("zoom hover, adaptive lanes, clip edges, volume and playhead", async ({ page }) => {
 	test.setTimeout(90000);
 	await installDesktopBridge(page, "filmstrip.mp4");
 	await page.goto("/?windowType=editor");
 	const clip = page.locator('[data-variant="clip"]');
-	await expect(clip.locator("img").first()).toBeVisible({ timeout: 20000 });
+	await expect(filmstripFrames(clip).first()).toBeVisible({ timeout: 20000 });
 	const scroll = page.getByTestId("timeline-scroll");
 	const zoomRow = page.locator('[data-timeline-row="row-zoom"]');
 	const clipRow = page.locator('[data-timeline-row="row-clip"]');

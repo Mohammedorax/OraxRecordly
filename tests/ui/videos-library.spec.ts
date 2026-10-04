@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installDesktopBridge, installDesktopBridgeOverrides } from "./bridge";
+import { filmstripFrames } from "./filmstrip";
 
 async function setup(page: Page) {
 	await installDesktopBridge(page, "filmstrip.mp4");
@@ -46,7 +47,7 @@ async function setup(page: Page) {
 	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000", {
 		timeout: 20000,
 	});
-	await expect(page.locator('[data-variant="clip"] img').first()).toBeVisible();
+	await expect(filmstripFrames(page.locator('[data-variant="clip"]')).first()).toBeVisible();
 	await expect(page.getByLabel("Loading preview")).toHaveCount(0);
 	await page.getByRole("button", { name: "Clips", exact: true }).click();
 	await expect(page.getByLabel("Select first.mp4")).toBeVisible();
@@ -144,7 +145,7 @@ test("generating captions leaves the current media session intact and shows the 
 		};
 	});
 	await page.goto("/?windowType=editor");
-	await expect(page.locator('[data-variant="clip"] img').first()).toBeVisible();
+	await expect(filmstripFrames(page.locator('[data-variant="clip"]')).first()).toBeVisible();
 	await page.getByRole("radio", { name: "Captions", exact: true }).click();
 	await page.getByRole("button", { name: "Generate Captions", exact: true }).click();
 	await expect(
