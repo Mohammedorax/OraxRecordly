@@ -122,8 +122,14 @@ describe("caption generation pipeline", () => {
 
 	it("retries SRT only for a runtime that rejects full JSON", async () => {
 		mocks.exec.mockImplementation(async (file: string, args: string[]) => {
-			if (file === "/whisper" && args.includes("-ojf"))
-				throw new Error("unknown argument: -ojf");
+			if (file === whisperExecutable && args.includes("-ojf")) {
+				// Emulate a real `whisper-cli` rejecting the flag the way Node surfaces
+				// it: a non-zero exit whose message/stderr carries the runtime's own
+				// diagnostic. The retry decision is derived from that text.
+				throw Object.assign(new Error("Command failed: error: unknown argument: -ojf"), {
+					stderr: "error: unknown argument: -ojf\n",
+				});
+			}
 			return { stderr: "" };
 		});
 		expect((await generateAutoCaptionsFromVideo(options)).cues).toHaveLength(1);

@@ -73,7 +73,8 @@ test("editor loads video, switches tools and edits export options", async ({ pag
 	await page.getByRole("button", { name: "16:9", exact: true }).click();
 	await page.getByRole("menuitem", { name: "1:1", exact: true }).click();
 	await expect(page.getByRole("button", { name: "1:1", exact: true })).toBeVisible();
-	await expect(page.getByRole("button", { name: "Open presets", exact: true })).toHaveCount(0);
+	// The editor header renders Export where the removed preset trigger used to sit.
+	await expect(page.getByRole("button", { name: "Export", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Add Layer", exact: true }).click();
 	await page.getByRole("menuitem", { name: "Annotation", exact: true }).click();
 	await expect

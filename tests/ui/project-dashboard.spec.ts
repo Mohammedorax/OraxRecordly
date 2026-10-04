@@ -510,7 +510,7 @@ test("project hover plays a muted five-second preview and stops on exit", async 
 		};
 	});
 	await page.goto("/?windowType=editor");
-	await expect(page.getByRole("button", { name: "Open presets" })).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Export", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Home", exact: true }).click();
 	const card = page.getByRole("button", { name: "Hover preview", exact: true });
 	await expect(card).toBeVisible();

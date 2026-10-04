@@ -11,7 +11,6 @@ import { useExportSettings } from "./export/useExportSettings";
 import { useTimelineEditingController } from "./hooks/useTimelineEditingController";
 import { EditorShell } from "./layout/EditorShell";
 import { useEditorSettingsPanelProps } from "./layout/useEditorSettingsPanelProps";
-import { useVideoEditorPresets } from "./presets/useVideoEditorPresets";
 import { useEditorProjectController } from "./project/useEditorProjectController";
 import { useProjectLibraryController } from "./project/useProjectLibraryController";
 import { getDevOpenRecordingConfig, getSmokeExportConfig } from "./smokeExportConfig";
@@ -158,18 +157,6 @@ export default function VideoEditor() {
 		}
 	}, []);
 
-	const presets = useVideoEditorPresets({
-		t,
-		appearance,
-		timeline,
-		exportSettings,
-		aspectRatio,
-		setAspectRatio,
-		whisperExecutablePath,
-		setWhisperExecutablePath,
-		whisperModelPath,
-		setWhisperModelPath,
-	});
 	const { refreshProjectLibrary, captureProjectThumbnail } = useProjectLibraryController({
 		project,
 		appearance,
@@ -393,7 +380,6 @@ export default function VideoEditor() {
 			appearance={appearance}
 			timeline={timeline}
 			ui={ui}
-			presets={presets}
 			projectController={projectController}
 			editing={editing}
 			exportController={exportController}

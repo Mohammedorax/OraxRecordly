@@ -124,9 +124,8 @@ test("populated projects dashboard fits long names and dismisses its overlays", 
 	// click outside of it; Escape is its dismissal path.
 	await page.keyboard.press("Escape");
 	await expect(projects).toHaveCount(0);
-	// The preset popover is intentionally not exposed: EditorHeader keeps its
-	// implementation behind `SHOW_PRESETS_BUTTON = false`, so no trigger renders.
-	await expect(page.getByRole("button", { name: "Open presets", exact: true })).toHaveCount(0);
+	// The editor header no longer exposes a preset menu; Export occupies that slot.
+	await expect(page.getByRole("button", { name: "Export", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Export", exact: true }).click();
 	await expect(page.getByRole("grid", { name: "Format", exact: true })).toBeVisible();
 	await clickOutside(page);

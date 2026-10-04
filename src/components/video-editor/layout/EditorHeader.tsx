@@ -12,13 +12,8 @@ import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
 import type { useExportSettings } from "../export/useExportSettings";
 import type { useExportStatusViewModel } from "../export/useExportStatusViewModel";
-import type { useVideoEditorPresets } from "../presets/useVideoEditorPresets";
 import type { useProjectState } from "../state/useProjectState";
 import { EditorExportMenu } from "./EditorExportMenu";
-import { EditorPresetMenu } from "./EditorPresetMenu";
-
-// Keep the preset implementation available for future use.
-const SHOW_PRESETS_BUTTON = false;
 
 type Props = {
 	clipsOpen: boolean;
@@ -37,7 +32,6 @@ type Props = {
 	handleRedo: () => void;
 	handleProjectNameSubmit: (event?: FormEvent<HTMLFormElement>) => void;
 	closeProjectNameEditor: () => void;
-	presets: ReturnType<typeof useVideoEditorPresets>;
 	exportSettings: ReturnType<typeof useExportSettings>;
 	exportSession: ReturnType<typeof useExportSession>;
 	exportDimensions: ReturnType<typeof useExportDimensions>;
@@ -71,7 +65,6 @@ export function EditorHeader(props: Props) {
 		handleRedo,
 		handleProjectNameSubmit,
 		closeProjectNameEditor,
-		presets,
 		exportSettings,
 		exportSession,
 		exportDimensions,
@@ -222,7 +215,6 @@ export function EditorHeader(props: Props) {
 						<Redo2 className="h-4 w-4" />
 					</Button>
 				</div>
-				{SHOW_PRESETS_BUTTON && <EditorPresetMenu t={t} presets={presets} />}
 				<EditorExportMenu
 					t={t}
 					exportSettings={exportSettings}

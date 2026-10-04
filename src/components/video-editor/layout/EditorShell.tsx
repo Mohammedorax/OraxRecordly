@@ -13,7 +13,6 @@ import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
 import type { useExportSettings } from "../export/useExportSettings";
 import type { useTimelineEditingController } from "../hooks/useTimelineEditingController";
-import type { useVideoEditorPresets } from "../presets/useVideoEditorPresets";
 import type { useEditorProjectController } from "../project/useEditorProjectController";
 import { SettingsPanel } from "../SettingsPanel";
 import type { useAppearanceState } from "../state/useAppearanceState";
@@ -35,7 +34,6 @@ type Props = {
 	appearance: ReturnType<typeof useAppearanceState>;
 	timeline: ReturnType<typeof useTimelineState>;
 	ui: ReturnType<typeof useEditorUiState>;
-	presets: ReturnType<typeof useVideoEditorPresets>;
 	projectController: ReturnType<typeof useEditorProjectController>;
 	editing: ReturnType<typeof useTimelineEditingController>;
 	exportController: ReturnType<typeof useEditorExportController>;
@@ -59,7 +57,6 @@ export function EditorShell(props: Props) {
 		appearance,
 		timeline,
 		ui,
-		presets,
 		projectController,
 		editing,
 		exportController,
@@ -228,7 +225,6 @@ export function EditorShell(props: Props) {
 				handleRedo={history.handleRedo}
 				handleProjectNameSubmit={saveActions.handleProjectNameSubmit}
 				closeProjectNameEditor={saveActions.closeProjectNameEditor}
-				presets={presets}
 				exportSettings={exportSettings}
 				exportSession={exportSession}
 				exportDimensions={exportDimensions}
