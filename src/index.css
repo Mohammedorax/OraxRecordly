@@ -20,20 +20,29 @@
 	font-display: swap;
 }
 
-/* Thmanyah Serif Display is the Arabic display face, bundled for offline desktop
-   use. Both weights are the unmodified OTFs published by Thmanyah. */
+/* Tajarib Typeface is the Arabic display face, bundled for offline desktop use.
+   All three weights are the unmodified OTFs shipped by the typeface, and they
+   share the typographic family "Tajarib Typeface" (nameID 16), distinguished
+   here by font-weight. */
 @font-face {
-	font-family: "Thmanyah Serif Display";
-	src: url("./assets/fonts/thmanyah/ThmanyahSerifDisplay-Regular.otf") format("opentype");
+	font-family: "Tajarib Typeface";
+	src: url("./assets/fonts/tajarib/Tajarib-Regular.otf") format("opentype");
 	font-style: normal;
 	font-weight: 400;
 	font-display: swap;
 }
 @font-face {
-	font-family: "Thmanyah Serif Display";
-	src: url("./assets/fonts/thmanyah/ThmanyahSerifDisplay-Medium.otf") format("opentype");
+	font-family: "Tajarib Typeface";
+	src: url("./assets/fonts/tajarib/Tajarib-Medium.otf") format("opentype");
 	font-style: normal;
 	font-weight: 500;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Tajarib Typeface";
+	src: url("./assets/fonts/tajarib/Tajarib-Bold.otf") format("opentype");
+	font-style: normal;
+	font-weight: 700;
 	font-display: swap;
 }
 
@@ -120,14 +129,14 @@
  */
 :root[lang="ar"],
 :root[lang^="ar-"] {
-	/* Thmanyah Serif Display is the Arabic display face and leads the stack so
+	/* Tajarib Typeface is the Arabic display face and leads the stack so
 	   Arabic text stops falling through to the platform UI font. It also ships
 	   Latin glyphs, so Latin and technical strings inside the Arabic locale render
 	   in it; the previous families stay after it as fallbacks for anything the
 	   bundled face does not cover. The English/Latin stack in `:root` is unchanged
 	   and keeps DM Sans. */
 	--app-font-sans:
-		"Thmanyah Serif Display", "DM Sans", "Segoe UI", "Noto Sans Arabic", "Noto Kufi Arabic",
+		"Tajarib Typeface", "DM Sans", "Segoe UI", "Noto Sans Arabic", "Noto Kufi Arabic",
 		"Geeza Pro", Tahoma, ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 

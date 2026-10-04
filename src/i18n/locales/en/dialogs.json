@@ -131,7 +131,7 @@
 		"licenceDescription": "OraxRecordly is free software released under the GNU AGPL-3.0. The complete corresponding source code of this application is available at the project repository.",
 		"licenceLink": "Read the full licence",
 		"thirdPartyTitle": "Third-party components",
-		"thirdPartyNotice": "OraxRecordly bundles third-party components, including Electron and Chromium, FFmpeg, and the Thmanyah Serif Display font. Each component remains under its own licence.",
+		"thirdPartyNotice": "OraxRecordly bundles third-party components, including Electron and Chromium, FFmpeg, and the Tajarib Typeface font. Each component remains under its own licence.",
 		"linksTitle": "Links",
 		"repositoryLink": "Source code repository",
 		"releasesLink": "Releases and changelog",

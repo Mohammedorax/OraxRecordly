@@ -73,7 +73,7 @@ describe("about surface", () => {
 		const html = render();
 		expect(html).toContain("Electron and Chromium");
 		expect(html).toContain("FFmpeg");
-		expect(html).toContain("Thmanyah Serif Display");
+		expect(html).toContain("Tajarib Typeface");
 	});
 
 	it("states that the software comes with no warranty", () => {

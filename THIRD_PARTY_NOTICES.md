@@ -11,14 +11,11 @@ Copyright 2014 The DM Sans Project Authors (https://github.com/googlefonts/dm-fo
 
 DM Sans is licensed under the SIL Open Font License, Version 1.1. The unmodified regular and italic variable fonts are sourced from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/dmsans). The full license is included in [src/assets/fonts/dm-sans/OFL.txt](src/assets/fonts/dm-sans/OFL.txt).
 
-## Thmanyah Serif Display
+## Tajarib Typeface
 
-Copyright © 2026, Thmanyah Publishing and Distribution (https://thmanyah.com/, ask@thmanyah.com), with Reserved Font Name "thmanyah".
+The Arabic display face bundled with OraxRecordly is **Tajarib Typeface**, shipped in three weights: `Regular` (weight 400), `Medium` (weight 500) and `Bold` (weight 700).
 
-Thmanyah Serif Display is used under the **Thmanyah Font License** — a proprietary licence, not an open-source one. The bundled `Regular` (weight 400) and `Medium` (weight 500) OTFs are unmodified files downloaded from Thmanyah, and they are embedded in this application as part of the compiled, packaged product, which the licence permits. The licence also:
+All three OTFs under [src/assets/fonts/tajarib/](src/assets/fonts/tajarib/) are the unmodified source files, bundled as-is; they are not subset or re-encoded. The typographic family name recorded in every one of them is `Tajarib Typeface` (`nameID 16`), with the typographic subfamilies Regular, Medium and Bold.
 
-- requires that the font's copyright notices and trademarks are not removed or altered (the OTFs are bundled unmodified for this reason);
-- prohibits redistributing, uploading, hosting, or otherwise making the font files available for download on any website, server, platform, or file-sharing service. The files under [src/assets/fonts/thmanyah/](src/assets/fonts/thmanyah/) are embedded assets for the packaged app only and must not be published as standalone font files.
-
-The full licence text is embedded in each OTF's `name` table (`nameID 13`); the licence URL recorded in the font is https://company.thmanyah.com/.
+No licence text is embedded in the font files: their `name` tables contain no licence-description or licence-URL records (`nameID 13` and `nameID 14` are absent). No licence terms are therefore reproduced here, and none should be inferred from this notice.
 
