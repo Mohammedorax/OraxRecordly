@@ -60,3 +60,7 @@ OraxRecordly_WEB/
 # Browser test output
 test-results/
 playwright-report/
+
+# Playwright run logs written by local UI-test runs
+run*.txt
+probe*.txt
