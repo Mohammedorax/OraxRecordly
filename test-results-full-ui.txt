@@ -1,0 +1,43 @@
+[playwright.config] browser: chrome (RECORDLY_UI_BROWSER_CHANNEL=chrome)
+[WebServer] (node:12724) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 62 tests using 1 worker
+
+[WebServer] 
+[WebServer] A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+[playwright.config] browser: chrome (RECORDLY_UI_BROWSER_CHANNEL=chrome)
+(node:14224) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\ui\block-deletion.spec.ts:12:1 › clip keyboard deletion is wired through the editor and undo restores it (6.6s)
+  ok  2 tests\ui\block-deletion.spec.ts:26:1 › zoom can be deleted after using its inspector (6.2s)
+  ok  3 tests\ui\block-deletion.spec.ts:37:1 › annotation deletion works from its inspector without deleting while typing (6.2s)
+  ok  4 tests\ui\block-deletion.spec.ts:55:1 › audio deletion works after changing inspector focus (6.0s)
+  ok  5 tests\ui\block-deletion.spec.ts:75:1 › caption remains deletable after the playhead leaves its span (6.5s)
+  ok  6 tests\ui\block-deletion.spec.ts:106:1 › inspector delete buttons remove clips and zooms (6.5s)
+  ok  7 tests\ui\block-deletion.spec.ts:125:1 › tool navigation leaves the annotation inspector (6.8s)
+  ok  8 tests\ui\block-deletion.spec.ts:144:1 › a dragged annotation can be selected across its whole block and deleted without deleting footage (7.5s)
+  ok  9 tests\ui\caption-speed.spec.ts:15:1 › captions render in preview and remain synchronized at 1x, 2x and 4x (12.1s)
+  x  10 tests\ui\clip-captions-and-background.spec.ts:4:1 › split clips share one grip and captions live inside the filmstrip (20.0s)
+[playwright.config] browser: chrome (RECORDLY_UI_BROWSER_CHANNEL=chrome)
+(node:14180) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 11 tests\ui\clip-captions-and-background.spec.ts:109:1 › background swaps use the section fade without sliding or overlapping panels (6.8s)
+  ok 12 tests\ui\clip-origin.spec.ts:4:1 › selecting an untouched clip does not introduce a leading gap (6.8s)
+  ok 13 tests\ui\clip-sequence.spec.ts:47:1 › left trimming keeps both gutter edges at one timestamp and can reveal footage again (8.2s)
+  ok 14 tests\ui\clip-sequence.spec.ts:82:1 › dragging the first clip past the middle clip inserts between its neighbors (7.6s)
+  ok 15 tests\ui\clip-sequence.spec.ts:116:1 › clip deletion and undo ripple connected annotations and imported audio together (10.3s)
+  ok 16 tests\ui\clips-polish.spec.ts:13:1 › narrow zooms retain the multiplier without a zoom icon (26.7s)
+  ok 17 tests\ui\clips-polish.spec.ts:30:1 › annotations can be dragged into the canvas background and survive undo (28.0s)
+  ok 18 tests\ui\controls.spec.ts:2:1 › HeroUI controls preserve editing, focus, keyboard and overlay behavior (10.7s)
+  ok 19 tests\ui\desktop-windows.spec.ts:4:1 › countdown can be cancelled from its HeroUI button (3.9s)
+  ok 20 tests\ui\desktop-windows.spec.ts:12:1 › update window fits the desktop toast and can be dismissed (6.2s)
+  ok 21 tests\ui\desktop-windows.spec.ts:25:1 › editor inspector and playback controls fit a smaller desktop (29.5s)
+  ok 22 tests\ui\editor-layout.spec.ts:4:1 › advanced controls preserve values and remember each section's view (35.2s)
+  x  23 tests\ui\editor-layout.spec.ts:45:1 › header breadcrumb fits long names, native chrome and compact windows (41.0s)
+[playwright.config] browser: chrome (RECORDLY_UI_BROWSER_CHANNEL=chrome)
+(node:11516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 24 tests\ui\editor-layout.spec.ts:129:1 › header name edits in place and saves on blur without a boxed input (27.0s)
+  ok 25 tests\ui\editor-layout.spec.ts:154:1 › new zoom blocks default to 1.8x (19.4s)
+  ok 26 tests\ui\editor-refinements.spec.ts:26:1 › clip filmstrip decodes different source frames and zoom blocks use the available height (19.1s)

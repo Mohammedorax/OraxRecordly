@@ -229,19 +229,28 @@ function MotionPresetCards({
 					value={presetId}
 					className="rounded-xl border border-separator p-3"
 				>
-					<Radio.Content>
-						<Radio.Control>
-							<Radio.Indicator />
-						</Radio.Control>
-						<div className="flex min-w-0 flex-col gap-1">
+					{/*
+					 * The description is a sibling of Radio.Content on purpose: Radio.Content
+					 * renders the native <label> that names the radio input, so any text
+					 * inside it (previously the description too) became part of the
+					 * accessible name. As a sibling it is still wired to the input through
+					 * react-aria's aria-describedby, and `contents` on Radio.Content lets the
+					 * control and the name stay in the same grid row while the control spans
+					 * both rows, keeping the original visual layout.
+					 */}
+					<div className="relative grid w-full grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1">
+						<Radio.Content className="contents">
+							<Radio.Control className="row-span-2 self-center">
+								<Radio.Indicator />
+							</Radio.Control>
 							<Label className="text-[13px] font-medium">
 								{tSettings(`effects.motionPresets.${presetId}.label`)}
 							</Label>
-							<Description className="text-xs leading-relaxed">
-								{tSettings(`effects.motionPresets.${presetId}.description`)}
-							</Description>
-						</div>
-					</Radio.Content>
+						</Radio.Content>
+						<Description className="col-start-2 text-xs leading-relaxed">
+							{tSettings(`effects.motionPresets.${presetId}.description`)}
+						</Description>
+					</div>
 				</Radio>
 			))}
 		</RadioGroup>

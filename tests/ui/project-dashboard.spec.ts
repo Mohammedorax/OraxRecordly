@@ -188,8 +188,12 @@ test("autosave creates one untitled project, stays idle without edits, and refre
 	await expect(page.getByRole("button", { name: "Rename project" })).toContainText(
 		"Untitled Project",
 	);
-	// Observe more than two debounce periods: idle must not perform periodic saves.
+	// The first autosave is debounced, so it can land after the project is created.
+	// Wait for it to actually happen before snapshotting the baseline, otherwise the
+	// idle window below would compare against a still-pending save.
+	await expect.poll(() => page.locator("html").getAttribute("data-project-saves")).not.toBeNull();
 	const before = await page.locator("html").getAttribute("data-project-saves");
+	// Observe more than two debounce periods: idle must not perform periodic saves.
 	await page.waitForTimeout(1800);
 	await expect(page.locator("html")).toHaveAttribute("data-project-creates", "1");
 	expect(await page.locator("html").getAttribute("data-project-saves")).toBe(before);

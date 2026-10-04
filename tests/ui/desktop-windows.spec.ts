@@ -35,11 +35,10 @@ test("editor inspector and playback controls fit a smaller desktop", async ({ pa
 		page.getByRole("radiogroup", { name: "Motion Presets", exact: true }),
 	).toBeVisible();
 	await page.getByText("Smooth", { exact: true }).click();
-	// The accessible name of the radio input is the whole Radio.Content text
-	// ("Smooth" plus its description), so assert on the radio's real value
-	// instead of an exact-name role query that can never match.
-	await expect(page.locator('input[type="radio"][value="smooth"]')).toBeChecked();
-	await expect(page.locator('input[type="radio"][value="focused"]')).not.toBeChecked();
+	// Each radio's accessible name is its preset name only; the description is
+	// exposed through react-aria's aria-describedby, not as part of the name.
+	await expect(page.getByRole("radio", { name: "Smooth", exact: true })).toBeChecked();
+	await expect(page.getByRole("radio", { name: "Focused", exact: true })).not.toBeChecked();
 	await expect
 		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
 		.toBe(true);
