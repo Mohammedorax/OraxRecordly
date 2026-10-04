@@ -64,3 +64,7 @@ playwright-report/
 # Playwright run logs written by local UI-test runs
 run*.txt
 probe*.txt
+
+# Playwright result dumps written by local UI-test runs
+test-results*.txt
+*-full-ui.txt
