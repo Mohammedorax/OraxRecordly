@@ -20,27 +20,36 @@
 	font-display: swap;
 }
 
-/* Tajarib Typeface is the Arabic display face, bundled for offline desktop use.
-   All three weights are the unmodified OTFs shipped by the typeface, and they
-   share the typographic family "Tajarib Typeface" (nameID 16), distinguished
-   here by font-weight. */
+/* SA Hazm is the Arabic display face, bundled for offline desktop use.
+   All four weights are the unmodified TTFs shipped by the typeface. They do not
+   all carry a typographic family record (nameID 16 is absent from Regular and
+   Bold), but the legacy family (nameID 1) and the typographic family agree on
+   "SA Hazm", so a single family name is registered here and the cuts are
+   distinguished by font-weight: 400 / 500 / 600 / 700. */
 @font-face {
-	font-family: "Tajarib Typeface";
-	src: url("./assets/fonts/tajarib/Tajarib-Regular.otf") format("opentype");
+	font-family: "SA Hazm";
+	src: url("./assets/fonts/sa-hazm/SAHazm-Regular.ttf") format("truetype");
 	font-style: normal;
 	font-weight: 400;
 	font-display: swap;
 }
 @font-face {
-	font-family: "Tajarib Typeface";
-	src: url("./assets/fonts/tajarib/Tajarib-Medium.otf") format("opentype");
+	font-family: "SA Hazm";
+	src: url("./assets/fonts/sa-hazm/SAHazm-Medium.ttf") format("truetype");
 	font-style: normal;
 	font-weight: 500;
 	font-display: swap;
 }
 @font-face {
-	font-family: "Tajarib Typeface";
-	src: url("./assets/fonts/tajarib/Tajarib-Bold.otf") format("opentype");
+	font-family: "SA Hazm";
+	src: url("./assets/fonts/sa-hazm/SAHazm-SemiBold.ttf") format("truetype");
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+}
+@font-face {
+	font-family: "SA Hazm";
+	src: url("./assets/fonts/sa-hazm/SAHazm-Bold.ttf") format("truetype");
 	font-style: normal;
 	font-weight: 700;
 	font-display: swap;
@@ -129,15 +138,15 @@
  */
 :root[lang="ar"],
 :root[lang^="ar-"] {
-	/* Tajarib Typeface is the Arabic display face and leads the stack so
+	/* SA Hazm is the Arabic display face and leads the stack so
 	   Arabic text stops falling through to the platform UI font. It also ships
 	   Latin glyphs, so Latin and technical strings inside the Arabic locale render
 	   in it; the previous families stay after it as fallbacks for anything the
 	   bundled face does not cover. The English/Latin stack in `:root` is unchanged
 	   and keeps DM Sans. */
 	--app-font-sans:
-		"Tajarib Typeface", "DM Sans", "Segoe UI", "Noto Sans Arabic", "Noto Kufi Arabic",
-		"Geeza Pro", Tahoma, ui-sans-serif, system-ui, -apple-system, sans-serif;
+		"SA Hazm", "DM Sans", "Segoe UI", "Noto Sans Arabic", "Noto Kufi Arabic", "Geeza Pro",
+		Tahoma, ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 /* Arabic is a connected script: letter-spacing breaks the joins, so neutralise

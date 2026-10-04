@@ -87,4 +87,4 @@ The user-data folder intentionally stays `%APPDATA%\Recordly` so recordings and 
 
 ## Licence and credits
 
-This project is licensed under **AGPL-3.0**, the same licence as upstream, and the original licence is kept in [LICENSE.md](LICENSE.md). Third-party components and fonts — including the **Tajarib Typeface** used for Arabic text — are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+This project is licensed under **AGPL-3.0**, the same licence as upstream, and the original licence is kept in [LICENSE.md](LICENSE.md). Third-party components and fonts — including the **SA Hazm** typeface used for Arabic text — are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

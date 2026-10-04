@@ -11,11 +11,11 @@ Copyright 2014 The DM Sans Project Authors (https://github.com/googlefonts/dm-fo
 
 DM Sans is licensed under the SIL Open Font License, Version 1.1. The unmodified regular and italic variable fonts are sourced from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/dmsans). The full license is included in [src/assets/fonts/dm-sans/OFL.txt](src/assets/fonts/dm-sans/OFL.txt).
 
-## Tajarib Typeface
+## SA Hazm
 
-The Arabic display face bundled with OraxRecordly is **Tajarib Typeface**, shipped in three weights: `Regular` (weight 400), `Medium` (weight 500) and `Bold` (weight 700).
+The Arabic display face bundled with OraxRecordly is **SA Hazm**, shipped in four weights: `Regular` (weight 400), `Medium` (weight 500), `SemiBold` (weight 600) and `Bold` (weight 700).
 
-All three OTFs under [src/assets/fonts/tajarib/](src/assets/fonts/tajarib/) are the unmodified source files, bundled as-is; they are not subset or re-encoded. The typographic family name recorded in every one of them is `Tajarib Typeface` (`nameID 16`), with the typographic subfamilies Regular, Medium and Bold.
+All four TTFs under [src/assets/fonts/sa-hazm/](src/assets/fonts/sa-hazm/) are the unmodified source files, bundled as-is; they are not subset or re-encoded. Their `name` tables record a legacy family (`nameID 1`) of `SA Hazm` for `Regular` and `Bold`, and `SA Hazm Regular`/`SA Hazm Medium`/`SA Hazm SemiBold` for the other cuts; the typographic family (`nameID 16`) `SA Hazm` is present in the `Medium` and `SemiBold` files and absent from `Regular` and `Bold`. All records therefore agree on the family name `SA Hazm`, with typographic subfamilies (`nameID 17`) Regular, Medium, SemiBold and Bold. The files identify version 1.000 (Glyphs 3.4.1) and record `Saad Althoraya` as designer (`nameID 9`) with `https://www.instagram.com/saadalthoraya/` (`nameID 12`).
 
-No licence text is embedded in the font files: their `name` tables contain no licence-description or licence-URL records (`nameID 13` and `nameID 14` are absent). No licence terms are therefore reproduced here, and none should be inferred from this notice.
+No licence text is embedded in the font files: their `name` tables contain no licence-description or licence-URL records (`nameID 13` and `nameID 14` are absent from all four files). No licence terms are therefore reproduced here, and none should be inferred from this notice.
 
