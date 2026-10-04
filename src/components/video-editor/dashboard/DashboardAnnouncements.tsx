@@ -69,7 +69,7 @@ export function DashboardAnnouncements({
 						aria-label={t("dashboard.previousAnnouncement", "Previous announcement")}
 						onPress={() => setIndex((active + banners.length - 1) % banners.length)}
 					>
-						<ArrowLeft className="size-4" />
+						<ArrowLeft className="rtl:rotate-180 size-4" />
 					</Button>
 					<div
 						className="flex gap-2 rounded-full bg-black/30 px-2 py-0.5"
@@ -102,7 +102,7 @@ export function DashboardAnnouncements({
 						aria-label={t("dashboard.nextAnnouncement", "Next announcement")}
 						onPress={() => setIndex((active + 1) % banners.length)}
 					>
-						<ArrowRight className="size-4" />
+						<ArrowRight className="rtl:rotate-180 size-4" />
 					</Button>
 				</div>
 			)}

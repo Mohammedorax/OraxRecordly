@@ -197,6 +197,40 @@ describe("selectRegionOnDisplay", () => {
 		expect(mocks.destroy).toHaveBeenCalledTimes(1);
 	});
 
+	it("defers the safety timeout while the user keeps interacting", async () => {
+		// The watchdog exists to tear down a *hung* overlay, so a selection that
+		// takes longer than the timeout to draw and adjust must not be destroyed
+		// mid-edit: every activity report from the overlay re-arms it.
+		vi.useFakeTimers();
+		const selection = selectRegionOnDisplay(display, 5_000);
+		const activity = mocks.ipcHandlers.get("screenshot-region-activity");
+		expect(activity).toBeTruthy();
+
+		await vi.advanceTimersByTimeAsync(4_000);
+		activity?.({ sender: fakeWindow.webContents });
+		await vi.advanceTimersByTimeAsync(4_000);
+		activity?.({ sender: fakeWindow.webContents });
+		await vi.advanceTimersByTimeAsync(4_000);
+		expect(mocks.destroy).not.toHaveBeenCalled();
+
+		// Once the user stops, the watchdog still tears the overlay down.
+		await vi.advanceTimersByTimeAsync(5_000);
+		await expect(selection).resolves.toBeNull();
+		expect(mocks.destroy).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores an activity report from a different window", async () => {
+		vi.useFakeTimers();
+		const selection = selectRegionOnDisplay(display, 5_000);
+		const activity = mocks.ipcHandlers.get("screenshot-region-activity");
+
+		// Another window must not be able to keep this overlay alive.
+		activity?.({ sender: {} });
+		await vi.advanceTimersByTimeAsync(5_000);
+
+		await expect(selection).resolves.toBeNull();
+	});
+
 	it("shows the overlay once the renderer finishes loading", async () => {
 		// Windows shows the overlay without stealing focus from the app underneath.
 		const selection = selectRegionOnDisplay(display, 10_000, "win32");

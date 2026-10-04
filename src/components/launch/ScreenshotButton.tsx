@@ -197,11 +197,13 @@ export function ScreenshotButton({
 			}
 
 			if (!result?.success) {
-				toast.error(
-					result?.error
-						? `${t("screenshot.failed")} ${result.error}`
-						: t("screenshot.failed"),
-				);
+				// The main process reports its failures in English and they are not
+				// translated, so they are kept out of the user-facing toast and only
+				// logged. The toast keeps the localized message and stays actionable.
+				if (result?.error) {
+					console.error("Screenshot capture failed:", result.error);
+				}
+				toast.error(t("screenshot.failed"));
 				return;
 			}
 
@@ -220,7 +222,8 @@ export function ScreenshotButton({
 				action: savedPath ? buildToastAction(savedPath) : undefined,
 			});
 		} catch (error) {
-			toast.error(`${t("screenshot.failed")} ${String(error)}`);
+			console.error("Screenshot capture threw:", error);
+			toast.error(t("screenshot.failed"));
 		} finally {
 			capturingRef.current = false;
 			setCapturing(false);
@@ -272,9 +275,15 @@ export function ScreenshotButton({
 				toast.success(t("screenshot.copied"));
 				return;
 			}
-			toast.error(`${t("screenshot.copyFailed")} ${written?.error ?? ""}`.trim());
+			// Same rule as the capture path: keep the untranslated bridge error out
+			// of the toast and leave it in the console.
+			if (written?.error) {
+				console.error("Clipboard image write failed:", written.error);
+			}
+			toast.error(t("screenshot.copyFailed"));
 		} catch (error) {
-			toast.error(`${t("screenshot.copyFailed")} ${String(error)}`);
+			console.error("Copying the screenshot to the clipboard failed:", error);
+			toast.error(t("screenshot.copyFailed"));
 		}
 	};
 

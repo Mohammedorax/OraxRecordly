@@ -5,6 +5,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { getPackagedRendererBaseUrl } from "./rendererServer";
 import {
 	SCREENSHOT_EDITOR_LOAD_IMAGE_EVENT,
+	SCREENSHOT_REGION_ACTIVITY_CHANNEL,
 	SCREENSHOT_REGION_CANCEL_CHANNEL,
 	SCREENSHOT_REGION_COMPLETE_CHANNEL,
 	SCREENSHOT_REGION_READY_EVENT,
@@ -156,6 +157,13 @@ function createRegionSelectorWindow(display: Electron.Display): BrowserWindow {
  *
  * The promise always settles: window close, display removal and a safety
  * timeout are all treated as cancellation.
+ *
+ * The safety timeout is an *idle* timeout. It exists to tear down an overlay
+ * whose renderer has stopped responding, so the selector reports its pointer and
+ * key activity back (see `SCREENSHOT_REGION_ACTIVITY_CHANNEL`) and every report
+ * re-arms the timer. Without that, a user who takes longer than the timeout to
+ * place and adjust a selection would have the overlay destroyed mid-edit — the
+ * handle-dragging and arrow-key nudging flow makes that easy to hit.
  */
 export function selectRegionOnDisplay(
 	display: Electron.Display,
@@ -169,11 +177,15 @@ export function selectRegionOnDisplay(
 		let removeGlobalListeners: (() => void) | null = null;
 		let win: BrowserWindow;
 
-		const cleanup = () => {
+		const clearSafetyTimer = () => {
 			if (safetyTimer) {
 				clearTimeout(safetyTimer);
 				safetyTimer = null;
 			}
+		};
+
+		const cleanup = () => {
+			clearSafetyTimer();
 			removeDisplayListener?.();
 			removeDisplayListener = null;
 			removeGlobalListeners?.();
@@ -195,11 +207,29 @@ export function selectRegionOnDisplay(
 			resolve(rect);
 		};
 
+		/** (Re)arm the idle watchdog that tears down a hung overlay. */
+		const armSafetyTimer = () => {
+			clearSafetyTimer();
+			safetyTimer = setTimeout(() => {
+				console.warn(
+					"Screenshot region selection was idle for too long; cancelling the overlay.",
+				);
+				settle(null);
+			}, safetyTimeoutMs);
+		};
+
 		const onComplete = (_event: Electron.IpcMainEvent, payload: unknown) => {
 			const rect = normalizeRegionSelection(payload);
 			settle(rect);
 		};
 		const onCancel = () => settle(null);
+		const onActivity = (event: Electron.IpcMainEvent) => {
+			// Only this overlay's own renderer may keep it alive.
+			if (settled || event?.sender !== win?.webContents) {
+				return;
+			}
+			armSafetyTimer();
+		};
 
 		try {
 			win = createRegionSelectorWindow(display);
@@ -262,6 +292,7 @@ export function selectRegionOnDisplay(
 
 		webContents.ipc.on(SCREENSHOT_REGION_COMPLETE_CHANNEL, onComplete);
 		webContents.ipc.on(SCREENSHOT_REGION_CANCEL_CHANNEL, onCancel);
+		webContents.ipc.on(SCREENSHOT_REGION_ACTIVITY_CHANNEL, onActivity);
 
 		// Belt and braces: some Electron/OS combinations deliver the renderer's
 		// `ipcRenderer.send` to the global `ipcMain` emitter only. Accept the region
@@ -281,15 +312,14 @@ export function selectRegionOnDisplay(
 		};
 		ipcMain.on(SCREENSHOT_REGION_COMPLETE_CHANNEL, onGlobalComplete);
 		ipcMain.on(SCREENSHOT_REGION_CANCEL_CHANNEL, onGlobalCancel);
+		ipcMain.on(SCREENSHOT_REGION_ACTIVITY_CHANNEL, onActivity);
 		removeGlobalListeners = () => {
 			ipcMain.removeListener(SCREENSHOT_REGION_COMPLETE_CHANNEL, onGlobalComplete);
 			ipcMain.removeListener(SCREENSHOT_REGION_CANCEL_CHANNEL, onGlobalCancel);
+			ipcMain.removeListener(SCREENSHOT_REGION_ACTIVITY_CHANNEL, onActivity);
 		};
 
-		safetyTimer = setTimeout(() => {
-			console.warn("Screenshot region selection timed out; cancelling the overlay.");
-			settle(null);
-		}, safetyTimeoutMs);
+		armSafetyTimer();
 	});
 }
 

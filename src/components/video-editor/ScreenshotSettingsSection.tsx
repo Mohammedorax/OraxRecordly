@@ -159,9 +159,10 @@ export function ScreenshotSettingsSection() {
 			} catch (error) {
 				setStatus("idle");
 				setShortcutError(false);
-				toast.error(
-					`${t("screenshots.saveFailed", "Could not save the screenshot settings")} ${String(error)}`,
-				);
+				// The store's own error text is English and untranslated, so it is
+				// logged rather than appended to the localized message.
+				console.error("Failed to save the screenshot settings:", error);
+				toast.error(t("screenshots.saveFailed", "Could not save the screenshot settings"));
 				return null;
 			}
 		},
@@ -213,8 +214,9 @@ export function ScreenshotSettingsSection() {
 			setFolder(result.path);
 			showSaved();
 		} catch (error) {
+			console.error("Failed to change the screenshots folder:", error);
 			toast.error(
-				`${t("screenshots.chooseFolderFailed", "Could not change the screenshots folder")} ${String(error)}`,
+				t("screenshots.chooseFolderFailed", "Could not change the screenshots folder"),
 			);
 		} finally {
 			setChoosingFolder(false);
@@ -272,9 +274,8 @@ export function ScreenshotSettingsSection() {
 				setFolder(result.path);
 			}
 		} catch (error) {
-			toast.error(
-				`${t("screenshots.openFolderFailed", "Could not open the screenshots folder")} ${String(error)}`,
-			);
+			console.error("Failed to open the screenshots folder:", error);
+			toast.error(t("screenshots.openFolderFailed", "Could not open the screenshots folder"));
 		} finally {
 			setOpeningFolder(false);
 		}

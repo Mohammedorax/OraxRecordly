@@ -292,7 +292,7 @@ export function AnnouncementDialog({ audience }: { audience: AnnouncementAudienc
 										"Previous announcement",
 									)}
 								>
-									<ArrowLeft />
+									<ArrowLeft className="rtl:rotate-180" />
 								</Button>
 							)}
 							{controls.indicators && (
@@ -330,7 +330,7 @@ export function AnnouncementDialog({ audience }: { audience: AnnouncementAudienc
 									}
 									aria-label={t("announcements.next", "Next announcement")}
 								>
-									<ArrowRight />
+									<ArrowRight className="rtl:rotate-180" />
 								</Button>
 							)}
 						</div>
@@ -354,7 +354,11 @@ export function AnnouncementDialog({ audience }: { audience: AnnouncementAudienc
 						{current.action && controls.action && (
 							<Button type="button" onClick={() => void openAction()}>
 								{current.action.label}
-								{current.action.url ? <ArrowSquareOut /> : <ArrowRight />}
+								{current.action.url ? (
+									<ArrowSquareOut />
+								) : (
+									<ArrowRight className="rtl:rotate-180" />
+								)}
 							</Button>
 						)}
 					</div>

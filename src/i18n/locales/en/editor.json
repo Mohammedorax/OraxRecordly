@@ -183,6 +183,7 @@
 		"noVideoLoaded": "No video loaded",
 		"projectMediaLoadFailed": "Could not load project media",
 		"renameFailed": "Could not rename project",
+		"renameFailedDetail": "Could not rename project: {{message}}",
 		"renameInput": "Project name",
 		"renameLibraryUpdateFailed": "Project renamed, but library preferences could not be updated",
 		"renameTitle": "Rename project",

@@ -616,6 +616,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => {
 		ipcRenderer.send("screenshot-region-complete", rect);
 	},
+	/**
+	 * Reports that the user is still interacting with the region overlay, so the
+	 * main process's idle watchdog (which exists to tear down a *hung* overlay)
+	 * does not fire while a selection is being drawn or adjusted.
+	 */
+	notifyScreenshotRegionActivity: () => {
+		ipcRenderer.send("screenshot-region-activity");
+	},
 	/** @deprecated Use `completeScreenshotRegion(rect)`. */
 	screenshotRegionComplete: (rect: { x: number; y: number; width: number; height: number }) => {
 		ipcRenderer.send("screenshot-region-complete", rect);

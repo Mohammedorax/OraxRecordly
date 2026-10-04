@@ -206,8 +206,38 @@ export function getTimelineDurationMs(clips: ClipRegion[], sourceDurationMs: num
 	);
 }
 
+/**
+ * Identity-keyed cache of the sorted clip order.
+ *
+ * `sortClipRegions` sits on the playback and export hot paths: the preview's
+ * `sync()` resolves the playhead two or three times per animation frame, the
+ * preview render body maps the playhead twice more, and every exported frame
+ * maps its timestamp the same way. Each of those calls copied and re-sorted the
+ * whole clip list, so a 60 fps preview with a long timeline re-sorted hundreds
+ * of clips every frame and threw the arrays away.
+ *
+ * The sorted order is a pure function of the input array's *identity*: every
+ * editor mutation replaces the array rather than mutating it (no caller does an
+ * in-place `push`/`splice`/`sort` on `clipRegions`). The order is therefore
+ * memoized per array and a fresh copy is handed to each caller, because callers
+ * such as `reorderClipSequence` splice the result in place and must never be
+ * able to corrupt the cache. A `WeakMap` ties the entry to the array's lifetime
+ * so there is no eviction work.
+ */
+const sortedClipOrderCache = new WeakMap<ClipRegion[], ClipRegion[]>();
+
+function getSortedClipOrder(clips: ClipRegion[]): ClipRegion[] {
+	let order = sortedClipOrderCache.get(clips);
+	if (!order) {
+		order = [...clips].sort((left, right) => left.startMs - right.startMs);
+		sortedClipOrderCache.set(clips, order);
+	}
+
+	return order.slice();
+}
+
 export function sortClipRegions(clips: ClipRegion[]): ClipRegion[] {
-	return [...clips].sort((left, right) => left.startMs - right.startMs);
+	return getSortedClipOrder(clips);
 }
 
 function getSafeClipSpeed(clip: ClipRegion) {

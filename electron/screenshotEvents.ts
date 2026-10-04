@@ -16,6 +16,12 @@ export const SCREENSHOT_WRITE_IMAGE_FILE_CHANNEL = "write-image-file";
 /** Send channels (renderer -> main, fire and forget). */
 export const SCREENSHOT_REGION_COMPLETE_CHANNEL = "screenshot-region-complete";
 export const SCREENSHOT_REGION_CANCEL_CHANNEL = "screenshot-region-cancel";
+/**
+ * Keeps the overlay's safety timer honest: the region selector reports its own
+ * pointer/key activity on this channel so the main process can reset a timeout
+ * that is meant to catch a hung overlay, not a slow user.
+ */
+export const SCREENSHOT_REGION_ACTIVITY_CHANNEL = "screenshot-region-activity";
 
 /** Event channels (main -> renderer). */
 export const SCREENSHOT_REGION_READY_EVENT = "screenshot-region-ready";

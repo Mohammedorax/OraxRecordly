@@ -18,12 +18,22 @@ interface RegionRect {
  */
 interface ScreenshotRegionBridge {
 	completeScreenshotRegion?: (rect: RegionRect | null) => Promise<void>;
+	/** Keeps the main process's idle watchdog alive while the user is working. */
+	notifyScreenshotRegionActivity?: () => void;
 }
 
 /** Below this size a pointer gesture is a click, not a selection. */
 const MIN_SELECTION_SIZE = 2;
 /** Arrow-key nudge distance, in CSS pixels (Shift = 10x). */
 const NUDGE_STEP = 1;
+/**
+ * Minimum spacing between idle-watchdog keep-alives, in milliseconds.
+ *
+ * The main process cancels an overlay that has produced no input for a whole
+ * minute (it guards a renderer that has hung). Pointer moves arrive far faster
+ * than that, so the keep-alive is coalesced instead of being sent per event.
+ */
+const ACTIVITY_PING_INTERVAL_MS = 1_000;
 /** Resize handles, in the order they are rendered. */
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
 type HandleId = (typeof HANDLES)[number];
@@ -118,6 +128,28 @@ export default function ScreenshotRegionOverlay() {
 	const gestureRef = useRef<Gesture | null>(null);
 	const rectRef = useRef<RegionRect | null>(null);
 	const sentRef = useRef(false);
+	const lastActivityPingRef = useRef(0);
+
+	/**
+	 * Tell main the user is still working, so its idle watchdog does not destroy
+	 * the overlay mid-selection. Throttled to one message per second; a missing
+	 * bridge is not an error (the watchdog simply falls back to its own clock).
+	 */
+	const reportActivity = useCallback(() => {
+		const bridge = window.electronAPI as unknown as ScreenshotRegionBridge | undefined;
+		const notify = bridge?.notifyScreenshotRegionActivity;
+		if (typeof notify !== "function") {
+			return;
+		}
+
+		const now = Date.now();
+		if (now - lastActivityPingRef.current < ACTIVITY_PING_INTERVAL_MS) {
+			return;
+		}
+
+		lastActivityPingRef.current = now;
+		notify();
+	}, []);
 
 	useEffect(() => {
 		rectRef.current = rect;
@@ -182,6 +214,8 @@ export default function ScreenshotRegionOverlay() {
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
+			reportActivity();
+
 			if (event.key === "Escape") {
 				event.preventDefault();
 				cancel();
@@ -222,7 +256,7 @@ export default function ScreenshotRegionOverlay() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [cancel, confirm]);
+	}, [cancel, confirm, reportActivity]);
 
 	const pointFromEvent = (event: ReactPointerEvent<HTMLDivElement>) => ({
 		x: clamp(event.clientX, 0, window.innerWidth),
@@ -239,6 +273,8 @@ export default function ScreenshotRegionOverlay() {
 
 	/** Starts a brand-new selection; used from the dimmed backdrop. */
 	const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+		reportActivity();
+
 		if (event.button === 2) {
 			event.preventDefault();
 			cancel();
@@ -309,6 +345,7 @@ export default function ScreenshotRegionOverlay() {
 			return;
 		}
 
+		reportActivity();
 		const point = pointFromEvent(event);
 		if (gesture.type === "draw") {
 			setRect(rectFromPoints(gesture.origin.x, gesture.origin.y, point.x, point.y));

@@ -899,6 +899,13 @@ interface Window {
 		completeScreenshotRegion: (
 			rect: { x: number; y: number; width: number; height: number } | null,
 		) => void;
+		/**
+		 * Region overlay: keeps the main process's idle watchdog alive while the
+		 * user is still drawing or adjusting a selection, so a slow selection is
+		 * never torn down mid-edit. Safe to call on every input event — the
+		 * overlay throttles it.
+		 */
+		notifyScreenshotRegionActivity: () => void;
 		/** @deprecated Use `completeScreenshotRegion(rect)`. */
 		screenshotRegionComplete: (rect: {
 			x: number;

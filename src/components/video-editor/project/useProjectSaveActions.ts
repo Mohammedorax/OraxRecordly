@@ -361,7 +361,15 @@ export function useProjectSaveActions({
 			try {
 				saved = await saveProjectWithName(name, "copy");
 			} catch (error) {
-				toast.error(getErrorMessage(error));
+				// The thrown message comes from the main process and is English-only,
+				// so it is framed by a localized message that says what failed and
+				// keeps the detail available for a bug report.
+				console.error("Saving the project failed:", error);
+				toast.error(
+					t("project.saveFailedDetail", "Could not save project: {{message}}", {
+						message: getErrorMessage(error),
+					}),
+				);
 			} finally {
 				setIsSavingProjectDialog(false);
 			}
@@ -397,7 +405,14 @@ export function useProjectSaveActions({
 			try {
 				saved = await saveProjectWithName(name, "rename");
 			} catch (error) {
-				toast.error(getErrorMessage(error));
+				// See the save dialog above: never surface the raw, untranslated
+				// main-process message on its own.
+				console.error("Renaming the project failed:", error);
+				toast.error(
+					t("project.renameFailedDetail", "Could not rename project: {{message}}", {
+						message: getErrorMessage(error),
+					}),
+				);
 			} finally {
 				setIsSavingProjectName(false);
 				savingNameRef.current = false;
@@ -416,6 +431,7 @@ export function useProjectSaveActions({
 			projectNameInputRef,
 			closeProjectNameEditor,
 			saveProjectWithName,
+			t,
 		],
 	);
 	const handleSaveProject = useCallback(() => saveProject(false), [saveProject]);

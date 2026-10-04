@@ -124,7 +124,7 @@ export function EditorAnnouncementBanner() {
 					{current.action?.url ? (
 						<ArrowSquareOut className="h-3.5 w-3.5" />
 					) : (
-						<ArrowRight className="h-3.5 w-3.5" />
+						<ArrowRight className="rtl:rotate-180 h-3.5 w-3.5" />
 					)}
 				</Button>
 			) : null}

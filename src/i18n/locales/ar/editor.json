@@ -183,6 +183,7 @@
 		"noVideoLoaded": "لم يتم تحميل أي فيديو",
 		"projectMediaLoadFailed": "تعذَّر تحميل وسائط المشروع",
 		"renameFailed": "تعذَّرت إعادة تسمية المشروع",
+		"renameFailedDetail": "تعذَّرت إعادة تسمية المشروع: {{message}}",
 		"renameInput": "اسم المشروع",
 		"renameLibraryUpdateFailed": "تمت إعادة تسمية المشروع، لكن تعذَّر تحديث تفضيلات المكتبة",
 		"renameTitle": "إعادة تسمية المشروع",

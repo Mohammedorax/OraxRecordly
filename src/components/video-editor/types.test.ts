@@ -9,6 +9,7 @@ import {
 	getTimelineDurationMs,
 	mapSourceTimeToTimelineTime,
 	mapTimelineTimeToSourceTime,
+	sortClipRegions,
 	trimsToClips,
 } from "./types";
 
@@ -244,5 +245,27 @@ describe("clipsToTrims", () => {
 		expect(clipsToTrims(clips, 40_000)).toEqual([
 			{ id: "trim-gap-1", startMs: 20_000, endMs: 40_000 },
 		]);
+	});
+});
+
+describe("sortClipRegions", () => {
+	const clips: ClipRegion[] = [
+		{ id: "clip-2", startMs: 10_000, endMs: 20_000, speed: 1 },
+		{ id: "clip-1", startMs: 0, endMs: 10_000, speed: 1 },
+	];
+
+	it("sorts by timeline start without touching the input", () => {
+		expect(sortClipRegions(clips).map((clip) => clip.id)).toEqual(["clip-1", "clip-2"]);
+		expect(clips.map((clip) => clip.id)).toEqual(["clip-2", "clip-1"]);
+	});
+
+	it("hands every caller its own array", () => {
+		// The sorted order is memoized per input array, so a caller that splices
+		// the result (reorderClipSequence does) must not be able to corrupt the
+		// cached order for the next caller.
+		const first = sortClipRegions(clips);
+		first.splice(0, 1);
+
+		expect(sortClipRegions(clips).map((clip) => clip.id)).toEqual(["clip-1", "clip-2"]);
 	});
 });

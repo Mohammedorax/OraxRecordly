@@ -1153,6 +1153,45 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			return zoomRegions.find((region) => region.id === selectedZoomId) ?? null;
 		}, [zoomRegions, selectedZoomId]);
 
+		/**
+		 * Annotations that are composited at the current playhead, in paint order.
+		 *
+		 * This component re-renders on every playhead update, and the render body
+		 * used to filter and sort the whole annotation list inline — allocating
+		 * two arrays per animation frame (the `[...filtered]` copy was redundant,
+		 * `filter` already returns a fresh array). Hoisting it into a memo keeps
+		 * the allocation off the per-frame path.
+		 */
+		const activeAnnotationRegions = useMemo(() => {
+			const timeMs = Math.round(timelineTime * 1000);
+			return (annotationRegions ?? [])
+				.filter((annotation) => isAnnotationActiveAtTime(annotation, timeMs))
+				.sort((a, b) => a.zIndex - b.zIndex);
+		}, [annotationRegions, timelineTime]);
+
+		/**
+		 * Clicking the topmost annotation selects it; clicking the already selected
+		 * one cycles to the next, so overlapping annotations stay reachable without
+		 * a separate z-order list.
+		 */
+		const handleAnnotationClick = useCallback(
+			(clickedId: string) => {
+				if (!onSelectAnnotation) return;
+
+				if (clickedId === selectedAnnotationId && activeAnnotationRegions.length > 1) {
+					const currentIndex = activeAnnotationRegions.findIndex(
+						(annotation) => annotation.id === clickedId,
+					);
+					const nextIndex = (currentIndex + 1) % activeAnnotationRegions.length;
+					onSelectAnnotation(activeAnnotationRegions[nextIndex].id);
+					return;
+				}
+
+				onSelectAnnotation(clickedId);
+			},
+			[activeAnnotationRegions, onSelectAnnotation, selectedAnnotationId],
+		);
+
 		useImperativeHandle(ref, () => ({
 			get isPlaying() {
 				return clipPlaybackRef.current?.isPlaying ?? false;
@@ -2664,79 +2703,55 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 									pointerEvents: "none",
 									left: 0,
 									top: 0,
-									width: overlayRef.current?.clientWidth || 800,
-									height: overlayRef.current?.clientHeight || 600,
+									// `stageSizeRef` is the overlay's own measured size: the layout
+									// pass and `updateOverlayForRegion` both write it from the very
+									// element this div fills. Reading `clientWidth`/`clientHeight`
+									// here instead forced a synchronous layout flush on every
+									// playhead frame, because the render body runs at 60fps.
+									width: stageSizeRef.current.width || 800,
+									height: stageSizeRef.current.height || 600,
 								}}
 							>
-								{(() => {
-									const timeMs = Math.round(timelineTime * 1000);
-									const filtered = (annotationRegions || []).filter(
-										(annotation) =>
-											isAnnotationActiveAtTime(annotation, timeMs),
-									);
-
-									const sorted = [...filtered].sort(
-										(a, b) => a.zIndex - b.zIndex,
-									);
-
-									const handleAnnotationClick = (clickedId: string) => {
-										if (!onSelectAnnotation) return;
-
-										if (
-											clickedId === selectedAnnotationId &&
-											sorted.length > 1
-										) {
-											const currentIndex = sorted.findIndex(
-												(a) => a.id === clickedId,
-											);
-											const nextIndex = (currentIndex + 1) % sorted.length;
-											onSelectAnnotation(sorted[nextIndex].id);
-										} else {
-											onSelectAnnotation(clickedId);
+								{activeAnnotationRegions.map((annotation) => (
+									<AnnotationOverlay
+										key={annotation.id}
+										annotation={annotation}
+										isSelected={annotation.id === selectedAnnotationId}
+										containerWidth={
+											annotationRecordingRect.width ||
+											overlayRef.current?.clientWidth ||
+											800
 										}
-									};
-
-									return sorted.map((annotation) => (
-										<AnnotationOverlay
-											key={annotation.id}
-											annotation={annotation}
-											isSelected={annotation.id === selectedAnnotationId}
-											containerWidth={
+										containerHeight={
+											annotationRecordingRect.height ||
+											overlayRef.current?.clientHeight ||
+											600
+										}
+										recordingRect={{
+											x: annotationRecordingRect.x,
+											y: annotationRecordingRect.y,
+											width:
 												annotationRecordingRect.width ||
 												overlayRef.current?.clientWidth ||
-												800
-											}
-											containerHeight={
+												800,
+											height:
 												annotationRecordingRect.height ||
 												overlayRef.current?.clientHeight ||
-												600
-											}
-											recordingRect={{
-												x: annotationRecordingRect.x,
-												y: annotationRecordingRect.y,
-												width:
-													annotationRecordingRect.width ||
-													overlayRef.current?.clientWidth ||
-													800,
-												height:
-													annotationRecordingRect.height ||
-													overlayRef.current?.clientHeight ||
-													600,
-											}}
-											sceneTransform={{ scale: 1, x: 0, y: 0 }}
-											interactionScale={annotationSceneTransform.scale}
-											onPositionChange={(id, position) =>
-												onAnnotationPositionChange?.(id, position)
-											}
-											onSizeChange={(id, size) =>
-												onAnnotationSizeChange?.(id, size)
-											}
-											onClick={handleAnnotationClick}
-											zIndex={annotation.zIndex}
-											isSelectedBoost={annotation.id === selectedAnnotationId}
-										/>
-									));
-								})()}
+												600,
+										}}
+										sceneTransform={{ scale: 1, x: 0, y: 0 }}
+										interactionScale={annotationSceneTransform.scale}
+										onPositionChange={(id, position) =>
+											onAnnotationPositionChange?.(id, position)
+										}
+										onSizeChange={(id, size) =>
+											onAnnotationSizeChange?.(id, size)
+										}
+										onClick={handleAnnotationClick}
+										zIndex={annotation.zIndex}
+										isSelectedBoost={annotation.id === selectedAnnotationId}
+									/>
+								))}
 							</div>
 						</div>
 					</div>
