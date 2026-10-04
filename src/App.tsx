@@ -65,12 +65,23 @@ export default function App() {
 	const [windowType] = useState(
 		() => new URLSearchParams(window.location.search).get("windowType") || "",
 	);
+	// Set by the main process only when the transparent HUD never presented a
+	// frame and was reopened on an opaque background (electron/hudFrameProbe.ts).
+	// The window is no longer transparent in that case, so forcing the document
+	// background transparent would leave the fallback see-through.
+	const [opaqueHudFallback] = useState(
+		() => new URLSearchParams(window.location.search).get("hudBackground") === "opaque",
+	);
 	const { t } = useI18n();
 
 	useEffect(() => {
 		document.documentElement.dataset.windowType = windowType;
 
-		if (TRANSPARENT_WINDOW_TYPES.has(windowType)) {
+		if (opaqueHudFallback) {
+			document.documentElement.classList.add("hud-overlay-opaque-window");
+			document.body.classList.add("hud-overlay-opaque-window");
+			document.getElementById("root")?.classList.add("hud-overlay-opaque-window");
+		} else if (TRANSPARENT_WINDOW_TYPES.has(windowType)) {
 			document.body.style.background = "transparent";
 			document.documentElement.style.background = "transparent";
 			document.getElementById("root")?.style.setProperty("background", "transparent");
@@ -86,10 +97,12 @@ export default function App() {
 			document.body.style.overflow = "visible";
 			document.getElementById("root")?.style.setProperty("overflow", "visible");
 		}
-	}, [windowType]);
+	}, [windowType, opaqueHudFallback]);
 
 	useEffect(() => {
-		if (!TRANSPARENT_WINDOW_TYPES.has(windowType)) {
+		// The error-recovery un-transparency below must not fight the deliberate
+		// opaque fallback, which removes the transparent background on purpose.
+		if (!TRANSPARENT_WINDOW_TYPES.has(windowType) || opaqueHudFallback) {
 			return;
 		}
 
@@ -110,7 +123,7 @@ export default function App() {
 			window.removeEventListener("error", restoreOpaqueBackground);
 			window.removeEventListener("unhandledrejection", restoreOpaqueBackground);
 		};
-	}, [windowType]);
+	}, [windowType, opaqueHudFallback]);
 
 	useEffect(() => {
 		document.title =

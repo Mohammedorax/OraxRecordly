@@ -20,6 +20,7 @@ import { RECORDINGS_DIR } from "./appPaths";
 import { readStartupPreferences, shouldStartMinimizedOnLaunch } from "./autoLaunch";
 import { showCursor } from "./cursorHider";
 import { getGpuSwitches } from "./gpuSwitches";
+import { registerSynchronousAppSettingHandlers } from "./synchronousIpcBootstrap";
 import {
 	cleanupAllExportStreams,
 	cleanupNativeVideoExportSessions,
@@ -64,6 +65,7 @@ import {
 	createHudOverlayWindow,
 	createSourceSelectorWindow,
 	getHudOverlayWindow,
+	getHudOverlayFramePresented,
 	getUpdateToastWindow,
 	hideUpdateToastWindow,
 	isHudOverlayMousePassthroughSupported,
@@ -146,6 +148,19 @@ async function logSmokeExportGpuDiagnostics() {
 }
 
 configureGpuAccelerationSwitches();
+
+// DELIBERATE — must run synchronously at import time, before any window exists.
+// The preload's `getAppSetting`/`setAppSetting` bridges are *synchronous*
+// (`ipcRenderer.sendSync`), and the renderer reads persisted preferences during
+// its first render. A synchronous IPC that arrives before its `ipcMain.on`
+// listener is registered is answered with nothing: Chromium logs
+// "called ipcRenderer.sendSync() ... without listeners", the renderer wedges,
+// and the window never presents a frame again — Electron still reports
+// `isVisible: true`, but `capturePage()` rejects with `UnknownVizError` and the
+// user sees an invisible app. Registering the channels here, rather than inside
+// the async `app.whenReady()` body, removes that race entirely.
+// See electron/synchronousIpcBootstrap.ts for the full analysis.
+registerSynchronousAppSettingHandlers();
 
 async function ensureRecordingsDir() {
 	try {
@@ -434,6 +449,13 @@ function snapshotWindowsForVisibility(): StartupWindowSnapshot[] {
 			: getWindowTypeFromUrl(window.webContents.getURL()),
 		visible: !window.isDestroyed() && window.isVisible(),
 		destroyed: window.isDestroyed(),
+		// Reported by the early frame probe in electron/windows.ts. It stays
+		// `undefined` until that probe has run, so "not probed yet" is never read
+		// as "broken" and a healthy HUD is never downgraded.
+		framePresented:
+			!window.isDestroyed() && window === getHudOverlayWindow()
+				? (getHudOverlayFramePresented() ?? undefined)
+				: undefined,
 	}));
 }
 

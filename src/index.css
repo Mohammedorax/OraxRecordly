@@ -114,6 +114,20 @@
 	#root.hud-overlay-window {
 		overflow: hidden;
 	}
+	/*
+	 * Opaque HUD fallback.
+	 *
+	 * Used only when the transparent HUD never presented a frame
+	 * (electron/hudFrameProbe.ts). The replacement window is created with
+	 * `transparent: false`, so the document must paint its own background or the
+	 * bar would sit on whatever the window default is. `--surface` matches the
+	 * bar's own `--launch-bar-bg`, so the bar keeps looking like one piece.
+	 */
+	html.hud-overlay-opaque-window,
+	body.hud-overlay-opaque-window,
+	#root.hud-overlay-opaque-window {
+		background: var(--surface);
+	}
 	input,
 	textarea {
 		user-select: text;

@@ -1,7 +1,7 @@
 import { createCountdownController } from "../../countdownController";
 import fs from "node:fs/promises";
 import { app, BrowserWindow, ipcMain } from "electron";
-import { hasAppSetting, readAppSettingsStore, writeAppSettingsStore } from "../../appSettingsStore";
+import { resolveAppSettingGet, resolveAppSettingSet } from "../../synchronousIpcBootstrap";
 import { hideCursor } from "../../cursorHider";
 import { createCountdownWindow } from "../../windows";
 import { COUNTDOWN_SETTINGS_FILE, RECORDINGS_SETTINGS_FILE, SHORTCUTS_FILE } from "../constants";
@@ -64,38 +64,16 @@ export function registerSettingsHandlers() {
 	});
 
 	ipcMain.on("app-settings:get", (event, key: unknown) => {
-		try {
-			if (typeof key !== "string" || key.length === 0) {
-				event.returnValue = { success: false, value: null };
-				return;
-			}
-
-			const store = readAppSettingsStore();
-			event.returnValue = {
-				success: true,
-				value: hasAppSetting(store, key) ? store[key] : null,
-			};
-		} catch (error) {
-			console.error("Failed to read app setting:", error);
-			event.returnValue = { success: false, value: null };
-		}
+		// The same channels are registered synchronously at import time by
+		// electron/synchronousIpcBootstrap.ts so the preload's blocking
+		// `sendSync` can never arrive before a listener exists. This
+		// registration is kept for the async startup path and for tests; both
+		// listeners answer from the same resolver, so the reply is identical.
+		event.returnValue = resolveAppSettingGet(key);
 	});
 
 	ipcMain.on("app-settings:set", (event, key: unknown, value: unknown) => {
-		try {
-			if (typeof key !== "string" || key.length === 0) {
-				event.returnValue = { success: false };
-				return;
-			}
-
-			const store = readAppSettingsStore();
-			store[key] = value;
-			writeAppSettingsStore(store);
-			event.returnValue = { success: true };
-		} catch (error) {
-			console.error("Failed to save app setting:", error);
-			event.returnValue = { success: false };
-		}
+		event.returnValue = resolveAppSettingSet(key, value);
 	});
 
 	// ---------------------------------------------------------------------------

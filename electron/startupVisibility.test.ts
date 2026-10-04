@@ -126,6 +126,33 @@ describe("decideStartupVisibility", () => {
 	it("keeps the editor fallback strictly after the HUD reveal", () => {
 		expect(STARTUP_VISIBILITY_EDITOR_FALLBACK_MS).toBeGreaterThan(STARTUP_VISIBILITY_PROBE_MS);
 	});
+
+	it("keeps watching when the HUD is visible but its frame was never presented", () => {
+		// The early probe recovers this case in-product; the watchdog must not
+		// declare victory in the meantime, or a failed recovery would leave the
+		// user with nothing on screen.
+		const unpresented = { ...hud(true), framePresented: false };
+		expect(decide({ windows: [unpresented], elapsedMs: 0 })).toBe("wait");
+		expect(decide({ windows: [unpresented], elapsedMs: STARTUP_VISIBILITY_PROBE_MS })).toBe(
+			"show-hud",
+		);
+		expect(
+			decide({
+				windows: [unpresented],
+				elapsedMs: STARTUP_VISIBILITY_EDITOR_FALLBACK_MS,
+				hudShowAttempted: true,
+			}),
+		).toBe("open-editor");
+	});
+
+	it("stops watching once the probe confirms a presented frame", () => {
+		expect(
+			decide({
+				windows: [{ ...hud(true), framePresented: true }],
+				elapsedMs: STARTUP_VISIBILITY_EDITOR_FALLBACK_MS,
+			}),
+		).toBe("none");
+	});
 });
 
 describe("findVisibleWindow", () => {
@@ -136,6 +163,26 @@ describe("findVisibleWindow", () => {
 
 	it("prefers the first visible, non-destroyed window", () => {
 		expect(findVisibleWindow([hud(false), editor(true)])?.windowType).toBe(EDITOR_WINDOW_TYPE);
+	});
+
+	it("rejects a visible window whose frame was never presented", () => {
+		// This is the owner's bug: Electron reports the HUD visible while the
+		// compositor never produced a frame, so it is not something the user sees.
+		expect(findVisibleWindow([{ ...hud(true), framePresented: false }])).toBeNull();
+	});
+
+	it("accepts a window whose frame was presented", () => {
+		expect(findVisibleWindow([{ ...hud(true), framePresented: true }])?.windowType).toBe(
+			HUD_OVERLAY_WINDOW_TYPE,
+		);
+	});
+
+	it("treats an unprobed window as visible", () => {
+		// `undefined` means the probe has not run; treating that as failure would
+		// downgrade a perfectly healthy HUD.
+		expect(findVisibleWindow([{ ...hud(true), framePresented: undefined }])?.windowType).toBe(
+			HUD_OVERLAY_WINDOW_TYPE,
+		);
 	});
 });
 

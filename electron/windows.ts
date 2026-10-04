@@ -16,6 +16,14 @@ import {
 	type HudOverlayWorkArea,
 } from "./hudOverlayBounds";
 import { getHudOverlayTaskbarOptions } from "./hudOverlayWindowOptions";
+import {
+	classifyHudFrameProbe,
+	decideHudFallback,
+	describeHudFallback,
+	HUD_FRAME_PROBE_DELAY_MS,
+	HUD_FRAME_PROBE_TIMEOUT_MS,
+	type HudFrameProbeOutcome,
+} from "./hudFrameProbe";
 import { stopWindowBoundsCapture } from "./ipc/cursor/bounds";
 import { stopInteractionCapture } from "./ipc/cursor/interaction";
 import { stopNativeCursorMonitor } from "./ipc/cursor/monitor";
@@ -46,12 +54,31 @@ let hudOverlayMouseReassertTimer: NodeJS.Timeout | null = null;
 let hudOverlayRecordingActive = false;
 let hudCaptureStarting = false;
 let hudCaptureProtectionOverride = false;
+let hudOverlayOpaqueFallbackApplied = false;
+/**
+ * Result of the early frame probe for the HUD, if it has run.
+ *
+ * `null` means "not probed yet or inconclusive"; `false` means the compositor
+ * positively never presented a frame. The cold-launch watchdog reads this so it
+ * does not treat a visible-but-never-painted HUD as a successful launch.
+ */
+let hudOverlayFramePresented: boolean | null = null;
 let countdownWindow: BrowserWindow | null = null;
 let updateToastWindow: BrowserWindow | null = null;
 let hudWasVisibleBeforeUpdateToast = false;
 
 const HUD_OVERLAY_SETTINGS_FILE = path.join(USER_DATA_PATH, "hud-overlay-settings.json");
 const HUD_EDGE_MARGIN_DIP = 16;
+/**
+ * Background for the opaque HUD fallback (see `electron/hudFrameProbe.ts`).
+ *
+ * This is only the colour the window shows for the instant before the document
+ * paints; the page then covers it with its own `--surface` token (the
+ * `.hud-overlay-opaque-window` rule in `src/index.css`). It is deliberately the
+ * same near-black family as the bar rather than a themed colour, because the
+ * native value cannot follow the user's light/dark preference.
+ */
+const HUD_OPAQUE_FALLBACK_BACKGROUND = "#101014";
 const UPDATE_TOAST_WIDTH = 420;
 const UPDATE_TOAST_HEIGHT = 172;
 
@@ -489,8 +516,20 @@ function notifyEditorMode() {
 }
 ipcMain.handle("get-editor-mode", getHudEditorMode);
 
-export function createHudOverlayWindow(): BrowserWindow {
+export interface CreateHudOverlayWindowOptions {
+	/**
+	 * Paint the bar on a solid background instead of a transparent one.
+	 *
+	 * Used by the frame-probe recovery path: when the compositor never presents
+	 * the transparent surface, an opaque window still composites. The page and
+	 * query are identical, so the user sees the same recording controls.
+	 */
+	opaqueFallback?: boolean;
+}
+
+export function createHudOverlayWindow(options: CreateHudOverlayWindowOptions = {}): BrowserWindow {
 	const perfStart = Date.now();
+	const opaqueFallback = options.opaqueFallback === true;
 	loadHudOverlayCaptureProtectionSetting();
 	const initialBounds = getHudOverlayBounds();
 	let hasShownHudWindow = false;
@@ -501,8 +540,8 @@ export function createHudOverlayWindow(): BrowserWindow {
 		x: initialBounds.x,
 		y: initialBounds.y,
 		frame: false,
-		transparent: true,
-		backgroundColor: "#00000000",
+		transparent: !opaqueFallback,
+		backgroundColor: opaqueFallback ? HUD_OPAQUE_FALLBACK_BACKGROUND : "#00000000",
 		resizable: false,
 		alwaysOnTop: true,
 		// The HUD is Recordly's persistent top-level window, so it owns the
@@ -562,6 +601,114 @@ export function createHudOverlayWindow(): BrowserWindow {
 				}
 			}, 50);
 		}
+
+		scheduleHudFrameProbe();
+	};
+
+	/**
+	 * One cheap `capturePage()` probe that answers "did the compositor ever
+	 * present a frame for this window?".
+	 *
+	 * `isVisible: true` is not that answer on Windows: the owner's bug was a HUD
+	 * that reported itself visible with a fully built DOM while every captured
+	 * frame came back as `UnknownVizError`. The 10 s watchdog in
+	 * `electron/startupVisibility.ts` cannot tell that apart from a slow start
+	 * until it gives up and opens the unrelated editor window.
+	 *
+	 * This probe runs ~1.2 s after the HUD is shown. On a positive failure it
+	 * makes the *same* HUD bar opaque — the user keeps the recording controls
+	 * instead of being bounced into the editor.
+	 */
+	const scheduleHudFrameProbe = () => {
+		setTimeout(() => {
+			void probeHudFramePresentation();
+		}, HUD_FRAME_PROBE_DELAY_MS).unref?.();
+	};
+
+	const probeHudFramePresentation = async () => {
+		if (win.isDestroyed() || !win.isVisible()) {
+			return;
+		}
+
+		let outcome: HudFrameProbeOutcome;
+		try {
+			const image = await Promise.race([
+				win.webContents.capturePage(),
+				new Promise<never>((_resolve, reject) => {
+					const timer = setTimeout(
+						() => reject(new Error("__probe-timeout__")),
+						HUD_FRAME_PROBE_TIMEOUT_MS,
+					);
+					timer.unref?.();
+				}),
+			]);
+			const size = image.getSize();
+			outcome = classifyHudFrameProbe({
+				threw: false,
+				width: size.width,
+				height: size.height,
+			});
+		} catch {
+			outcome = classifyHudFrameProbe({ threw: true });
+		}
+
+		// Only a positive result is recorded. `inconclusive` must leave the state
+		// as "unknown" so a HUD that is merely slow is never downgraded.
+		if (outcome !== "inconclusive") {
+			hudOverlayFramePresented = outcome === "presented";
+		}
+
+		const action = decideHudFallback({
+			outcome,
+			windowAlive: !win.isDestroyed(),
+			fallbackApplied: hudOverlayOpaqueFallbackApplied,
+			// "Start minimized" hides the HUD on purpose, so a probe failure there
+			// says nothing about the compositor.
+			hudIntentionallyHidden: !win.isVisible(),
+		});
+
+		console.warn(
+			`[hud-frame-probe] ${describeHudFallback(action, {
+				outcome,
+				windowAlive: !win.isDestroyed(),
+				fallbackApplied: hudOverlayOpaqueFallbackApplied,
+				hudIntentionallyHidden: !win.isVisible(),
+			})}`,
+		);
+
+		if (action !== "recover-with-opaque-hud") {
+			return;
+		}
+
+		applyHudOpaqueFallback();
+	};
+
+	/**
+	 * Re-presents the HUD on a solid background after the compositor failed to
+	 * present its transparent surface.
+	 *
+	 * The transparent window is not reused: a surface that was never composited
+	 * stays un-composited — that is precisely the owner's bug, where a later
+	 * success was never observed — so recovery means replacing the window. The
+	 * replacement uses the same page and query (`windowType=hud-overlay`) and the
+	 * same bounds, so the user loses neither their position nor any feature; the
+	 * only difference is that the page is painted onto an opaque background,
+	 * which is a code path Windows always composites.
+	 */
+	const applyHudOpaqueFallback = () => {
+		if (hudOverlayOpaqueFallbackApplied || win.isDestroyed()) {
+			return;
+		}
+
+		hudOverlayOpaqueFallbackApplied = true;
+		console.warn(
+			"[hud-frame-probe] The transparent HUD never presented a frame; reopening it with an opaque background so the recording controls are visible.",
+		);
+
+		const opaque = createHudOverlayWindow({ opaqueFallback: true });
+		// The replacement inherits the failed window's place on screen.
+		opaque.setBounds(win.getBounds(), false);
+		win.destroy();
 	};
 
 	applyHudOverlayCaptureProtectionToWindow(win, hudOverlayHiddenFromCapture);
@@ -672,6 +819,17 @@ export function createHudOverlayWindow(): BrowserWindow {
 			recordingPreparationActive = false;
 			hudCaptureStarting = false;
 			hudOverlayRecordingActive = false;
+			// The frame-probe state belongs to the window that produced it, so it is
+			// cleared with the window. A later HUD (reopened from the tray, say)
+			// then starts from a clean slate and runs its own probe.
+			//
+			// `applyHudOpaqueFallback` deliberately does NOT hit this branch: it
+			// creates the replacement — which assigns `hudOverlayWindow` to the new
+			// window — *before* destroying the failed one, so `hudOverlayWindow ===
+			// win` is already false. That keeps the "recover at most once" guard
+			// intact across the handover.
+			hudOverlayFramePresented = null;
+			hudOverlayOpaqueFallbackApplied = false;
 			// The HUD owns the recording controls, so a closed HUD must never leave
 			// the desktop-wide cursor hook, the native cursor monitor or the
 			// PowerShell window-bounds poll running — and an OS cursor hidden by the
@@ -685,12 +843,19 @@ export function createHudOverlayWindow(): BrowserWindow {
 		}
 	});
 
+	const query: Record<string, string> = { windowType: "hud-overlay" };
+	if (opaqueFallback) {
+		// `src/App.tsx` reads this to keep the document background opaque; without
+		// it the transparent-window CSS would leave the fallback see-through and
+		// the recovery would be invisible.
+		query["hudBackground"] = "opaque";
+	}
+
 	if (VITE_DEV_SERVER_URL) {
-		win.loadURL(VITE_DEV_SERVER_URL + "?windowType=hud-overlay");
+		const search = new URLSearchParams(query).toString();
+		win.loadURL(`${VITE_DEV_SERVER_URL}?${search}`);
 	} else {
-		win.loadFile(path.join(RENDERER_DIST, "index.html"), {
-			query: { windowType: "hud-overlay" },
-		});
+		win.loadFile(path.join(RENDERER_DIST, "index.html"), { query });
 	}
 
 	return win;
@@ -698,6 +863,23 @@ export function createHudOverlayWindow(): BrowserWindow {
 
 export function getHudOverlayWindow(): BrowserWindow | null {
 	return hudOverlayWindow && !hudOverlayWindow.isDestroyed() ? hudOverlayWindow : null;
+}
+
+/**
+ * Whether the early frame probe proved the HUD is being presented.
+ *
+ * `null` until the probe has run (or when it was inconclusive), `false` only on a
+ * positive "the compositor never produced a frame" result. Callers must treat
+ * `null` as "unknown", never as failure.
+ */
+export function getHudOverlayFramePresented(): boolean | null {
+	return hudOverlayFramePresented;
+}
+
+/** Test seam: forget the probe result between cases. */
+export function resetHudOverlayFramePresentedForTests(): void {
+	hudOverlayFramePresented = null;
+	hudOverlayOpaqueFallbackApplied = false;
 }
 
 /**

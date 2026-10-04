@@ -42,6 +42,13 @@ export interface StartupWindowSnapshot {
 	windowType: string;
 	visible: boolean;
 	destroyed: boolean;
+	/**
+	 * `false` only when the early frame probe positively proved the window never
+	 * presented a frame (`electron/hudFrameProbe.ts`). Left `undefined` while the
+	 * probe has not run yet or was inconclusive, because "unknown" must not be
+	 * treated as "broken" — that would downgrade a healthy HUD.
+	 */
+	framePresented?: boolean;
 }
 
 export interface StartupVisibilityInput {
@@ -73,11 +80,15 @@ export function getWindowTypeFromUrl(url: string): string {
 	}
 }
 
-/** The first live, visible window, or `null` when the app is showing nothing. */
+/** The first live, visible window whose frame was actually presented, or `null`. */
 export function findVisibleWindow(
 	windows: readonly StartupWindowSnapshot[],
 ): StartupWindowSnapshot | null {
-	return windows.find((window) => window.visible && !window.destroyed) ?? null;
+	return (
+		windows.find(
+			(window) => window.visible && !window.destroyed && window.framePresented !== false,
+		) ?? null
+	);
 }
 
 /**
@@ -92,7 +103,13 @@ export function findVisibleWindow(
 export function decideStartupVisibility(input: StartupVisibilityInput): StartupVisibilityAction {
 	const live = input.windows.filter((window) => !window.destroyed);
 
-	if (findVisibleWindow(live)) {
+	// A window that reports itself visible but whose frame was never presented is
+	// not "something the user can see" — that is exactly the owner's bug. The
+	// early probe in `electron/hudFrameProbe.ts` proves it and recovers the HUD
+	// itself; until it has, this watchdog keeps treating the launch as not yet
+	// visible so the editor fallback still fires if recovery does not happen.
+	const visible = live.find((window) => window.visible && window.framePresented !== false);
+	if (visible) {
 		return "none";
 	}
 
