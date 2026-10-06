@@ -133,6 +133,7 @@ export function useTimelineEditingController(input: Input) {
 	const zoomCommands = useZoomRegionCommands({
 		setSelectedClipId: timeline.setSelectedClipId,
 		videoPath: input.videoPath,
+		zoomRegions: timeline.zoomRegions,
 		setZoomRegions: timeline.setZoomRegions,
 		selectedZoomId: timeline.selectedZoomId,
 		setSelectedZoomId: timeline.setSelectedZoomId,

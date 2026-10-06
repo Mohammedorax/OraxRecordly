@@ -1,20 +1,20 @@
-import { RecordingThumbnail } from "./RecordingThumbnail";
+import { Checkbox, Dropdown, Button as HeroButton, Label, SearchField } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
-import { Checkbox, Label, Dropdown, SearchField, Button as HeroButton } from "@heroui/react";
+import { Button } from "@/components/ui/button";
 import {
-	FilmStrip,
-	Plus,
-	X,
-	Trash,
 	ArrowCounterClockwise,
 	DotsThree,
+	FilmStrip,
 	FolderOpen,
+	Plus,
+	Trash,
+	X,
 } from "@/components/ui/icons";
-import { Button } from "@/components/ui/button";
-import { RECORDING_DRAG_TYPE } from "@/types/recordingLibrary";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
-import { formatLocaleDate } from "@/utils/localeFormatUtils";
+import { RECORDING_DRAG_TYPE } from "@/types/recordingLibrary";
+import { formatLocaleDateTime } from "@/utils/localeFormatUtils";
+import { RecordingThumbnail } from "./RecordingThumbnail";
 import type { useRecordingLibrary } from "./useRecordingLibrary";
 
 export function RecordingLibraryPanel({
@@ -266,10 +266,17 @@ export function RecordingLibraryPanel({
 									{entry.name}
 								</span>
 								<span className="mt-1 block text-[11px] text-muted-foreground">
-									{formatLocaleDate(entry.createdAt, locale, {
-										month: "short",
-										day: "numeric",
-									})}{" "}
+									{formatLocaleDateTime(
+										entry.recordedAt ?? entry.createdAt,
+										locale,
+										{
+											year: "numeric",
+											month: "short",
+											day: "numeric",
+											hour: "2-digit",
+											minute: "2-digit",
+										},
+									)}{" "}
 									· {(entry.bytes / 1024 / 1024).toFixed(1)} MB
 								</span>
 							</span>

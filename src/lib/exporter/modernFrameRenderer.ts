@@ -1,7 +1,11 @@
 import { Application, BlurFilter, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
 import { ZoomBlurFilter } from "pixi-filters/zoom-blur";
-import { buildActiveCaptionLayout } from "@/components/video-editor/captionLayout";
+import {
+	buildActiveCaptionLayout,
+	type CaptionLayoutCache,
+	createCaptionLayoutCache,
+} from "@/components/video-editor/captionLayout";
 import {
 	CAPTION_FONT_WEIGHT,
 	CAPTION_LINE_HEIGHT,
@@ -73,6 +77,7 @@ import {
 import { ForwardFrameSource } from "./forwardFrameSource";
 import { KeycastOverlayLayer } from "./keycastLayer";
 import { resolveMediaElementSource } from "./localMediaSource";
+import { paintRecordingLabel } from "./recordingLabel";
 import { getShadowFilterPadding, VIDEO_SHADOW_LAYER_PROFILES } from "./shadowProfile";
 import type { ExportRenderBackend } from "./types";
 
@@ -134,6 +139,8 @@ interface FrameRenderConfig {
 	cursorSway?: number;
 	zoomSmoothness?: number;
 	zoomClassicMode?: boolean;
+	/** Clip name + recording date/time badge burned into every frame. */
+	recordingLabelText?: string;
 	nativeReadbackMode?: "pixels" | "canvas";
 }
 
@@ -360,6 +367,8 @@ export class FrameRenderer {
 	private captionSprite: Sprite | null = null;
 	private captionTextureSource: MutableVideoTextureSource | null = null;
 	private captionRenderKey: string | null = null;
+	private captionLayoutCache: CaptionLayoutCache = createCaptionLayoutCache();
+	private recordingLabelSprite: Sprite | null = null;
 	private exportCompositeCanvas: ExportCompositeCanvasState | null = null;
 	private outputCanvasOverride: HTMLCanvasElement | null = null;
 	private config: FrameRenderConfig;
@@ -470,6 +479,7 @@ export class FrameRenderer {
 
 		this.cameraContainer.addChild(this.annotationContainer);
 		this.overlayContainer.addChild(this.captionContainer);
+		this.setupRecordingLabelLayer();
 
 		// Keystroke badge sits on top of every other overlay, exactly where the
 		// preview's DOM badge sits above the caption box.
@@ -878,8 +888,10 @@ export class FrameRenderer {
 		const canvas = document.createElement("canvas");
 		canvas.width = targetWidth;
 		canvas.height = targetHeight;
+		// This canvas is only drawn into and used as a texture source — never read
+		// back — so keep it GPU-backed instead of opting into a software canvas.
 		const context = configureHighQuality2DContext(
-			canvas.getContext("2d", { willReadFrequently: true }),
+			canvas.getContext("2d", { willReadFrequently: false }),
 		);
 		if (!context) {
 			return null;
@@ -1458,6 +1470,29 @@ export class FrameRenderer {
 		}
 	}
 
+	private setupRecordingLabelLayer(): void {
+		const text = this.config.recordingLabelText?.trim();
+		if (!text || !this.overlayContainer) {
+			return;
+		}
+
+		const canvas = document.createElement("canvas");
+		canvas.width = Math.max(1, Math.round(this.config.width));
+		canvas.height = Math.max(1, Math.round(this.config.height));
+		const context = configureHighQuality2DContext(canvas.getContext("2d"));
+		if (!context) {
+			return;
+		}
+
+		paintRecordingLabel(context, { text, width: canvas.width, height: canvas.height });
+
+		const texture = Texture.from(canvas);
+		const sprite = new Sprite(texture);
+		this.recordingLabelSprite = sprite;
+		// Drawn once: the label is static for the whole export.
+		this.overlayContainer.addChild(sprite);
+	}
+
 	private setupCaptionResources(): void {
 		if (!this.config.autoCaptions?.length || !this.config.autoCaptionSettings) {
 			return;
@@ -1494,6 +1529,7 @@ export class FrameRenderer {
 			settings,
 			maxWidthPx: getCaptionTextMaxWidth(this.config.width, settings.maxWidth, fontSize),
 			measureText: (text) => measureCtx.measureText(text).width,
+			cache: this.captionLayoutCache,
 		});
 		if (!layout) {
 			return null;
@@ -2419,6 +2455,7 @@ export class FrameRenderer {
 			this.videoSprite,
 			this.backgroundSprite,
 			this.captionSprite,
+			this.recordingLabelSprite,
 			...this.videoShadowLayers.map((layer) => layer.sprite),
 		]) {
 			if (sprite?.texture) texturesToDestroy.add(sprite.texture);
@@ -2509,6 +2546,7 @@ export class FrameRenderer {
 		this.captionSprite = null;
 		this.captionTextureSource = null;
 		this.captionRenderKey = null;
+		this.recordingLabelSprite = null;
 		this.exportCompositeCanvas = null;
 		this.outputCanvasOverride = null;
 

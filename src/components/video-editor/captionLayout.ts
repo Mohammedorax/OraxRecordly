@@ -48,6 +48,36 @@ export interface ActiveCaptionLayout {
 	scale: number;
 }
 
+/**
+ * Holds the time-invariant half of a caption layout (flattened words, line
+ * breaks, pages). Building it runs canvas `measureText` 2-3x per word across
+ * every cue, which is far too expensive to repeat for each exported frame.
+ * Callers that render many frames with the same cues/settings can own one of
+ * these and pass it to `buildActiveCaptionLayout`; the cached geometry is
+ * invalidated automatically when the cues or the layout settings change.
+ */
+export interface CaptionLayoutCache {
+	signature: string;
+	sortedCues: CaptionCue[];
+	sourceWords: ReturnType<typeof flattenCaptionWords>;
+	words: CaptionWordLayout[];
+	lines: CaptionLineLayout[];
+	pages: CaptionPageLayout[];
+	maxRows: number;
+}
+
+export function createCaptionLayoutCache(): CaptionLayoutCache {
+	return {
+		signature: "",
+		sortedCues: [],
+		sourceWords: [],
+		words: [],
+		lines: [],
+		pages: [],
+		maxRows: 1,
+	};
+}
+
 type CaptionSourceWord = {
 	cueId: string;
 	cueWordIndex: number;
@@ -133,8 +163,11 @@ function getActiveCaptionCue(cues: CaptionCue[], timeMs: number) {
 	return null;
 }
 
-function isWithinCaptionCoverage(cues: CaptionCue[], timeMs: number) {
-	const sorted = [...cues].sort((left, right) => left.startMs - right.startMs);
+function sortCaptionCues(cues: CaptionCue[]) {
+	return [...cues].sort((left, right) => left.startMs - right.startMs);
+}
+
+function isWithinSortedCaptionCoverage(sorted: CaptionCue[], timeMs: number) {
 	for (let index = 0; index < sorted.length; index += 1) {
 		const cue = sorted[index];
 		if (timeMs < cue.startMs) {
@@ -150,6 +183,77 @@ function isWithinCaptionCoverage(cues: CaptionCue[], timeMs: number) {
 	}
 
 	return false;
+}
+
+function isWithinCaptionCoverage(cues: CaptionCue[], timeMs: number) {
+	return isWithinSortedCaptionCoverage(sortCaptionCues(cues), timeMs);
+}
+
+function mixCaptionLayoutHash(hash: number, value: string): number {
+	let next = hash;
+	for (let index = 0; index < value.length; index += 1) {
+		next ^= value.charCodeAt(index);
+		next = Math.imul(next, 16777619);
+	}
+	next ^= 0x2c;
+	return Math.imul(next, 16777619);
+}
+
+/**
+ * FNV-1a over everything that changes the cached geometry. Text is hashed
+ * character-wise so in-place cue edits are caught without allocating a large
+ * signature string on every frame.
+ */
+function getCaptionLayoutSignature(
+	cues: CaptionCue[],
+	settings: AutoCaptionSettings,
+	maxWidthPx: number,
+): string {
+	let hash = 2166136261;
+	hash = mixCaptionLayoutHash(hash, `${maxWidthPx}`);
+	hash = mixCaptionLayoutHash(hash, settings.fontFamily ?? "");
+	hash = mixCaptionLayoutHash(hash, `${settings.fontSize}`);
+	hash = mixCaptionLayoutHash(hash, `${settings.maxWidth}`);
+	hash = mixCaptionLayoutHash(hash, `${settings.maxRows ?? ""}`);
+
+	for (const cue of cues) {
+		hash = mixCaptionLayoutHash(hash, cue.id);
+		hash = mixCaptionLayoutHash(hash, `${cue.startMs}`);
+		hash = mixCaptionLayoutHash(hash, `${cue.endMs}`);
+		hash = mixCaptionLayoutHash(hash, cue.text ?? "");
+		for (const word of cue.words ?? []) {
+			hash = mixCaptionLayoutHash(hash, word.text ?? "");
+			hash = mixCaptionLayoutHash(hash, `${word.startMs ?? ""}`);
+			hash = mixCaptionLayoutHash(hash, `${word.endMs ?? ""}`);
+			hash = mixCaptionLayoutHash(hash, word.leadingSpace ? "1" : "0");
+		}
+	}
+
+	return `${cues.length}:${hash >>> 0}`;
+}
+
+function getCaptionWordState(index: number, activeWordIndex: number): CaptionWordState {
+	if (index < activeWordIndex) {
+		return "spoken";
+	}
+	return index === activeWordIndex ? "active" : "upcoming";
+}
+
+function updateCaptionWordStates(
+	words: CaptionWordLayout[],
+	lines: CaptionLineLayout[],
+	activeWordIndex: number,
+): void {
+	for (let index = 0; index < words.length; index += 1) {
+		words[index].state = getCaptionWordState(index, activeWordIndex);
+	}
+	// buildCaptionLines spreads each word into a new object, so the line copies
+	// need the same per-frame state update.
+	for (const line of lines) {
+		for (const word of line.words) {
+			word.state = getCaptionWordState(word.index, activeWordIndex);
+		}
+	}
 }
 
 export function flattenCaptionWords(cues: CaptionCue[]) {
@@ -438,13 +542,87 @@ export function buildActiveCaptionLayout(options: {
 	settings: AutoCaptionSettings;
 	maxWidthPx: number;
 	measureText: (text: string) => number;
+	cache?: CaptionLayoutCache;
 }) {
-	const sourceWords = flattenCaptionWords(options.cues);
+	type CaptionLayoutGeometry = {
+		sourceWords: ReturnType<typeof flattenCaptionWords>;
+		sortedCues: CaptionCue[];
+		words: CaptionWordLayout[];
+		lines: CaptionLineLayout[];
+		pages: CaptionPageLayout[];
+		maxRows: number;
+	};
+
+	const buildGeometry = (): CaptionLayoutGeometry => {
+		const sourceWords = flattenCaptionWords(options.cues);
+		const sortedCues = sortCaptionCues(options.cues);
+		const maxRows = clamp(Math.round(options.settings.maxRows || 1), 1, 4);
+		if (sourceWords.length === 0) {
+			return { sourceWords, sortedCues, words: [], lines: [], pages: [], maxRows };
+		}
+		const words: CaptionWordLayout[] = sourceWords.map((word, index) => ({
+			cueId: word.cueId,
+			cueWordIndex: word.cueWordIndex,
+			text: word.text,
+			index,
+			forcedBreakBefore: word.forcedBreakBefore,
+			leadingSpace: word.leadingSpace,
+			startMs: word.startMs,
+			endMs: word.endMs,
+			hasRealTiming: word.hasRealTiming,
+			state: "upcoming",
+		}));
+		const lines = buildCaptionLines({
+			words,
+			maxWidthPx: options.maxWidthPx,
+			measureText: options.measureText,
+		});
+		const pages = buildCaptionPages({
+			lines,
+			words,
+			maxRows,
+			hasWordTimings: true,
+			cue: {
+				id: sourceWords[0].cueId,
+				startMs: sourceWords[0].startMs,
+				endMs: sourceWords[sourceWords.length - 1].endMs,
+				text: "",
+			},
+		});
+		return { sourceWords, sortedCues, words, lines, pages, maxRows };
+	};
+
+	const cache = options.cache;
+	let geometry: CaptionLayoutGeometry;
+	if (cache) {
+		const signature = getCaptionLayoutSignature(
+			options.cues,
+			options.settings,
+			options.maxWidthPx,
+		);
+		if (cache.signature === signature) {
+			geometry = cache;
+		} else {
+			geometry = buildGeometry();
+			cache.signature = signature;
+			cache.sortedCues = geometry.sortedCues;
+			cache.sourceWords = geometry.sourceWords;
+			cache.words = geometry.words;
+			cache.lines = geometry.lines;
+			cache.pages = geometry.pages;
+			cache.maxRows = geometry.maxRows;
+		}
+	} else {
+		geometry = buildGeometry();
+	}
+
+	const { sourceWords, sortedCues, words, lines, pages, maxRows } = geometry;
+
 	if (sourceWords.length === 0) {
 		return null;
 	}
 
-	if (!isWithinCaptionCoverage(options.cues, options.timeMs)) {
+	if (!isWithinSortedCaptionCoverage(sortedCues, options.timeMs)) {
 		return null;
 	}
 
@@ -459,47 +637,11 @@ export function buildActiveCaptionLayout(options: {
 				? sourceWords.length - 1
 				: clamp(activeWordIndex - 1, 0, sourceWords.length - 1);
 	}
-	const maxRows = clamp(Math.round(options.settings.maxRows || 1), 1, 4);
+	// Cached word objects are reused across frames, so apply the per-frame state
+	// in place instead of rebuilding the arrays.
+	updateCaptionWordStates(words!, lines!, activeWordIndex);
 
-	const words: CaptionWordLayout[] = sourceWords.map((word, index) => {
-		return {
-			cueId: word.cueId,
-			cueWordIndex: word.cueWordIndex,
-			text: word.text,
-			index,
-			forcedBreakBefore: word.forcedBreakBefore,
-			leadingSpace: word.leadingSpace,
-			startMs: word.startMs,
-			endMs: word.endMs,
-			hasRealTiming: word.hasRealTiming,
-			state:
-				index < activeWordIndex
-					? "spoken"
-					: index === activeWordIndex
-						? "active"
-						: "upcoming",
-		};
-	});
-
-	const lines = buildCaptionLines({
-		words,
-		maxWidthPx: options.maxWidthPx,
-		measureText: options.measureText,
-	});
-
-	const pages = buildCaptionPages({
-		lines,
-		words,
-		maxRows,
-		hasWordTimings: true,
-		cue: {
-			id: sourceWords[0].cueId,
-			startMs: sourceWords[0].startMs,
-			endMs: sourceWords[sourceWords.length - 1].endMs,
-			text: "",
-		},
-	});
-	const visiblePageIndex = getVisibleCaptionPageIndex(pages, options.timeMs);
+	const visiblePageIndex = getVisibleCaptionPageIndex(pages!, options.timeMs);
 	if (visiblePageIndex < 0) {
 		return null;
 	}

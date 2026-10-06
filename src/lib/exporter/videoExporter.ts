@@ -1,4 +1,3 @@
-import { requiresClipTimelineRendering } from "./clipTimeline";
 import type {
 	AnnotationRegion,
 	AudioRegion,
@@ -19,6 +18,7 @@ import type {
 import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import { AudioProcessor, isAacAudioEncodingSupported } from "./audioEncoder";
+import { requiresClipTimelineRendering } from "./clipTimeline";
 import { buildEditedTrackSourceSegments, classifyEditedTrackStrategy } from "./editedTrackStrategy";
 import {
 	advanceFinalizationProgress,
@@ -92,6 +92,8 @@ interface VideoExporterConfig extends ExportConfig {
 	cursorClickBounceDuration?: number;
 	cursorSway?: number;
 	zoomSmoothness?: number;
+	/** Clip name + recording date/time badge burned into every frame. */
+	recordingLabelText?: string;
 	audioRegions?: AudioRegion[];
 	clipRegions?: ClipRegion[];
 	sourceAudioFallbackPaths?: string[];
@@ -274,6 +276,7 @@ export class VideoExporter {
 				cursorClickBounceDuration: this.config.cursorClickBounceDuration,
 				cursorSway: this.config.cursorSway,
 				zoomSmoothness: this.config.zoomSmoothness,
+				recordingLabelText: this.config.recordingLabelText,
 			});
 			await this.renderer.initialize();
 
@@ -854,6 +857,7 @@ export class VideoExporter {
 
 		let editedAudioBuffer: ArrayBuffer | undefined;
 		let editedAudioMimeType: string | null = null;
+		let audioMode = audioPlan.audioMode;
 
 		if (
 			audioPlan.audioMode === "edited-track" &&
@@ -863,60 +867,74 @@ export class VideoExporter {
 			this.audioProcessor.setOnProgress((progress) => {
 				this.reportFinalizingProgress(totalFrames, 99, progress);
 			});
-			const audioBlob = await this.measureFinalizationStage("editedAudioRenderMs", async () =>
-				this.awaitWithFinalizationTimeout(
-					this.audioProcessor!.renderEditedAudioTrack(
-						this.config.videoUrl,
-						this.config.trimRegions,
-						this.config.speedRegions,
-						this.config.audioRegions,
-						this.config.sourceAudioFallbackPaths,
-						this.config.sourceAudioFallbackStartDelayMsByPath,
-						this.config.sourceAudioTrackSettings,
-						this.config.clipRegions,
+			const editedAudio = await this.measureFinalizationStage(
+				"editedAudioRenderMs",
+				async () =>
+					this.awaitWithFinalizationTimeout(
+						this.audioProcessor!.renderEditedAudioTrack(
+							this.config.videoUrl,
+							this.config.trimRegions,
+							this.config.speedRegions,
+							this.config.audioRegions,
+							this.config.sourceAudioFallbackPaths,
+							this.config.sourceAudioFallbackStartDelayMsByPath,
+							this.config.sourceAudioTrackSettings,
+							this.config.clipRegions,
+						),
+						"native edited audio rendering",
+						"audio",
+						true,
 					),
-					"native edited audio rendering",
-					"audio",
-					true,
-				),
 			);
-			editedAudioBuffer = await audioBlob.arrayBuffer();
-			editedAudioMimeType = audioBlob.type || null;
+			if (editedAudio) {
+				editedAudioBuffer = editedAudio;
+				editedAudioMimeType = "audio/wav";
+			} else {
+				// No decodable audio: finalize the video without an audio track.
+				audioMode = "none";
+			}
 		}
 
 		const sessionId = this.nativeExportSessionId;
 		this.nativeExportSessionId = null;
 
+		const finalizeOptions =
+			audioMode === "none" && audioPlan.audioMode !== "none"
+				? ({ audioMode: "none" } as const)
+				: {
+						audioMode: audioPlan.audioMode,
+						audioSourcePath:
+							audioPlan.audioMode === "copy-source" ||
+							audioPlan.audioMode === "trim-source" ||
+							(audioPlan.audioMode === "edited-track" &&
+								audioPlan.strategy === "filtergraph-fast-path")
+								? audioPlan.audioSourcePath
+								: null,
+						trimSegments:
+							audioPlan.audioMode === "trim-source"
+								? audioPlan.trimSegments
+								: undefined,
+						editedTrackStrategy:
+							audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
+						editedTrackSegments:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.editedTrackSegments
+								: undefined,
+						audioSourceSampleRate:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.audioSourceSampleRate
+								: undefined,
+						editedAudioData: editedAudioBuffer,
+						editedAudioMimeType,
+					};
+
 		const result = await this.measureFinalizationStage("nativeExportFinalizeMs", async () =>
 			this.awaitWithFinalizationTimeout(
-				window.electronAPI.nativeVideoExportFinish(sessionId, {
-					audioMode: audioPlan.audioMode,
-					audioSourcePath:
-						audioPlan.audioMode === "copy-source" ||
-						audioPlan.audioMode === "trim-source" ||
-						(audioPlan.audioMode === "edited-track" &&
-							audioPlan.strategy === "filtergraph-fast-path")
-							? audioPlan.audioSourcePath
-							: null,
-					trimSegments:
-						audioPlan.audioMode === "trim-source" ? audioPlan.trimSegments : undefined,
-					editedTrackStrategy:
-						audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
-					editedTrackSegments:
-						audioPlan.audioMode === "edited-track" &&
-						audioPlan.strategy === "filtergraph-fast-path"
-							? audioPlan.editedTrackSegments
-							: undefined,
-					audioSourceSampleRate:
-						audioPlan.audioMode === "edited-track" &&
-						audioPlan.strategy === "filtergraph-fast-path"
-							? audioPlan.audioSourceSampleRate
-							: undefined,
-					editedAudioData: editedAudioBuffer,
-					editedAudioMimeType,
-				}),
+				window.electronAPI.nativeVideoExportFinish(sessionId, finalizeOptions),
 				"native export finalization",
-				audioPlan.audioMode === "none" ? "default" : "audio",
+				audioMode === "none" ? "default" : "audio",
 			),
 		);
 		if (result.metrics) {
@@ -952,6 +970,7 @@ export class VideoExporter {
 
 		let editedAudioBuffer: ArrayBuffer | undefined;
 		let editedAudioMimeType: string | null = null;
+		let audioMode = audioPlan.audioMode;
 
 		if (
 			audioPlan.audioMode === "edited-track" &&
@@ -961,54 +980,66 @@ export class VideoExporter {
 			this.audioProcessor.setOnProgress((progress) => {
 				this.reportFinalizingProgress(totalFrames, 99, progress);
 			});
-			const audioBlob = await this.measureFinalizationStage("editedAudioRenderMs", async () =>
-				this.awaitWithFinalizationTimeout(
-					this.audioProcessor!.renderEditedAudioTrack(
-						this.config.videoUrl,
-						this.config.trimRegions,
-						this.config.speedRegions,
-						this.config.audioRegions,
-						this.config.sourceAudioFallbackPaths,
-						this.config.sourceAudioFallbackStartDelayMsByPath,
-						this.config.sourceAudioTrackSettings,
-						this.config.clipRegions,
+			const editedAudio = await this.measureFinalizationStage(
+				"editedAudioRenderMs",
+				async () =>
+					this.awaitWithFinalizationTimeout(
+						this.audioProcessor!.renderEditedAudioTrack(
+							this.config.videoUrl,
+							this.config.trimRegions,
+							this.config.speedRegions,
+							this.config.audioRegions,
+							this.config.sourceAudioFallbackPaths,
+							this.config.sourceAudioFallbackStartDelayMsByPath,
+							this.config.sourceAudioTrackSettings,
+							this.config.clipRegions,
+						),
+						"ffmpeg edited audio rendering",
+						"audio",
+						true,
 					),
-					"ffmpeg edited audio rendering",
-					"audio",
-					true,
-				),
 			);
-			editedAudioBuffer = await audioBlob.arrayBuffer();
-			editedAudioMimeType = audioBlob.type || null;
+			if (editedAudio) {
+				editedAudioBuffer = editedAudio;
+				editedAudioMimeType = "audio/wav";
+			} else {
+				// No decodable audio: keep the rendered video and skip the audio mux.
+				audioMode = "none";
+			}
 		}
 
-		const muxOptions = {
-			audioMode: audioPlan.audioMode,
-			audioSourcePath:
-				audioPlan.audioMode === "copy-source" ||
-				audioPlan.audioMode === "trim-source" ||
-				(audioPlan.audioMode === "edited-track" &&
-					audioPlan.strategy === "filtergraph-fast-path")
-					? audioPlan.audioSourcePath
-					: null,
-			trimSegments:
-				audioPlan.audioMode === "trim-source" ? audioPlan.trimSegments : undefined,
-			editedTrackStrategy:
-				audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
-			editedTrackSegments:
-				audioPlan.audioMode === "edited-track" &&
-				audioPlan.strategy === "filtergraph-fast-path"
-					? audioPlan.editedTrackSegments
-					: undefined,
-			audioSourceSampleRate:
-				audioPlan.audioMode === "edited-track" &&
-				audioPlan.strategy === "filtergraph-fast-path"
-					? audioPlan.audioSourceSampleRate
-					: undefined,
-			outputDurationSec: this.effectiveDurationSec,
-			editedAudioData: editedAudioBuffer,
-			editedAudioMimeType,
-		};
+		const muxOptions =
+			audioMode === "none" && audioPlan.audioMode !== "none"
+				? ({ audioMode: "none" } as const)
+				: {
+						audioMode: audioPlan.audioMode,
+						audioSourcePath:
+							audioPlan.audioMode === "copy-source" ||
+							audioPlan.audioMode === "trim-source" ||
+							(audioPlan.audioMode === "edited-track" &&
+								audioPlan.strategy === "filtergraph-fast-path")
+								? audioPlan.audioSourcePath
+								: null,
+						trimSegments:
+							audioPlan.audioMode === "trim-source"
+								? audioPlan.trimSegments
+								: undefined,
+						editedTrackStrategy:
+							audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
+						editedTrackSegments:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.editedTrackSegments
+								: undefined,
+						audioSourceSampleRate:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.audioSourceSampleRate
+								: undefined,
+						outputDurationSec: this.effectiveDurationSec,
+						editedAudioData: editedAudioBuffer,
+						editedAudioMimeType,
+					};
 
 		if (videoSource.mode === "stream") {
 			if (!window.electronAPI?.muxExportedVideoAudioFromPath) {

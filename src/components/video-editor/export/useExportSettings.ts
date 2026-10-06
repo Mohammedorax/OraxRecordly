@@ -21,6 +21,9 @@ export function useExportSettings(
 	clips: ClipRegion[],
 ) {
 	const [includeCaptionSidecar, setIncludeCaptionSidecar] = useState(false);
+	// On by default: the label is the requested "clip name + recording date/time"
+	// badge, and the export dialog can switch it off per export.
+	const [showRecordingLabel, setShowRecordingLabel] = useState(true);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(preferences.exportQuality);
 	const [exportEncodingMode, setExportEncodingMode] = useState<ExportEncodingMode>(
 		preferences.exportEncodingMode,
@@ -56,6 +59,8 @@ export function useExportSettings(
 	return {
 		includeCaptionSidecar,
 		setIncludeCaptionSidecar,
+		showRecordingLabel,
+		setShowRecordingLabel,
 		exportQuality,
 		setExportQuality,
 		exportEncodingMode,

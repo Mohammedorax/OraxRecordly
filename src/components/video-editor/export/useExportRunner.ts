@@ -1,9 +1,11 @@
 import { useCallback, useRef } from "react";
 import { toast } from "@/components/ui/toast";
-import { useScopedT } from "@/contexts/I18nContext";
+import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { getMp4ExportBitrate } from "@/lib/exporter/exportBitrate";
 import { DEFAULT_MP4_CODEC } from "@/lib/exporter/mp4Support";
 import type { ExportSettings } from "@/lib/exporter/types";
+import { buildRecordingLabelText } from "@/utils/recordingLabelUtils";
+import { getRawLibraryNameOverride } from "../dashboard/useRawLibrary";
 import { calculateMp4ExportDimensions, capMp4ShareDimensions } from "../exportDimensions";
 import { resolveMp4ExportRouting } from "../mp4ExportRouting";
 import { resolveMp4ExportSettings } from "../mp4ExportSettings";
@@ -23,6 +25,7 @@ import {
 
 export function useExportRunner(input: ExportRunnerInput) {
 	const t = useScopedT("editor");
+	const { locale } = useI18n();
 	const inputRef = useRef(input);
 	inputRef.current = input;
 	const showExportSuccessToast = useExportSuccessToast();
@@ -85,6 +88,16 @@ export function useExportRunner(input: ExportRunnerInput) {
 				toast.error(t("export.videoNotReady", "Video not ready"));
 				return;
 			}
+
+			// Clip name + recording date/time burned into frames, when enabled.
+			const recordingLabelText =
+				settings.showRecordingLabel && videoPath
+					? buildRecordingLabelText({
+							pathOrName: videoPath,
+							nameOverride: getRawLibraryNameOverride(videoPath),
+							locale,
+						})
+					: undefined;
 
 			const exportRunId = exportRunIdRef.current + 1;
 			exportRunIdRef.current = exportRunId;
@@ -151,6 +164,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 							previewWidth,
 							previewHeight,
 							shadowIntensity: effectiveShadowIntensity,
+							recordingLabelText,
 							onProgress: (progress) => {
 								if (exportWasCancelled()) return;
 								recordSmokeProgress(progress);
@@ -336,6 +350,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 							previewWidth,
 							previewHeight,
 							shadowIntensity: effectiveShadowIntensity,
+							recordingLabelText,
 							onProgress: (progress) => {
 								if (exportWasCancelled()) return;
 								recordSmokeProgress(progress);
@@ -363,7 +378,16 @@ export function useExportRunner(input: ExportRunnerInput) {
 
 					exporterRef.current = exporter;
 					const result = await exporter.export();
-					if (exportWasCancelled()) return;
+					if (exportWasCancelled()) {
+						// A cancelled run can still finish with a temp MP4 on disk. Discard
+						// it here, otherwise the file stays in %TEMP% forever.
+						if (result.tempFilePath) {
+							await window.electronAPI
+								.discardExportedTemp?.(result.tempFilePath)
+								.catch(() => undefined);
+						}
+						return;
+					}
 					const smokeExportElapsedMs =
 						smokeExportStartedAt !== null
 							? Math.round(performance.now() - smokeExportStartedAt)
@@ -624,7 +648,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 				}
 			}
 		},
-		[showExportSuccessToast, t],
+		[showExportSuccessToast, t, locale],
 	);
 
 	return { handleExport, showExportSuccessToast };

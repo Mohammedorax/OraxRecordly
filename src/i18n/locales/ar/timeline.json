@@ -14,7 +14,8 @@
 		"addedSuggestions": "تمت إضافة {{count}} من اقتراحات التكبير المبنية على التفاعل",
 		"label": "تكبير {{index}}",
 		"addZoom": "إضافة تكبير (Z)",
-		"suggestZooms": "اقتراح تكبيرات من المؤشر"
+		"suggestZooms": "اقتراح تكبيرات من المؤشر",
+		"clearAutoZooms": "حذف جميع التكبيرات التلقائية"
 	},
 	"trim": {
 		"cannotPlace": "لا يمكن وضع القص هنا",

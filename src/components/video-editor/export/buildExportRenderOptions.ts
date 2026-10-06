@@ -16,6 +16,7 @@ type BuildExportRenderOptionsInput = {
 	previewWidth: number;
 	previewHeight: number;
 	shadowIntensity: number;
+	recordingLabelText?: string;
 	onProgress: (progress: ExportProgress) => void;
 };
 
@@ -29,6 +30,7 @@ export function buildExportRenderOptions({
 	previewWidth,
 	previewHeight,
 	shadowIntensity,
+	recordingLabelText,
 	onProgress,
 }: BuildExportRenderOptionsInput) {
 	return {
@@ -81,6 +83,7 @@ export function buildExportRenderOptions({
 		cursorClickBounce: appearance.cursorClickBounce,
 		cursorClickBounceDuration: appearance.cursorClickBounceDuration,
 		cursorSway: appearance.cursorSway,
+		recordingLabelText,
 		previewWidth,
 		previewHeight,
 		onProgress,

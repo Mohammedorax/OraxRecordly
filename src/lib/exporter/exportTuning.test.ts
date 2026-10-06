@@ -8,9 +8,9 @@ import {
 } from "./exportTuning";
 
 describe("exportTuning", () => {
-	it("prefers realtime latency for fast and balanced exports", () => {
+	it("prefers realtime latency only for the dedicated fast mode", () => {
 		expect(getPreferredWebCodecsLatencyModes("fast")).toEqual(["realtime", "quality"]);
-		expect(getPreferredWebCodecsLatencyModes("balanced")).toEqual(["realtime", "quality"]);
+		expect(getPreferredWebCodecsLatencyModes("balanced")).toEqual(["quality", "realtime"]);
 		expect(getPreferredWebCodecsLatencyModes("quality")).toEqual(["quality", "realtime"]);
 	});
 
@@ -20,6 +20,23 @@ describe("exportTuning", () => {
 		expect(getWebCodecsEncodeQueueLimit(60, "quality")).toBe(144);
 		expect(getWebCodecsEncodeQueueLimit(240, "fast")).toBe(96);
 		expect(getWebCodecsEncodeQueueLimit(12, "balanced")).toBe(72);
+	});
+
+	it("caps the encode queue by retained frame memory at high resolutions", () => {
+		// 4K quality would otherwise retain 144 NV12 frames (~1.8 GB).
+		expect(getWebCodecsEncodeQueueLimit(60, "quality", { width: 3840, height: 2160 })).toBe(43);
+		expect(
+			getWebCodecsEncodeQueueLimit(60, "balanced", { width: 3840, height: 2160 }),
+		).toBeLessThan(120);
+		// HD and below keep their tuned frame counts.
+		expect(getWebCodecsEncodeQueueLimit(60, "balanced", { width: 1920, height: 1080 })).toBe(
+			120,
+		);
+		expect(getWebCodecsEncodeQueueLimit(60, "quality", { width: 1280, height: 720 })).toBe(144);
+		// A byte budget still leaves enough in flight to keep the encoder fed.
+		expect(
+			getWebCodecsEncodeQueueLimit(60, "quality", { width: 7680, height: 4320 }),
+		).toBeGreaterThanOrEqual(8);
 	});
 
 	it("widens keyframe spacing for faster modes", () => {

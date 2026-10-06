@@ -192,6 +192,8 @@ export interface GifExportConfig {
 export interface ExportSettings {
 	format: ExportFormat;
 	includeCaptionSidecar?: boolean;
+	/** Burn the clip name + recording date/time badge into the exported frames. */
+	showRecordingLabel?: boolean;
 	// MP4 settings
 	quality?: ExportQuality;
 	encodingMode?: ExportEncodingMode;

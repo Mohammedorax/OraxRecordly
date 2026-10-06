@@ -26,6 +26,11 @@ function loadNames(): Record<string, string> {
 		return {};
 	}
 }
+export function getRawLibraryNameOverride(path: string): string | undefined {
+	const name = loadNames()[path];
+	return typeof name === "string" && name.trim() ? name.trim() : undefined;
+}
+
 export function useRawLibrary(enabled: boolean) {
 	const [entries, setEntries] = useState<ProjectLibraryEntry[]>([]);
 	const [error, setError] = useState<string | null>(null);

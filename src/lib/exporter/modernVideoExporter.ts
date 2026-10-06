@@ -137,6 +137,8 @@ interface VideoExporterConfig extends ExportConfig {
 	cursorSway?: number;
 	zoomSmoothness?: number;
 	zoomClassicMode?: boolean;
+	/** Clip name + recording date/time badge burned into every frame. */
+	recordingLabelText?: string;
 	audioRegions?: AudioRegion[];
 	clipRegions?: ClipRegion[];
 	sourceAudioFallbackPaths?: string[];
@@ -647,6 +649,7 @@ export class ModernVideoExporter {
 					cursorSway: this.config.cursorSway,
 					zoomSmoothness: this.config.zoomSmoothness,
 					zoomClassicMode: this.config.zoomClassicMode,
+					recordingLabelText: this.config.recordingLabelText,
 				});
 				await this.renderer.initialize();
 				this.rendererInitTimeMs = this.getNowMs() - stageStartedAt;
@@ -769,6 +772,14 @@ export class ModernVideoExporter {
 						);
 					}
 
+					if (this.cancelled) {
+						return {
+							success: false,
+							error: "Export cancelled",
+							metrics: this.buildExportMetrics(),
+						};
+					}
+
 					return {
 						success: true,
 						tempFilePath: finishResult.tempFilePath,
@@ -881,6 +892,13 @@ export class ModernVideoExporter {
 				}
 
 				this.finalizationTimeMs = this.getNowMs() - stageStartedAt;
+				if (this.cancelled) {
+					return {
+						success: false,
+						error: "Export cancelled",
+						metrics: this.buildExportMetrics(),
+					};
+				}
 				if (muxerResult.mode === "stream") {
 					return {
 						success: true,
@@ -1727,6 +1745,10 @@ export class ModernVideoExporter {
 		if ((this.config.keycastEvents ?? []).length > 0 && this.config.keycastSettings?.enabled) {
 			reasons.push("unsupported-keycast-overlay");
 		}
+		// Same for the recording label: only the Pixi renderer burns it in.
+		if (this.config.recordingLabelText?.trim()) {
+			reasons.push("unsupported-recording-label-overlay");
+		}
 		const crop = this.config.cropRegion;
 		if (
 			!Number.isFinite(crop.x) ||
@@ -2101,30 +2123,33 @@ export class ModernVideoExporter {
 	) {
 		this.audioProcessor = new AudioProcessor();
 		this.audioProcessor.setOnProgress(onProgress);
-		const audioBlob = await this.measureFinalizationStage("editedAudioRenderMs", async () =>
-			this.awaitWithFinalizationTimeout(
-				this.audioProcessor!.renderEditedAudioTrack(
-					this.config.videoUrl,
-					this.config.trimRegions,
-					this.config.speedRegions,
-					this.config.audioRegions,
-					sourceAudioFallbackPaths,
-					this.config.sourceAudioFallbackStartDelayMsByPath,
-					this.config.sourceAudioTrackSettings,
-					this.config.clipRegions,
+		const editedAudioData = await this.measureFinalizationStage(
+			"editedAudioRenderMs",
+			async () =>
+				this.awaitWithFinalizationTimeout(
+					this.audioProcessor!.renderEditedAudioTrack(
+						this.config.videoUrl,
+						this.config.trimRegions,
+						this.config.speedRegions,
+						this.config.audioRegions,
+						sourceAudioFallbackPaths,
+						this.config.sourceAudioFallbackStartDelayMsByPath,
+						this.config.sourceAudioTrackSettings,
+						this.config.clipRegions,
+					),
+					description,
+					"audio",
+					true,
 				),
-				description,
-				"audio",
-				true,
-			),
 		);
 
 		this.throwIfCancelled();
-		const editedAudioData = await audioBlob.arrayBuffer();
-		this.throwIfCancelled();
+		if (!editedAudioData) {
+			return null;
+		}
 		return {
 			editedAudioData,
-			editedAudioMimeType: audioBlob.type || null,
+			editedAudioMimeType: "audio/wav",
 		};
 	}
 
@@ -2161,10 +2186,19 @@ export class ModernVideoExporter {
 
 				const renderedAudio = await this.renderEditedAudioForNativeMux(
 					"Native static-layout edited audio rendering",
-					(progress) =>
-						this.reportProgress(0, totalFrames, "preparing", undefined, progress),
+					(progress) => {
+						// This render runs under the progress-aware idle watchdog, and
+						// reportProgress does not refresh it. Forward progress here so a
+						// slow-but-healthy WSOLA render is not killed as "no progress".
+						this.activeFinalizationProgressWatchdog?.refreshProgress();
+						this.reportProgress(0, totalFrames, "preparing", undefined, progress);
+					},
 					audioPlan.sourceAudioFallbackPaths,
 				);
+				if (!renderedAudio) {
+					// No decodable audio source: run the native export without an audio track.
+					return { audioMode: "none" as const };
+				}
 
 				return {
 					audioMode: audioPlan.audioMode,
@@ -2349,7 +2383,22 @@ export class ModernVideoExporter {
 		}
 
 		const sourcePath = this.getNativeVideoSourcePath();
-		const audioOptions = await this.getNativeStaticLayoutAudioOptions(audioPlan, totalFrames);
+		const audioOptions = await this.getNativeStaticLayoutAudioOptions(
+			audioPlan,
+			totalFrames,
+		).catch((error) => {
+			if (this.cancelled) {
+				throw error;
+			}
+			// The static-layout contract is "return null -> fall back to WebCodecs".
+			// Rendering the edited audio can fail (e.g. finalization timeout) before
+			// the main try block, so treat it the same way instead of aborting.
+			console.warn(
+				"[VideoExporter] Native static layout audio preparation failed; falling back",
+				error,
+			);
+			return null;
+		});
 		if (!sourcePath || !audioOptions) {
 			this.nativeStaticLayoutSkipReason = !sourcePath
 				? "missing-source-path"
@@ -2837,6 +2886,7 @@ export class ModernVideoExporter {
 
 		let editedAudioBuffer: ArrayBuffer | undefined;
 		let editedAudioMimeType: string | null = null;
+		let audioMode = audioPlan.audioMode;
 
 		if (
 			audioPlan.audioMode === "edited-track" &&
@@ -2847,16 +2897,23 @@ export class ModernVideoExporter {
 				(progress) => this.reportFinalizingProgress(this.processedFrameCount, 99, progress),
 				audioPlan.sourceAudioFallbackPaths,
 			);
-			editedAudioBuffer = renderedAudio.editedAudioData;
-			editedAudioMimeType = renderedAudio.editedAudioMimeType;
+			if (renderedAudio) {
+				editedAudioBuffer = renderedAudio.editedAudioData;
+				editedAudioMimeType = renderedAudio.editedAudioMimeType;
+			} else {
+				// The recording has no decodable audio; finalize the video without audio.
+				audioMode = "none";
+			}
 		}
 
 		const sessionId = this.nativeExportSessionId;
 		console.log(`[VideoExporter] Finalizing ${NATIVE_EXPORT_ENGINE_NAME} export`, {
 			sessionId,
-			audioMode: audioPlan.audioMode,
+			audioMode,
 			editedTrackStrategy:
-				audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
+				audioPlan.audioMode === "edited-track" && audioMode !== "none"
+					? audioPlan.strategy
+					: undefined,
 			encoderName: this.encoderName ?? "unknown",
 		});
 
@@ -2864,37 +2921,46 @@ export class ModernVideoExporter {
 		await this.awaitPendingNativeWrites();
 		this.throwIfCancelled();
 
+		// When no audio could be decoded, finalize with `none` so the muxer does not
+		// expect a track that was never rendered.
+		const finalizeOptions =
+			audioMode === "none" && audioPlan.audioMode !== "none"
+				? ({ audioMode: "none" } as const)
+				: {
+						audioMode: audioPlan.audioMode,
+						audioSourcePath:
+							audioPlan.audioMode === "copy-source" ||
+							audioPlan.audioMode === "trim-source" ||
+							(audioPlan.audioMode === "edited-track" &&
+								audioPlan.strategy === "filtergraph-fast-path")
+								? audioPlan.audioSourcePath
+								: null,
+						trimSegments:
+							audioPlan.audioMode === "trim-source"
+								? audioPlan.trimSegments
+								: undefined,
+						editedTrackStrategy:
+							audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
+						editedTrackSegments:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.editedTrackSegments
+								: undefined,
+						outputDurationSec: this.effectiveDurationSec,
+						audioSourceSampleRate:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.audioSourceSampleRate
+								: undefined,
+						editedAudioData: editedAudioBuffer,
+						editedAudioMimeType,
+					};
+
 		const result = await this.measureFinalizationStage("nativeExportFinalizeMs", async () =>
 			this.awaitWithFinalizationTimeout(
-				window.electronAPI.nativeVideoExportFinish(sessionId, {
-					audioMode: audioPlan.audioMode,
-					audioSourcePath:
-						audioPlan.audioMode === "copy-source" ||
-						audioPlan.audioMode === "trim-source" ||
-						(audioPlan.audioMode === "edited-track" &&
-							audioPlan.strategy === "filtergraph-fast-path")
-							? audioPlan.audioSourcePath
-							: null,
-					trimSegments:
-						audioPlan.audioMode === "trim-source" ? audioPlan.trimSegments : undefined,
-					editedTrackStrategy:
-						audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
-					editedTrackSegments:
-						audioPlan.audioMode === "edited-track" &&
-						audioPlan.strategy === "filtergraph-fast-path"
-							? audioPlan.editedTrackSegments
-							: undefined,
-					outputDurationSec: this.effectiveDurationSec,
-					audioSourceSampleRate:
-						audioPlan.audioMode === "edited-track" &&
-						audioPlan.strategy === "filtergraph-fast-path"
-							? audioPlan.audioSourceSampleRate
-							: undefined,
-					editedAudioData: editedAudioBuffer,
-					editedAudioMimeType,
-				}),
+				window.electronAPI.nativeVideoExportFinish(sessionId, finalizeOptions),
 				`${NATIVE_EXPORT_ENGINE_NAME} export finalization`,
-				audioPlan.audioMode === "none" ? "default" : "audio",
+				audioMode === "none" ? "default" : "audio",
 			),
 		);
 		if (result.metrics) {
@@ -2936,6 +3002,7 @@ export class ModernVideoExporter {
 
 		let editedAudioBuffer: ArrayBuffer | undefined;
 		let editedAudioMimeType: string | null = null;
+		let audioMode = audioPlan.audioMode;
 
 		if (
 			audioPlan.audioMode === "edited-track" &&
@@ -2946,38 +3013,48 @@ export class ModernVideoExporter {
 				(progress) => this.reportFinalizingProgress(this.processedFrameCount, 99, progress),
 				audioPlan.sourceAudioFallbackPaths,
 			);
-			editedAudioBuffer = renderedAudio.editedAudioData;
-			editedAudioMimeType = renderedAudio.editedAudioMimeType;
+			if (renderedAudio) {
+				editedAudioBuffer = renderedAudio.editedAudioData;
+				editedAudioMimeType = renderedAudio.editedAudioMimeType;
+			} else {
+				// No decodable audio: keep the rendered video and skip the audio mux.
+				audioMode = "none";
+			}
 		}
 
 		this.throwIfCancelled();
-		const muxOptions = {
-			audioMode: audioPlan.audioMode,
-			audioSourcePath:
-				audioPlan.audioMode === "copy-source" ||
-				audioPlan.audioMode === "trim-source" ||
-				(audioPlan.audioMode === "edited-track" &&
-					audioPlan.strategy === "filtergraph-fast-path")
-					? audioPlan.audioSourcePath
-					: null,
-			trimSegments:
-				audioPlan.audioMode === "trim-source" ? audioPlan.trimSegments : undefined,
-			editedTrackStrategy:
-				audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
-			editedTrackSegments:
-				audioPlan.audioMode === "edited-track" &&
-				audioPlan.strategy === "filtergraph-fast-path"
-					? audioPlan.editedTrackSegments
-					: undefined,
-			audioSourceSampleRate:
-				audioPlan.audioMode === "edited-track" &&
-				audioPlan.strategy === "filtergraph-fast-path"
-					? audioPlan.audioSourceSampleRate
-					: undefined,
-			outputDurationSec: this.effectiveDurationSec,
-			editedAudioData: editedAudioBuffer,
-			editedAudioMimeType,
-		};
+		const muxOptions =
+			audioMode === "none" && audioPlan.audioMode !== "none"
+				? ({ audioMode: "none" } as const)
+				: {
+						audioMode: audioPlan.audioMode,
+						audioSourcePath:
+							audioPlan.audioMode === "copy-source" ||
+							audioPlan.audioMode === "trim-source" ||
+							(audioPlan.audioMode === "edited-track" &&
+								audioPlan.strategy === "filtergraph-fast-path")
+								? audioPlan.audioSourcePath
+								: null,
+						trimSegments:
+							audioPlan.audioMode === "trim-source"
+								? audioPlan.trimSegments
+								: undefined,
+						editedTrackStrategy:
+							audioPlan.audioMode === "edited-track" ? audioPlan.strategy : undefined,
+						editedTrackSegments:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.editedTrackSegments
+								: undefined,
+						audioSourceSampleRate:
+							audioPlan.audioMode === "edited-track" &&
+							audioPlan.strategy === "filtergraph-fast-path"
+								? audioPlan.audioSourceSampleRate
+								: undefined,
+						outputDurationSec: this.effectiveDurationSec,
+						editedAudioData: editedAudioBuffer,
+						editedAudioMimeType,
+					};
 
 		if (videoSource.mode === "stream") {
 			if (!window.electronAPI?.muxExportedVideoAudioFromPath) {
@@ -3437,7 +3514,10 @@ export class ModernVideoExporter {
 		this.webCodecsEncodeQueueLimit =
 			this.config.maxEncodeQueue ??
 			this.backpressureProfile?.maxEncodeQueue ??
-			getWebCodecsEncodeQueueLimit(this.config.frameRate, this.config.encodingMode);
+			getWebCodecsEncodeQueueLimit(this.config.frameRate, this.config.encodingMode, {
+				width: this.config.width,
+				height: this.config.height,
+			});
 		this.keyFrameInterval = getWebCodecsKeyFrameInterval(
 			this.config.frameRate,
 			this.config.encodingMode,

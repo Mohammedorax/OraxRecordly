@@ -1,11 +1,13 @@
-import { probeNativeVideoMetadata, type NativeVideoMetadataProbe } from "../ffmpeg/metadata";
+import { type NativeVideoMetadataProbe, probeNativeVideoMetadata } from "../ffmpeg/metadata";
+
 export {
-	probeNativeVideoMetadata,
-	parseNativeVideoMetadataProbeOutput,
+	type NativeVideoMetadataProbe,
 	parseFfmpegDurationSeconds,
 	parseFfmpegFrameRate,
-	type NativeVideoMetadataProbe,
+	parseNativeVideoMetadataProbeOutput,
+	probeNativeVideoMetadata,
 } from "../ffmpeg/metadata";
+
 import type { ChildProcessByStdio } from "node:child_process";
 import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
@@ -3972,6 +3974,11 @@ export async function muxNativeVideoExportAudio(
 			outputPath,
 			metrics,
 		};
+	} catch (error) {
+		// A failed ffmpeg run can leave a partial `-final.mp4` behind. It is not a
+		// valid output and is not registered as an owned temp, so remove it here.
+		await removeTemporaryExportFile(outputPath);
+		throw error;
 	} finally {
 		await Promise.allSettled(
 			tempArtifacts.map((artifactPath) => removeTemporaryExportFile(artifactPath)),

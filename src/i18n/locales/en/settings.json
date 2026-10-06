@@ -314,6 +314,10 @@
 			"hint": "Save .srt and .vtt files next to your exported video.",
 			"title": "Export captions file"
 		},
+		"recordingLabel": {
+			"hint": "Burn the clip name with the recording date and time into the video.",
+			"title": "Show clip name and date"
+		},
 		"encodingTitle": "Encoding",
 		"format": "Format",
 		"nvidiaCuda": {

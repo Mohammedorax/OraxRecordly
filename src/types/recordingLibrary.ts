@@ -2,6 +2,8 @@ export interface RecordingLibraryEntry {
 	path: string;
 	name: string;
 	createdAt: number;
+	/** Capture start time (from the file name), falling back to mtime. */
+	recordedAt?: number;
 	bytes: number;
 	url: string;
 }

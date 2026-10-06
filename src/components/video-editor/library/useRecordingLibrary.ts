@@ -1,19 +1,19 @@
-import type { useAppearanceState } from "../state/useAppearanceState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
 import type { RecordingLibraryEntry } from "@/types/recordingLibrary";
 import { packClipSequence, rippleRegionAnchors, rippleRegions } from "../clipSequence";
-import {
-	type ZoomRegion,
-	sortClipRegions,
-	DEFAULT_AUTO_ZOOM_DEPTH,
-	clampFocusToDepth,
-} from "../types";
-import { buildInteractionZoomSuggestions } from "../timeline/zoomSuggestionUtils";
+import type { useAppearanceState } from "../state/useAppearanceState";
+import type { useEditorUiState } from "../state/useEditorUiState";
 import type { useProjectState } from "../state/useProjectState";
 import type { useTimelineState } from "../state/useTimelineState";
-import type { useEditorUiState } from "../state/useEditorUiState";
+import { buildInteractionZoomSuggestions } from "../timeline/zoomSuggestionUtils";
+import {
+	clampFocusToDepth,
+	DEFAULT_AUTO_ZOOM_DEPTH,
+	sortClipRegions,
+	type ZoomRegion,
+} from "../types";
 
 export function useRecordingLibrary(
 	project: ReturnType<typeof useProjectState>,
@@ -191,6 +191,7 @@ export function useRecordingLibrary(
 							depth: DEFAULT_AUTO_ZOOM_DEPTH,
 							focus: clampFocusToDepth(zoom.focus, DEFAULT_AUTO_ZOOM_DEPTH),
 							mode: "auto" as const,
+							source: "auto" as const,
 						})),
 					);
 				}

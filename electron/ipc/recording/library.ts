@@ -1,17 +1,30 @@
-import fs from "node:fs/promises";
 import { constants } from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { shell } from "electron";
+import type { RecordingLibraryEntry } from "../../../src/types/recordingLibrary";
 import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
 import { rememberApprovedLocalReadPath } from "../project/manager";
 import { getRecordingsDir } from "../utils";
-import type { RecordingLibraryEntry } from "../../../src/types/recordingLibrary";
 
 let mutation = Promise.resolve();
 const undoBatches = new Map<string, { bundle: string; files: string[] }>();
 const isRecording = (name: string) =>
 	/\.(mp4|mov|webm|mkv|m4v)$/i.test(name) && !/[.-]webcam[.-]/i.test(name);
 const batchKey = (paths: string[]) => JSON.stringify([...new Set(paths)].sort());
+
+/**
+ * The recorder names files `recording-<epochMs>`, so the capture *start* time is
+ * recoverable from the name (mtime is the stop time). Falls back to mtime.
+ */
+const RECORDING_START_PATTERN = /^recording-(\d{10,})(?:-webcam)?$/i;
+function getRecordedAtMs(fileName: string, fallbackMs: number): number {
+	const dotIndex = fileName.lastIndexOf(".");
+	const stem = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+	const match = RECORDING_START_PATTERN.exec(stem);
+	const parsed = match ? Number.parseInt(match[1], 10) : Number.NaN;
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
+}
 
 export function listRecordings(includeSources = false): Promise<RecordingLibraryEntry[]> {
 	const task = mutation.then(async () => {
@@ -47,6 +60,7 @@ export function listRecordings(includeSources = false): Promise<RecordingLibrary
 				name: entry.name,
 				bytes: stat.size,
 				createdAt: stat.mtimeMs,
+				recordedAt: getRecordedAtMs(entry.name, stat.mtimeMs),
 				url: buildMediaUrl(server, filePath),
 			});
 		}

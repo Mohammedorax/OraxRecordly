@@ -1,9 +1,8 @@
-import { Card } from "@heroui/react";
-import { ProgressBar } from "@heroui/react";
-import { DownloadSimple as Download } from "@/components/ui/icons";
-import { toast } from "@/components/ui/toast";
+import { Card, ProgressBar } from "@heroui/react";
 import { Button } from "@/components/ui/button";
+import { DownloadSimple as Download } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast } from "@/components/ui/toast";
 import type { useI18n } from "@/contexts/I18nContext";
 import { ExportSettingsMenu } from "../ExportSettingsMenu";
 import type { useExportDimensions } from "../export/useExportDimensions";
@@ -67,6 +66,8 @@ export function EditorExportMenu(props: Props) {
 		setGifSizePreset,
 		includeCaptionSidecar,
 		setIncludeCaptionSidecar,
+		showRecordingLabel,
+		setShowRecordingLabel,
 	} = exportSettings;
 	const {
 		isExporting,
@@ -329,6 +330,8 @@ export function EditorExportMenu(props: Props) {
 							}
 							includeCaptionSidecar={includeCaptionSidecar}
 							onIncludeCaptionSidecarChange={setIncludeCaptionSidecar}
+							showRecordingLabel={showRecordingLabel}
+							onShowRecordingLabelChange={setShowRecordingLabel}
 							mp4OutputDimensions={mp4OutputDimensions}
 							gifOutputDimensions={gifOutputDimensions}
 							onExport={handleStartExportFromDropdown}

@@ -11,7 +11,6 @@ afterEach(() => {
 describe("modern export audio cancellation", () => {
 	it.each([
 		"audio-render",
-		"audio-buffer",
 		"video-buffer",
 	])("does not start FFmpeg after cancellation during %s", async (stage) => {
 		const mux = vi.fn();
@@ -29,17 +28,12 @@ describe("modern export audio cancellation", () => {
 			backgroundBlur: 0,
 			cropRegion: { x: 0, y: 0, width: 1, height: 1 },
 		});
-		const audio = new Blob([], { type: "audio/wav" });
 		vi.spyOn(AudioProcessor.prototype, "renderEditedAudioTrack").mockImplementation(
 			async () => {
 				if (stage === "audio-render") exporter.cancel();
-				return audio;
+				return new ArrayBuffer(0);
 			},
 		);
-		vi.spyOn(audio, "arrayBuffer").mockImplementation(async () => {
-			if (stage === "audio-buffer") exporter.cancel();
-			return new ArrayBuffer(0);
-		});
 		const video = new Blob([], { type: "video/mp4" });
 		vi.spyOn(video, "arrayBuffer").mockImplementation(async () => {
 			if (stage === "video-buffer") exporter.cancel();

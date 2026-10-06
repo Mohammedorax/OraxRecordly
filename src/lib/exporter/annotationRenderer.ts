@@ -436,8 +436,14 @@ export async function renderAnnotations(
 				if (sw > 0 && sh > 0) {
 					const buffer = getBlurBufferCanvas();
 					if (buffer) {
-						buffer.width = sw;
-						buffer.height = sh;
+						// Assigning width/height (even to the same value) clears and can
+						// reallocate the canvas backing store, so only resize on change.
+						if (buffer.width !== sw) {
+							buffer.width = sw;
+						}
+						if (buffer.height !== sh) {
+							buffer.height = sh;
+						}
 						const bCtx = buffer.getContext("2d");
 						if (bCtx) {
 							bCtx.drawImage(ctx.canvas, sx, sy, sw, sh, 0, 0, sw, sh);

@@ -63,6 +63,7 @@ import { renderAnnotations } from "./annotationRenderer";
 import { renderCaptions } from "./captionRenderer";
 import { ForwardFrameSource } from "./forwardFrameSource";
 import { resolveMediaElementSource } from "./localMediaSource";
+import { paintRecordingLabel } from "./recordingLabel";
 
 interface FrameRenderConfig {
 	timelineEffects?: boolean;
@@ -121,6 +122,8 @@ interface FrameRenderConfig {
 	cursorClickBounce?: number;
 	cursorClickBounceDuration?: number;
 	cursorSway?: number;
+	/** Clip name + recording date/time badge burned into every frame. */
+	recordingLabelText?: string;
 }
 
 interface AnimationState {
@@ -1255,6 +1258,15 @@ export class FrameRenderer {
 				height: this.config.height,
 				timeMs: cursorTimeMs,
 				isMac: detectMacPlatform(),
+			});
+		}
+
+		// Recording label is static, so it is drawn last to stay readable.
+		if (this.compositeCtx && this.config.recordingLabelText) {
+			paintRecordingLabel(this.compositeCtx, {
+				text: this.config.recordingLabelText,
+				width: this.config.width,
+				height: this.config.height,
 			});
 		}
 	}

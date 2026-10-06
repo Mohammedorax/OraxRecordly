@@ -6,7 +6,10 @@ const BASELINE_PIXELS_PER_SECOND = 1280 * 720 * 60;
 
 const LATENCY_MODE_PREFERENCES: Record<ExportEncodingMode, readonly WebCodecsLatencyMode[]> = {
 	fast: ["realtime", "quality"],
-	balanced: ["realtime", "quality"],
+	// "realtime" maps to a zerolatency-style tune (no lookahead/B-frames) in Chrome.
+	// Only the dedicated fast mode should pay that quality cost; balanced and quality
+	// prefer the quality tune and fall back to realtime when the platform rejects it.
+	balanced: ["quality", "realtime"],
 	quality: ["quality", "realtime"],
 };
 
@@ -27,6 +30,15 @@ const MAX_QUEUE_LIMIT: Record<ExportEncodingMode, number> = {
 	balanced: 120,
 	quality: 180,
 };
+
+/**
+ * Frames waiting in a WebCodecs encoder are retained in full. Without a byte
+ * budget a 4K quality export can queue ~144 frames (~1.8 GB of NV12), which is
+ * enough to push 8-16 GB machines into swap or an OOM abort. The byte budget
+ * only starts to bite above ~3K; 720p/1080p keep their tuned frame counts.
+ */
+const MAX_QUEUED_FRAME_BYTES = 512 * 1024 * 1024;
+const MIN_BYTE_BUDGETED_QUEUE_LIMIT = 8;
 
 const KEYFRAME_INTERVAL_SECONDS: Record<ExportEncodingMode, number> = {
 	fast: 4,
@@ -91,15 +103,33 @@ export function getPreferredWebCodecsLatencyModes(
 export function getWebCodecsEncodeQueueLimit(
 	frameRate: number,
 	encodingMode?: ExportEncodingMode,
+	dimensions?: { width: number; height: number },
 ): number {
 	const resolvedEncodingMode = normalizeEncodingMode(encodingMode);
 	const targetLimit = Math.round(frameRate * TARGET_QUEUE_SECONDS[resolvedEncodingMode]);
 
-	return clamp(
+	const frameLimit = clamp(
 		targetLimit,
 		MIN_QUEUE_LIMIT[resolvedEncodingMode],
 		MAX_QUEUE_LIMIT[resolvedEncodingMode],
 	);
+	if (!dimensions) {
+		return frameLimit;
+	}
+	if (
+		!Number.isFinite(dimensions.width) ||
+		!Number.isFinite(dimensions.height) ||
+		dimensions.width <= 0 ||
+		dimensions.height <= 0
+	) {
+		return frameLimit;
+	}
+
+	// 8-bit NV12 is what decoders hand to the encoder: 1.5 bytes per pixel.
+	const frameBytes = Math.max(1, Math.floor(dimensions.width * dimensions.height * 1.5));
+	const byteBudgetLimit = Math.floor(MAX_QUEUED_FRAME_BYTES / frameBytes);
+
+	return Math.max(MIN_BYTE_BUDGETED_QUEUE_LIMIT, Math.min(frameLimit, byteBudgetLimit));
 }
 
 export function getWebCodecsKeyFrameInterval(
@@ -123,7 +153,10 @@ export function getExportBackpressureProfile(
 	const isHighCoreSystem = hardwareConcurrency >= 8;
 	const isHeavyWorkload = relativePixelRate >= 1.5;
 	const isExtremeWorkload = relativePixelRate >= 3;
-	const maxEncodeQueue = getWebCodecsEncodeQueueLimit(options.frameRate, options.encodingMode);
+	const maxEncodeQueue = getWebCodecsEncodeQueueLimit(options.frameRate, options.encodingMode, {
+		width: options.width,
+		height: options.height,
+	});
 
 	if (options.encodeBackend === "ffmpeg") {
 		if (isLowCoreSystem || isExtremeWorkload) {

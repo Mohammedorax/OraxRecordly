@@ -16,7 +16,7 @@ type OfflineRenderTestHarness = AudioProcessor & {
 	): Promise<{
 		mainBufferEntry: { buffer: AudioBuffer; gain: number } | null;
 		companionEntries: Array<{ buffer: AudioBuffer; startDelaySec: number; gain: number }>;
-	}>;
+	} | null>;
 	renderAndMuxOfflineAudio(
 		videoUrl: string,
 		trimRegions: never[],
@@ -50,6 +50,14 @@ function fakeAudioBuffer(channels: Float32Array[]): AudioBuffer {
 		numberOfChannels: channels.length,
 		getChannelData: (channel: number) => channels[channel],
 	} as AudioBuffer;
+}
+
+function fakePcmAudioBuffer(channels: Float32Array[]): AudioBuffer {
+	return {
+		numberOfChannels: channels.length,
+		length: channels[0]?.length ?? 0,
+		getChannelData: (channel: number) => channels[channel],
+	} as unknown as AudioBuffer;
 }
 
 describe("AudioProcessor offline render preparation", () => {
@@ -86,6 +94,74 @@ describe("AudioProcessor offline render preparation", () => {
 			clips,
 			muxer,
 		);
+	});
+
+	it("skips audio entirely when the recording has no decodable audio sources", async () => {
+		const processor = new AudioProcessor() as unknown as OfflineRenderTestHarness;
+		vi.spyOn(processor, "decodeAudioFromUrl").mockResolvedValue(null);
+		const muxer = { addAudioChunk: vi.fn() };
+		const clips = [
+			{ id: "clip", startMs: 0, endMs: 1000, sourceStartMs: 0, speed: 1, muted: true },
+		];
+
+		await expect(
+			processor.process(
+				null,
+				muxer as never,
+				"file:///tmp/silent.mp4",
+				[],
+				[],
+				undefined,
+				[],
+				[],
+				undefined,
+				undefined,
+				clips,
+			),
+		).resolves.toBeUndefined();
+		expect(muxer.addAudioChunk).not.toHaveBeenCalled();
+	});
+
+	it("returns no WAV instead of failing when edited audio cannot be decoded", async () => {
+		const processor = new AudioProcessor() as unknown as OfflineRenderTestHarness;
+		vi.spyOn(processor, "decodeAudioFromUrl").mockResolvedValue(null);
+
+		await expect(
+			processor.renderEditedAudioTrack("file:///tmp/silent.mp4"),
+		).resolves.toBeNull();
+	});
+
+	it("writes the edited WAV into one exactly sized buffer", async () => {
+		const processor = new AudioProcessor() as unknown as OfflineRenderTestHarness & {
+			renderToWavArrayBufferChunked(prepared: unknown): Promise<ArrayBuffer>;
+		};
+		const chunkFrames = 48_000;
+		const rendered = fakePcmAudioBuffer([
+			new Float32Array(chunkFrames),
+			new Float32Array(chunkFrames),
+		]);
+		vi.spyOn(processor, "renderChunked").mockImplementation(
+			async (_prepared, _totalSec, onChunk) => {
+				await onChunk(rendered, 0, 0);
+			},
+		);
+
+		const wav = await processor.renderToWavArrayBufferChunked({
+			mainBufferEntry: null,
+			companionEntries: [],
+			regionEntries: [],
+			mutedSourceOutputRangesSec: [],
+			slices: [],
+			outputDurationMs: 1000,
+			numChannels: 2,
+		} as never);
+
+		const bytes = new Uint8Array(wav);
+		const view = new DataView(wav);
+		expect(String.fromCharCode(...bytes.subarray(0, 4))).toBe("RIFF");
+		expect(String.fromCharCode(...bytes.subarray(8, 12))).toBe("WAVE");
+		expect(view.getUint32(40, true)).toBe(chunkFrames * 2 * 2);
+		expect(wav.byteLength).toBe(44 + chunkFrames * 2 * 2);
 	});
 
 	it("rejects a cancelled chunked render instead of returning a partial WAV", async () => {

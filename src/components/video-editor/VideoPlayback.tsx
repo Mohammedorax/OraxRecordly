@@ -20,7 +20,6 @@ import {
 	type KeycastSettings,
 } from "@/lib/keycast/keycastModel";
 import { detectMacPlatform } from "@/lib/keycast/keycastRenderer";
-import { KeycastBadgeOverlay } from "./keycast/KeycastBadge";
 import {
 	clampMediaTimeToDuration,
 	enablePitchPreservingPlayback,
@@ -45,6 +44,7 @@ import {
 	buildActiveCaptionLayout,
 	CAPTION_ENTER_MS,
 	CAPTION_EXIT_MS,
+	createCaptionLayoutCache,
 	flattenCaptionWords,
 } from "./captionLayout";
 import {
@@ -56,6 +56,7 @@ import {
 	getCaptionTextMaxWidth,
 	getCaptionWordVisualState,
 } from "./captionStyle";
+import { KeycastBadgeOverlay } from "./keycast/KeycastBadge";
 import {
 	type AnnotationRegion,
 	type AutoCaptionSettings,
@@ -119,13 +120,13 @@ import {
 } from "./videoPlayback/motionSmoothing";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
 import { PreviewVideoSource } from "./videoPlayback/previewVideoSource";
-import { usePreviewVideoReady } from "./videoPlayback/usePreviewVideoReady";
 import { getSceneEffectMetrics } from "./videoPlayback/sceneEffects";
 import {
 	resolvePreviewMotionMode,
 	resolveSceneZoomTarget,
 	shouldComposePreviewFrame,
 } from "./videoPlayback/sceneMotion";
+import { usePreviewVideoReady } from "./videoPlayback/usePreviewVideoReady";
 import {
 	applyZoomTransform,
 	computeZoomTransform,
@@ -767,6 +768,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cues: autoCaptions,
 			overlayWidth: captionOverlayWidth,
 		});
+		const captionGeometryCacheRef = useRef(createCaptionLayoutCache());
 		const activeCaptionLayout = useMemo(() => {
 			const builtAtMs = captionTimeKeyMs;
 			const rememberCaptionLayout = (layout: ActiveCaptionLayout | null) => {
@@ -818,6 +820,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					settings: autoCaptionSettings,
 					maxWidthPx: maxTextWidthPx,
 					measureText: (text) => measurementContext.measureText(text).width,
+					// Reuse the time-invariant line-breaking work across caption events;
+					// the cache invalidates itself when cues or settings change.
+					cache: captionGeometryCacheRef.current,
 				}),
 			);
 		}, [

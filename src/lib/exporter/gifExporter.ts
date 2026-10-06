@@ -3,8 +3,8 @@ import type {
 	AnnotationRegion,
 	AutoCaptionSettings,
 	CaptionCue,
-	CursorClickEffectStyle,
 	CropRegion,
+	CursorClickEffectStyle,
 	CursorStyle,
 	CursorTelemetryPoint,
 	Padding,
@@ -85,6 +85,8 @@ interface GifExporterConfig {
 	cursorClickBounce?: number;
 	cursorClickBounceDuration?: number;
 	cursorSway?: number;
+	/** Clip name + recording date/time badge burned into every frame. */
+	recordingLabelText?: string;
 	previewWidth?: number;
 	previewHeight?: number;
 	maxDecodeQueue?: number;
@@ -155,6 +157,7 @@ export function buildGifFrameRendererConfig(
 		cursorClickBounce: config.cursorClickBounce,
 		cursorClickBounceDuration: config.cursorClickBounceDuration,
 		cursorSway: config.cursorSway,
+		recordingLabelText: config.recordingLabelText,
 	};
 }
 

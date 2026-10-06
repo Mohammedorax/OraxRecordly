@@ -52,6 +52,7 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 			clipRegions,
 		);
 		if (this.cancelled) return;
+		if (!prepared) return;
 		await this.renderAndEncodeChunked(prepared, muxer);
 	}
 
@@ -64,7 +65,7 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 		sourceAudioFallbackStartDelayMsByPath?: Record<string, number>,
 		sourceAudioTrackSettings?: SourceAudioTrackSettings,
 		clipRegions?: ClipRegion[],
-	): Promise<PreparedOfflineRender> {
+	): Promise<PreparedOfflineRender | null> {
 		if (this.cancelled) throw new Error("Export cancelled");
 		this.onProgress?.(0);
 
@@ -140,7 +141,18 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 		// Determine source duration for timeline calculation
 		const primaryBuffer = mainBufferEntry?.buffer ?? companionEntries[0]?.buffer ?? null;
 		if (!primaryBuffer && regionEntries.length === 0) {
-			throw new Error("No decodable audio sources found");
+			// A recording can legitimately contain no audio at all (for example screen
+			// capture with no microphone or system audio requested). Never fail the whole
+			// export in that case: render the video without an audio track instead.
+			console.warn(
+				"[AudioProcessor] No decodable audio sources found; continuing without audio.",
+				{
+					embeddedRequested: resolvedPlan.includeEmbeddedInExport,
+					companionPaths: resolvedPlan.playbackPaths.length,
+					audioRegions: audioRegions.length,
+				},
+			);
+			return null;
 		}
 
 		let sourceDurationSec: number;
@@ -278,22 +290,47 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 		}
 	}
 
-	// Render timeline to a WAV blob for the native/FFmpeg export path.
-	// Processes in chunks to avoid holding the entire output in memory.
-	protected async renderToWavBlobChunked(prepared: PreparedOfflineRender): Promise<Blob> {
+	// Render the edited timeline to a single 16-bit PCM WAV buffer for the
+	// native/FFmpeg export path. The destination is sized once and written in
+	// place, so peak memory stays at ~one copy of the PCM data instead of the
+	// previous parts-array + Blob + arrayBuffer() duplication.
+	protected async renderToWavArrayBufferChunked(
+		prepared: PreparedOfflineRender,
+	): Promise<ArrayBuffer> {
 		const totalOutputSec = Math.max(prepared.outputDurationMs / 1000, 0.01);
-		const totalFrames = Math.ceil(totalOutputSec * OFFLINE_AUDIO_SAMPLE_RATE);
 		const numChannels = prepared.numChannels;
+		const bytesPerSample = 2;
+
+		// Mirror renderChunked's per-chunk arithmetic exactly: the sum of per-chunk
+		// ceil()s can exceed ceil(totalDuration * sampleRate), so computing the frame
+		// count any other way risks overflowing the destination buffer.
+		const chunkCount = Math.ceil(totalOutputSec / OFFLINE_CHUNK_DURATION_SEC);
+		let totalFrames = 0;
+		let offsetSec = 0;
+		for (let index = 0; index < chunkCount; index += 1) {
+			const chunkSec = Math.min(OFFLINE_CHUNK_DURATION_SEC, totalOutputSec - offsetSec);
+			totalFrames += Math.ceil(chunkSec * OFFLINE_AUDIO_SAMPLE_RATE);
+			offsetSec += chunkSec;
+		}
 
 		const header = this.createWavHeader(OFFLINE_AUDIO_SAMPLE_RATE, numChannels, totalFrames);
-		const pcmParts: ArrayBuffer[] = [header];
+		const wav = new ArrayBuffer(header.byteLength + totalFrames * numChannels * bytesPerSample);
+		const wavBytes = new Uint8Array(wav);
+		wavBytes.set(new Uint8Array(header), 0);
 
+		let writeOffset = header.byteLength;
 		await this.renderChunked(prepared, totalOutputSec, async (rendered) => {
-			pcmParts.push(...this.audioBufferToPcmParts(rendered));
+			for (const part of this.audioBufferToPcmParts(rendered)) {
+				if (writeOffset + part.byteLength > wavBytes.byteLength) {
+					throw new Error("Rendered audio exceeded the reserved WAV buffer size");
+				}
+				wavBytes.set(new Uint8Array(part), writeOffset);
+				writeOffset += part.byteLength;
+			}
 		});
 		if (this.cancelled) throw new Error("Export cancelled");
 
-		return new Blob(pcmParts, { type: "audio/wav" });
+		return wav;
 	}
 
 	// Shared chunked rendering loop. Processes the timeline in

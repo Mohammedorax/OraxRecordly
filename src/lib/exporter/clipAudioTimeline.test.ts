@@ -35,8 +35,16 @@ function context() {
 }
 
 describe("clip audio timeline", () => {
-	it("keeps the silent middle interval and schedules retained source at its timeline position", async () => {
-		const processor = new TestAudioProcessor();
+	async function prepareRender(
+		processor: TestAudioProcessor,
+		clips: Array<{
+			id: string;
+			startMs: number;
+			endMs: number;
+			sourceStartMs: number;
+			speed: number;
+		}>,
+	) {
 		const prepared = await processor.prepare(
 			"file:///tmp/source.mp4",
 			[],
@@ -47,6 +55,13 @@ describe("clip audio timeline", () => {
 			undefined,
 			clips,
 		);
+		if (!prepared) throw new Error("expected a prepared offline render");
+		return prepared;
+	}
+
+	it("keeps the silent middle interval and schedules retained source at its timeline position", async () => {
+		const processor = new TestAudioProcessor();
+		const prepared = await prepareRender(processor, clips);
 		expect(prepared.outputDurationMs).toBe(4000);
 		expect(prepared.slices).toEqual([
 			{ sourceStartMs: 0, sourceEndMs: 3000, speed: 3, outputStartMs: 0 },
@@ -72,16 +87,7 @@ describe("clip audio timeline", () => {
 	});
 	it("schedules a clip correctly when its audio straddles an offline chunk boundary", async () => {
 		const processor = new TestAudioProcessor();
-		const prepared = await processor.prepare(
-			"file:///tmp/source.mp4",
-			[],
-			[],
-			[],
-			[],
-			undefined,
-			undefined,
-			clips,
-		);
+		const prepared = await prepareRender(processor, clips);
 		const { starts, ctx } = context();
 		processor.schedule(ctx, buffer, prepared.slices, 0, 1, 2.5, 1);
 		expect(starts).toHaveLength(1);
@@ -89,16 +95,7 @@ describe("clip audio timeline", () => {
 	});
 	it("an explicitly empty clip list schedules no source audio", async () => {
 		const processor = new TestAudioProcessor();
-		const prepared = await processor.prepare(
-			"file:///tmp/source.mp4",
-			[],
-			[],
-			[],
-			[],
-			undefined,
-			undefined,
-			[],
-		);
+		const prepared = await prepareRender(processor, []);
 		expect(prepared.slices).toEqual([]);
 		expect(prepared.outputDurationMs).toBe(12000);
 	});

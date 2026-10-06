@@ -1,20 +1,20 @@
 import type { WebDemuxer } from "web-demuxer";
-import { requiresClipTimelineRendering } from "./clipTimeline";
 import type {
 	AudioRegion,
 	ClipRegion,
 	SourceAudioTrackSettings,
 	SpeedRegion,
 } from "@/components/video-editor/types";
-import { resolveSourceTrackRoutingPolicy } from "./sourceTrackRoutingPolicy";
-import { AudioTranscodeProcessor } from "./audioTranscodeProcessor";
 import {
 	hasNonDefaultSourceTrackSettings,
 	MIN_SPEED_REGION_DELTA_MS,
 	MP4_AUDIO_CODEC,
 	type TrimLikeRegion,
 } from "./audioProcessorShared";
+import { AudioTranscodeProcessor } from "./audioTranscodeProcessor";
+import { requiresClipTimelineRendering } from "./clipTimeline";
 import type { VideoMuxer } from "./muxer";
+import { resolveSourceTrackRoutingPolicy } from "./sourceTrackRoutingPolicy";
 
 export {
 	getSourceTrackIdFromPath,
@@ -247,7 +247,7 @@ export class AudioProcessor extends AudioTranscodeProcessor {
 		sourceAudioFallbackStartDelayMsByPath?: Record<string, number>,
 		sourceAudioTrackSettings?: SourceAudioTrackSettings,
 		clipRegions?: ClipRegion[],
-	): Promise<Blob> {
+	): Promise<ArrayBuffer | null> {
 		const sortedTrims = trimRegions
 			? [...trimRegions].sort((a, b) => a.startMs - b.startMs)
 			: [];
@@ -275,7 +275,8 @@ export class AudioProcessor extends AudioTranscodeProcessor {
 			sourceAudioTrackSettings,
 			clipRegions,
 		);
-		return this.renderToWavBlobChunked(prepared);
+		if (!prepared) return null;
+		return this.renderToWavArrayBufferChunked(prepared);
 	}
 
 	// Legacy trim-only path used when no speed regions are configured.

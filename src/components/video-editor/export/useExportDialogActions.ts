@@ -77,6 +77,7 @@ export function useExportDialogActions({
 				sourceHeight: video.videoHeight,
 				exportFormat,
 				includeCaptionSidecar: hasCaptionsForSidecar && settings.includeCaptionSidecar,
+				showRecordingLabel: settings.showRecordingLabel !== false,
 				exportEncodingMode: settings.exportEncodingMode,
 				exportQuality: settings.exportQuality,
 				mp4FrameRate: settings.mp4FrameRate,

@@ -27,3 +27,18 @@ export function formatLocaleDate(
 		...LATIN_NUMBERING_SYSTEM,
 	});
 }
+
+/**
+ * Locale-aware date *and* time. Uses `toLocaleString` because
+ * `toLocaleDateString` is not guaranteed to render supplied time fields.
+ */
+export function formatLocaleDateTime(
+	date: Date | number | string,
+	locale: string,
+	options?: Intl.DateTimeFormatOptions,
+): string {
+	return new Date(date).toLocaleString(locale, {
+		...options,
+		...LATIN_NUMBERING_SYSTEM,
+	});
+}
