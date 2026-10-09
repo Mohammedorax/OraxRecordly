@@ -1,16 +1,16 @@
-import type { ClipSequenceSpan } from "../timeline/core/timelineTypes";
 import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback } from "react";
 import { toast } from "@/components/ui/toast";
-import { changeClipSpan } from "../clipSpanChange";
 import {
 	packClipSequence,
 	reorderClipSequence,
 	rippleRegionAnchors,
 	rippleRegions,
 } from "../clipSequence";
-import { getClipSourceStartMs, type AnnotationRegion, type AudioRegion } from "../types";
+import { changeClipSpan } from "../clipSpanChange";
 import { planClipSplit } from "../clipSplit";
+import type { ClipSequenceSpan } from "../timeline/core/timelineTypes";
 import type { ClipRegion, EditorEffectSection, ZoomRegion } from "../types";
+import { type AnnotationRegion, type AudioRegion, getClipSourceStartMs } from "../types";
 import { supportsPreviewPlaybackRate } from "../videoPlayback/playbackRate";
 
 type Translator = (

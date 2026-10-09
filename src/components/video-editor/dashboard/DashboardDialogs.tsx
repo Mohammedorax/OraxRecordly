@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { useScopedT } from "@/contexts/I18nContext";
 import {
 	Dialog,
 	DialogContent,
@@ -7,6 +6,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { useScopedT } from "@/contexts/I18nContext";
 
 import type { DashboardProps } from "./types";
 

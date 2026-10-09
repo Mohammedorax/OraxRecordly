@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { hasFreshProjectThumbnail } from "../../electron/ipc/project/thumbnailFreshness";
 import { expect, test } from "@playwright/test";
+import { hasFreshProjectThumbnail } from "../../electron/ipc/project/thumbnailFreshness";
 import { installDesktopBridge, installDesktopBridgeOverrides } from "./bridge";
 
 test("home dashboard searches, sorts, opens projects and returns to the editor", async ({

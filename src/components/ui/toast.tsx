@@ -1,5 +1,5 @@
-import { Toast, toast as heroToast } from "@heroui/react";
-import { isValidElement, type ComponentProps, type ReactNode } from "react";
+import { toast as heroToast, Toast } from "@heroui/react";
+import { type ComponentProps, isValidElement, type ReactNode } from "react";
 import { translateForActiveLocale } from "@/contexts/I18nContext";
 import { writeClipboardText } from "@/lib/clipboard";
 

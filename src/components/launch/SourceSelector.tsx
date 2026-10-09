@@ -1,8 +1,8 @@
 import { ToggleButton } from "@heroui/react";
-import { AppWindowIcon, CaretUpIcon, MonitorIcon } from "@/components/ui/icons";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AppWindowIcon, CaretUpIcon, MonitorIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";

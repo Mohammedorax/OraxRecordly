@@ -1,6 +1,6 @@
+import { Card, Modal } from "@heroui/react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { DashboardAnnouncements } from "./DashboardAnnouncements";
-import { Card, Modal } from "@heroui/react";
 import { DashboardDialogs } from "./DashboardDialogs";
 import { DashboardFilters } from "./DashboardFilters";
 import { DashboardGrid } from "./DashboardGrid";

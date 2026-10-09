@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
-import { loadKeycastSettings, saveKeycastSettings } from "@/lib/keycast/keycastSettings";
 import type { KeycastSettings } from "@/lib/keycast/keycastModel";
+import { loadKeycastSettings, saveKeycastSettings } from "@/lib/keycast/keycastSettings";
 import type { EditorPreferences } from "../editorPreferences";
 import type {
 	CropRegion,

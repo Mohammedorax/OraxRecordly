@@ -1,5 +1,9 @@
 import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
+
 const execFileAsync = promisify(execFile);
 
 export interface NativeVideoMetadataProbe {
@@ -97,7 +101,58 @@ export function parseNativeVideoMetadataProbeOutput(
 	};
 }
 
+/**
+ * Metadata probing shells out to ffmpeg (~100-400 ms each) and the same file is
+ * probed repeatedly during an export. Cache by path + size + mtime so edits or a
+ * replaced file invalidate the entry automatically.
+ */
+const METADATA_CACHE_LIMIT = 8;
+const metadataCache: Array<{ key: string; metadata: NativeVideoMetadataProbe }> = [];
+
+async function getMetadataCacheKey(inputPath: string): Promise<string | null> {
+	try {
+		const stat = await fs.stat(inputPath);
+		return `${path.resolve(inputPath)}|${stat.size}|${stat.mtimeMs}`;
+	} catch {
+		return null;
+	}
+}
+
+/** Test seam / manual invalidation. */
+export function clearNativeVideoMetadataCache(): void {
+	metadataCache.length = 0;
+}
+
 export async function probeNativeVideoMetadata(
+	ffmpegPath: string,
+	inputPath: string,
+	signal?: AbortSignal,
+): Promise<NativeVideoMetadataProbe> {
+	signal?.throwIfAborted();
+
+	const cacheKey = await getMetadataCacheKey(inputPath);
+	if (cacheKey) {
+		const cachedIndex = metadataCache.findIndex((entry) => entry.key === cacheKey);
+		if (cachedIndex >= 0) {
+			const [cached] = metadataCache.splice(cachedIndex, 1);
+			metadataCache.push(cached);
+			return cached.metadata;
+		}
+	}
+
+	const metadata = await probeNativeVideoMetadataUncached(ffmpegPath, inputPath, signal);
+
+	if (cacheKey) {
+		metadataCache.push({ key: cacheKey, metadata });
+		if (metadataCache.length > METADATA_CACHE_LIMIT) {
+			metadataCache.shift();
+		}
+	}
+
+	return metadata;
+}
+
+async function probeNativeVideoMetadataUncached(
 	ffmpegPath: string,
 	inputPath: string,
 	signal?: AbortSignal,
@@ -105,6 +160,7 @@ export async function probeNativeVideoMetadata(
 	let output = "";
 	try {
 		const result = await execFileAsync(ffmpegPath, ["-hide_banner", "-i", inputPath], {
+			...HIDDEN_WINDOW_OPTIONS,
 			signal,
 			timeout: 30_000,
 			maxBuffer: 4 * 1024 * 1024,

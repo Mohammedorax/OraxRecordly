@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
 import { ensureNativeWindowListBinary } from "../paths/binaries";
 import {
 	cachedNativeMacWindowSources,
@@ -40,6 +41,7 @@ export async function getNativeMacWindowSources(options?: { maxAgeMs?: number })
 	try {
 		const binaryPath = await ensureNativeWindowListBinary();
 		const { stdout } = await execFileAsync(binaryPath, [], {
+			...HIDDEN_WINDOW_OPTIONS,
 			timeout: 30000,
 			maxBuffer: 10 * 1024 * 1024,
 		});
@@ -135,6 +137,7 @@ export async function resolveLinuxWindowBounds(
 	if (windowId) {
 		try {
 			const { stdout } = await execFileAsync("xwininfo", ["-id", String(windowId)], {
+				...HIDDEN_WINDOW_OPTIONS,
 				timeout: 1500,
 			});
 			const bounds = parseXwininfoBounds(stdout);
@@ -154,6 +157,7 @@ export async function resolveLinuxWindowBounds(
 
 	try {
 		const { stdout } = await execFileAsync("xwininfo", ["-name", windowTitle], {
+			...HIDDEN_WINDOW_OPTIONS,
 			timeout: 1500,
 		});
 		const bounds = parseXwininfoBounds(stdout);

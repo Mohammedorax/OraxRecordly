@@ -1,12 +1,12 @@
 import { Card, Chip, ProgressBar } from "@heroui/react";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
 	ArrowClockwiseIcon,
 	CheckCircleIcon,
 	DownloadSimpleIcon,
 	WarningCircleIcon,
 } from "@/components/ui/icons";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "./UpdateToastWindow.module.css";
 

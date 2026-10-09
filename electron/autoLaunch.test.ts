@@ -28,8 +28,8 @@ import {
 	applyAutoLaunchPreference,
 	isAutoLaunchSupported,
 	readLoginItemState,
-	shouldStartMinimizedOnLaunch,
 	START_MINIMIZED_ARG,
+	shouldStartMinimizedOnLaunch,
 } from "./autoLaunch";
 
 afterEach(() => {

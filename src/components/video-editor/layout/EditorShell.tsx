@@ -1,18 +1,18 @@
-import { DashboardSettingsContext } from "../dashboard/DashboardSettings";
-import { useVideoSourceRecovery } from "../hooks/useVideoSourceRecovery";
-import { useRecordingLibrary } from "../library/useRecordingLibrary";
-import { RecordingLibraryPanel } from "../library/RecordingLibraryPanel";
-import { RECORDING_DRAG_TYPE } from "@/types/recordingLibrary";
-import { Button } from "@/components/ui/button";
-import { useCallback, useMemo, useEffect, useRef, type ComponentProps } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef } from "react";
 import { EditorAnnouncementBanner } from "@/components/announcements/EditorAnnouncementBanner";
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toast";
 import type { useI18n } from "@/contexts/I18nContext";
+import { RECORDING_DRAG_TYPE } from "@/types/recordingLibrary";
+import { DashboardSettingsContext } from "../dashboard/DashboardSettings";
 import type { useEditorExportController } from "../export/useEditorExportController";
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
 import type { useExportSettings } from "../export/useExportSettings";
 import type { useTimelineEditingController } from "../hooks/useTimelineEditingController";
+import { useVideoSourceRecovery } from "../hooks/useVideoSourceRecovery";
+import { RecordingLibraryPanel } from "../library/RecordingLibraryPanel";
+import { useRecordingLibrary } from "../library/useRecordingLibrary";
 import type { useEditorProjectController } from "../project/useEditorProjectController";
 import { SettingsPanel } from "../SettingsPanel";
 import type { useAppearanceState } from "../state/useAppearanceState";
@@ -22,8 +22,8 @@ import type { useTimelineState } from "../state/useTimelineState";
 import type { EditorEffectSection } from "../types";
 import { CropEditorDialog } from "./CropEditorDialog";
 import { EditorDialogs } from "./EditorDialogs";
-import { EditorLoadingSkeleton } from "./EditorLoadingSkeleton";
 import { EditorHeader } from "./EditorHeader";
+import { EditorLoadingSkeleton } from "./EditorLoadingSkeleton";
 import { EditorPreviewPanel } from "./EditorPreviewPanel";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorTimelinePanel } from "./EditorTimelinePanel";
@@ -230,6 +230,7 @@ export function EditorShell(props: Props) {
 				exportDimensions={exportDimensions}
 				exportStatus={exportStatus}
 				hasCaptionsForSidecar={hasCaptionsForSidecar}
+				effectiveDurationSec={ui.duration}
 				nvidiaCudaExportAvailable={nvidiaCudaExportAvailable}
 				experimentalNvidiaCudaExport={experimentalNvidiaCudaExport}
 				setExperimentalNvidiaCudaExport={setExperimentalNvidiaCudaExport}
@@ -379,6 +380,28 @@ export function EditorShell(props: Props) {
 					</div>
 				</div>
 			)}
+			{/* Compact progress pill: the export dialog can be closed while the
+			    render keeps running, so keep the state and a cancel action visible. */}
+			{exportSession.isExporting && !exportSession.showExportDropdown ? (
+				<div
+					className="pointer-events-auto fixed end-4 bottom-4 z-[90] flex items-center gap-3 rounded-full border border-white/10 bg-black/80 px-4 py-2 text-xs text-white shadow-lg backdrop-blur"
+					role="status"
+					aria-live="polite"
+				>
+					<span className="font-medium tabular-nums">
+						{exportStatus.exportPercentLabel}
+					</span>
+					<span className="text-white/70">{exportStatus.runtimeLabel}</span>
+					<Button
+						variant="ghost"
+						size="sm"
+						className="h-7 px-3 text-white text-xs hover:bg-white/10"
+						onClick={dialogActions.handleCancelExport}
+					>
+						{t("common.actions.cancel", "Cancel")}
+					</Button>
+				</div>
+			) : null}
 			{editorDialogs}
 			<CropEditorDialog
 				open={ui.showCropModal}

@@ -1,21 +1,15 @@
-import { isHudInEditorMode } from "./hudEditorMode";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain } from "electron";
 import {
-	supportsHudCaptureProtection,
 	shouldProtectHudCapture,
+	supportsHudCaptureProtection,
 } from "../src/lib/hudCaptureProtection";
 import { USER_DATA_PATH } from "./appPaths";
-import {
-	getHudOverlayAnchor,
-	getHudOverlayWindowBounds,
-	type HudOverlayAnchor,
-	type HudOverlayWorkArea,
-} from "./hudOverlayBounds";
-import { getHudOverlayTaskbarOptions } from "./hudOverlayWindowOptions";
+import { showCursor } from "./cursorHider";
+import { isHudInEditorMode } from "./hudEditorMode";
 import {
 	classifyHudFrameProbe,
 	decideHudFallback,
@@ -24,11 +18,17 @@ import {
 	HUD_FRAME_PROBE_TIMEOUT_MS,
 	type HudFrameProbeOutcome,
 } from "./hudFrameProbe";
+import {
+	getHudOverlayAnchor,
+	getHudOverlayWindowBounds,
+	type HudOverlayAnchor,
+	type HudOverlayWorkArea,
+} from "./hudOverlayBounds";
+import { getHudOverlayTaskbarOptions } from "./hudOverlayWindowOptions";
 import { stopWindowBoundsCapture } from "./ipc/cursor/bounds";
 import { stopInteractionCapture } from "./ipc/cursor/interaction";
 import { stopNativeCursorMonitor } from "./ipc/cursor/monitor";
 import { stopCursorCapture } from "./ipc/cursor/telemetry";
-import { showCursor } from "./cursorHider";
 import { getPackagedRendererBaseUrl } from "./rendererServer";
 
 const electronWindowsDir = path.dirname(fileURLToPath(import.meta.url));

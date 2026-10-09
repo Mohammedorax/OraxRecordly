@@ -46,6 +46,7 @@ describe("Windows desktop wallpaper registry", () => {
 			(
 				_command: string,
 				_args: string[],
+				_options: unknown,
 				callback: (error: unknown, result: unknown) => void,
 			) => {
 				callback(null, { stdout: SYSTEM_WALLPAPER_REGISTRY_OUTPUT, stderr: "" });
@@ -62,6 +63,7 @@ describe("Windows desktop wallpaper registry", () => {
 		expect(execFileMock).toHaveBeenCalledWith(
 			"reg.exe",
 			["query", "HKCU\\Control Panel\\Desktop"],
+			expect.objectContaining({ windowsHide: true }),
 			expect.any(Function),
 		);
 	});
@@ -71,6 +73,7 @@ describe("Windows desktop wallpaper registry", () => {
 			(
 				_command: string,
 				_args: string[],
+				_options: unknown,
 				callback: (error: unknown, result: unknown) => void,
 			) => {
 				callback(
@@ -94,6 +97,7 @@ describe("Windows desktop wallpaper registry", () => {
 			(
 				_command: string,
 				_args: string[],
+				_options: unknown,
 				callback: (error: unknown, result: unknown) => void,
 			) => {
 				callback(null, {

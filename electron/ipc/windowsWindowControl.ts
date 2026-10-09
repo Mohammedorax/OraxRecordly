@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { HIDDEN_WINDOW_OPTIONS } from "../childProcess";
 import type { SelectedSource, WindowBounds } from "./types";
 import { getScreen, parseWindowId } from "./utils";
 import { convertPhysicalBoundsToDip } from "./windowsCaptureSelection";
@@ -22,6 +23,7 @@ export async function bringWindowsWindowForward(windowId: number): Promise<void>
 	].join("\n");
 
 	await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], {
+		...HIDDEN_WINDOW_OPTIONS,
 		timeout: 5000,
 		env: { ...process.env, RECORDLY_WINDOW_ID: String(windowId) },
 	});
@@ -79,6 +81,7 @@ export async function resolveWindowsWindowBounds(
 			"powershell.exe",
 			["-NoProfile", "-Command", script],
 			{
+				...HIDDEN_WINDOW_OPTIONS,
 				timeout: 5000,
 				env: {
 					...process.env,

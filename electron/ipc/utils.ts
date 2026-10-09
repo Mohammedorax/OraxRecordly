@@ -1,11 +1,12 @@
-import { getLocalMediaServerPath } from "../../src/lib/localMediaUrl";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "electron";
-import { RECORDINGS_DIR } from "../appPaths";
+import { getLocalMediaServerPath } from "../../src/lib/localMediaUrl";
+import { getDefaultRecordingsDir, RECORDINGS_DIR } from "../appPaths";
 import { AUTO_RECORDING_PREFIX, RECORDINGS_SETTINGS_FILE } from "./constants";
+import { migrateRecordingsDirectoryOnce } from "./recordingDirMigration";
 import {
 	approvedLocalReadPaths,
 	customRecordingsDir,
@@ -109,7 +110,40 @@ async function loadRecordingsDirectorySetting() {
 
 export async function getRecordingsDir() {
 	await loadRecordingsDirectorySetting();
-	const targetDir = customRecordingsDir ?? RECORDINGS_DIR;
+	if (customRecordingsDir) {
+		await fs.mkdir(customRecordingsDir, { recursive: true });
+		return customRecordingsDir;
+	}
+	return resolveDefaultRecordingsDir();
+}
+
+/**
+ * Runs the one-time move into the visible Videos folder. The work happens at most
+ * once per process, and any failure keeps the legacy folder so an existing
+ * library is never orphaned.
+ */
+let recordingsDirMigrationPromise: Promise<boolean> | null = null;
+
+async function resolveDefaultRecordingsDir() {
+	const targetDir = getDefaultRecordingsDir();
+	if (targetDir === RECORDINGS_DIR) {
+		await fs.mkdir(targetDir, { recursive: true });
+		return targetDir;
+	}
+
+	if (!recordingsDirMigrationPromise) {
+		recordingsDirMigrationPromise = migrateRecordingsDirectoryOnce({
+			customDir: null,
+			targetDir,
+		});
+	}
+
+	const migrated = await recordingsDirMigrationPromise;
+	if (!migrated) {
+		await fs.mkdir(RECORDINGS_DIR, { recursive: true });
+		return RECORDINGS_DIR;
+	}
+
 	await fs.mkdir(targetDir, { recursive: true });
 	return targetDir;
 }

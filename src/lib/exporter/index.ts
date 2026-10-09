@@ -1,6 +1,5 @@
 export { FrameRenderer } from "./frameRenderer";
 export { GifExporter } from "./gifExporter";
-export { calculateOutputDimensions } from "./outputDimensions";
 export { ModernVideoExporter } from "./modernVideoExporter";
 export type {
 	SupportedMp4Dimensions,
@@ -13,6 +12,7 @@ export {
 	resolveSupportedMp4EncoderPath,
 } from "./mp4Support";
 export { VideoMuxer } from "./muxer";
+export { calculateOutputDimensions } from "./outputDimensions";
 export { StreamingVideoDecoder } from "./streamingDecoder";
 export type {
 	ExportBackendPreference,

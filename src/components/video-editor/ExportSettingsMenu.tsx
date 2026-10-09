@@ -1,5 +1,5 @@
 import { Card, Description, Label, Tag, TagGroup } from "@heroui/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DownloadSimple as Download, FilmSlate as Film, Image } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +14,7 @@ import type {
 	GifSizePreset,
 } from "@/lib/exporter/types";
 import { GIF_FRAME_RATES, GIF_SIZE_PRESETS, MP4_FRAME_RATES } from "@/lib/exporter/types";
+import { type ExportHistoryEntry, readExportHistory } from "./export/exportHistory";
 
 interface ExportSettingsMenuProps {
 	exportFormat: ExportFormat;
@@ -33,6 +34,12 @@ interface ExportSettingsMenuProps {
 	onIncludeCaptionSidecarChange?: (enabled: boolean) => void;
 	showRecordingLabel?: boolean;
 	onShowRecordingLabelChange?: (enabled: boolean) => void;
+	alwaysAskExportLocation?: boolean;
+	onAlwaysAskExportLocationChange?: (enabled: boolean) => void;
+	/** Destination shown next to the "ask where to save" switch. */
+	exportDirectoryPath?: string | null;
+	/** Pre-export size hint, already formatted (e.g. "24.3 MB"). */
+	estimatedSizeLabel?: string | null;
 	mp4OutputDimensions?: Record<ExportQuality, { width: number; height: number }>;
 	gifFrameRate: GifFrameRate;
 	onGifFrameRateChange?: (rate: GifFrameRate) => void;
@@ -113,6 +120,10 @@ export function ExportSettingsMenu({
 	onIncludeCaptionSidecarChange,
 	showRecordingLabel = false,
 	onShowRecordingLabelChange,
+	alwaysAskExportLocation = false,
+	onAlwaysAskExportLocationChange,
+	exportDirectoryPath = null,
+	estimatedSizeLabel = null,
 	mp4OutputDimensions,
 	gifFrameRate,
 	onGifFrameRateChange,
@@ -125,6 +136,12 @@ export function ExportSettingsMenu({
 	className,
 }: ExportSettingsMenuProps) {
 	const tSettings = useScopedT("settings");
+	// The menu mounts when the export popover opens, so this reflects the latest
+	// finished exports without any cross-component subscription.
+	const [exportHistory, setExportHistory] = useState<ExportHistoryEntry[]>([]);
+	useEffect(() => {
+		setExportHistory(readExportHistory());
+	}, []);
 	const isLegacyModel = exportPipelineModel === "legacy";
 
 	return (
@@ -192,6 +209,17 @@ export function ExportSettingsMenu({
 								),
 							}))}
 						/>
+						{estimatedSizeLabel ? (
+							<p className="text-muted-foreground text-xs">
+								{tSettings(
+									"export.estimatedSize",
+									"Estimated size: about {{size}}",
+									{
+										size: estimatedSizeLabel,
+									},
+								)}
+							</p>
+						) : null}
 						<Choices
 							label={tSettings("export.fpsTitle", "FPS")}
 							value={mp4FrameRate}
@@ -249,6 +277,28 @@ export function ExportSettingsMenu({
 								)}
 							</Description>
 						</div>
+						<div>
+							<Switch
+								checked={alwaysAskExportLocation}
+								onCheckedChange={onAlwaysAskExportLocationChange}
+							>
+								<Label>
+									{tSettings("export.exportLocation.title", "Ask where to save")}
+								</Label>
+							</Switch>
+							<Description>
+								{exportDirectoryPath
+									? tSettings(
+											"export.exportLocation.hint",
+											"Exports are saved to {{path}}",
+											{ path: exportDirectoryPath },
+										)
+									: tSettings(
+											"export.exportLocation.hintFallback",
+											"Exports are saved to your OraxRecordly folder.",
+										)}
+							</Description>
+						</div>
 					</>
 				) : (
 					<>
@@ -280,6 +330,36 @@ export function ExportSettingsMenu({
 						</Switch>
 					</>
 				)}
+				{exportHistory.length > 0 ? (
+					<div className="flex flex-col gap-1">
+						<Label>{tSettings("export.history.title", "Recent exports")}</Label>
+						{exportHistory.slice(0, 3).map((entry) => (
+							<div
+								key={entry.path}
+								className="flex items-center justify-between gap-2"
+							>
+								<span
+									className="truncate text-muted-foreground text-xs"
+									title={entry.path}
+								>
+									{entry.name}
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-6 shrink-0 px-2 text-xs"
+									onClick={() =>
+										void window.electronAPI
+											?.revealInFolder?.(entry.path)
+											.catch(() => undefined)
+									}
+								>
+									{tSettings("export.history.reveal", "Show in folder")}
+								</Button>
+							</div>
+						))}
+					</div>
+				) : null}
 			</Card.Content>
 			<Card.Footer>
 				<Button size="lg" onClick={onExport} className="w-full">

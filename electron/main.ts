@@ -1,4 +1,3 @@
-import { clearRecordingTrashUndo } from "./ipc/recording/library";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -16,11 +15,10 @@ import {
 	systemPreferences,
 	Tray,
 } from "electron";
-import { RECORDINGS_DIR } from "./appPaths";
 import { readStartupPreferences, shouldStartMinimizedOnLaunch } from "./autoLaunch";
 import { showCursor } from "./cursorHider";
+import { releaseExportPowerGuard } from "./exportPowerGuard";
 import { getGpuSwitches } from "./gpuSwitches";
-import { registerSynchronousAppSettingHandlers } from "./synchronousIpcBootstrap";
 import {
 	cleanupAllExportStreams,
 	cleanupNativeVideoExportSessions,
@@ -28,22 +26,25 @@ import {
 	killWindowsCaptureProcess,
 	registerIpcHandlers,
 } from "./ipc/handlers";
+import { clearRecordingTrashUndo } from "./ipc/recording/library";
+import { captureScreenshotFromGlobalShortcut } from "./ipc/register/screenshot";
+import { readScreenshotPreferences } from "./ipc/settings/screenshotPreferencesStore";
+import { getRecordingsDir } from "./ipc/utils";
 import { ensureMediaServer } from "./mediaServer";
 import { hardenWebContentsNavigation, shouldHardenWebContentsType } from "./navigationPolicy";
 import { shouldGrantDisplayCapture, shouldGrantMediaPermission } from "./permissionPolicy";
 import { ensurePackagedRendererServer, getPackagedRendererBaseUrl } from "./rendererServer";
+import {
+	registerScreenshotGlobalShortcut,
+	unregisterScreenshotGlobalShortcut,
+} from "./screenshotShortcut";
 import {
 	decideStartupVisibility,
 	describeStartupVisibility,
 	getWindowTypeFromUrl,
 	type StartupWindowSnapshot,
 } from "./startupVisibility";
-import { captureScreenshotFromGlobalShortcut } from "./ipc/register/screenshot";
-import {
-	registerScreenshotGlobalShortcut,
-	unregisterScreenshotGlobalShortcut,
-} from "./screenshotShortcut";
-import { readScreenshotPreferences } from "./ipc/settings/screenshotPreferencesStore";
+import { registerSynchronousAppSettingHandlers } from "./synchronousIpcBootstrap";
 import {
 	checkForAppUpdates,
 	deferUpdateReminder,
@@ -61,15 +62,15 @@ import {
 	skipAvailableUpdateVersion,
 } from "./updater";
 import {
+	beginHudCaptureProtection,
 	createEditorWindow,
 	createHudOverlayWindow,
 	createSourceSelectorWindow,
-	getHudOverlayWindow,
 	getHudOverlayFramePresented,
+	getHudOverlayWindow,
 	getUpdateToastWindow,
 	hideUpdateToastWindow,
 	isHudOverlayMousePassthroughSupported,
-	beginHudCaptureProtection,
 	reassertHudOverlayMousePassthrough as reassertHudOverlayMouseState,
 	setHudOverlayRecordingActive,
 	showUpdateToastWindow,
@@ -164,8 +165,10 @@ registerSynchronousAppSettingHandlers();
 
 async function ensureRecordingsDir() {
 	try {
-		await fs.mkdir(RECORDINGS_DIR, { recursive: true });
-		console.log("RECORDINGS_DIR:", RECORDINGS_DIR);
+		// Resolving runs the one-time move into the visible Videos folder.
+		const recordingsDir = await getRecordingsDir();
+		await fs.mkdir(recordingsDir, { recursive: true });
+		console.log("RECORDINGS_DIR:", recordingsDir);
 		console.log("User Data Path:", app.getPath("userData"));
 	} catch (error) {
 		console.error("Failed to create recordings directory:", error);
@@ -1124,6 +1127,7 @@ app.on("before-quit", () => {
 	void showCursor();
 	cleanupNativeVideoExportSessions();
 	void cleanupAllExportStreams();
+	releaseExportPowerGuard();
 });
 
 app.on("window-all-closed", () => {

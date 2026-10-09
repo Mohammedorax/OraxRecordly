@@ -1,6 +1,6 @@
 import { Button, ToggleButton } from "@heroui/react";
-import { Check, Plus, X } from "@/components/ui/icons";
 import { useEffect, useState } from "react";
+import { Check, Plus, X } from "@/components/ui/icons";
 import { useScopedT } from "@/contexts/I18nContext";
 import { getRenderableVideoUrl } from "@/lib/assetPath";
 import { isVideoWallpaperSource } from "@/lib/wallpapers";

@@ -1,12 +1,13 @@
-import { createRecordingEditorNavigation } from "../../recordingEditorNavigation";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { app, BrowserWindow, desktopCapturer, ipcMain, systemPreferences } from "electron";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
+import { createRecordingEditorNavigation } from "../../recordingEditorNavigation";
 import {
-	setHudRecordingPreparationActive,
 	createHudOverlayWindow,
 	getHudOverlayWindow,
 	reassertHudOverlayMousePassthrough,
+	setHudRecordingPreparationActive,
 } from "../../windows";
 import { ALLOW_RECORDLY_WINDOW_CAPTURE } from "../constants";
 import {
@@ -54,7 +55,10 @@ export async function bringSelectedWindowForward(
 			const appName =
 				rawAppName && /^[\w .&()+'-]{1,64}$/.test(rawAppName) ? rawAppName : null;
 			if (!appName) return null;
-			await execFileAsync("open", ["-a", appName], { timeout: 2000 });
+			await execFileAsync("open", ["-a", appName], {
+				...HIDDEN_WINDOW_OPTIONS,
+				timeout: 2000,
+			});
 			try {
 				systemPreferences?.isTrustedAccessibilityClient?.(true);
 				const { stdout } = await execFileAsync(
@@ -92,7 +96,7 @@ export async function bringSelectedWindowForward(
 						appName,
 						String(windowId),
 					],
-					{ timeout: 2000 },
+					{ ...HIDDEN_WINDOW_OPTIONS, timeout: 2000 },
 				);
 				const [x, y, width, height] = stdout.trim().split(",").map(Number);
 				if ([x, y, width, height].every(Number.isFinite) && width > 0 && height > 0) {
@@ -106,6 +110,7 @@ export async function bringSelectedWindowForward(
 			await bringWindowsWindowForward(windowId);
 		} else if (process.platform === "linux") {
 			await execFileAsync("wmctrl", ["-i", "-a", `0x${windowId.toString(16)}`], {
+				...HIDDEN_WINDOW_OPTIONS,
 				timeout: 1500,
 			});
 		}

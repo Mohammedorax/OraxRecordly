@@ -6,9 +6,9 @@ import {
 	findVisibleWindow,
 	getWindowTypeFromUrl,
 	HUD_OVERLAY_WINDOW_TYPE,
-	type StartupVisibilityInput,
 	STARTUP_VISIBILITY_EDITOR_FALLBACK_MS,
 	STARTUP_VISIBILITY_PROBE_MS,
+	type StartupVisibilityInput,
 	type StartupWindowSnapshot,
 } from "./startupVisibility";
 

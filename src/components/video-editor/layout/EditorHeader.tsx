@@ -1,12 +1,12 @@
 import { Separator } from "@heroui/react";
+import type { CSSProperties, FormEvent, RefObject } from "react";
+import { Button } from "@/components/ui/button";
 import {
-	House,
 	FilmStrip,
+	House,
 	ArrowClockwise as Redo2,
 	ArrowCounterClockwise as Undo2,
 } from "@/components/ui/icons";
-import type { CSSProperties, FormEvent, RefObject } from "react";
-import { Button } from "@/components/ui/button";
 import type { useI18n } from "@/contexts/I18nContext";
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
@@ -37,6 +37,8 @@ type Props = {
 	exportDimensions: ReturnType<typeof useExportDimensions>;
 	exportStatus: ReturnType<typeof useExportStatusViewModel>;
 	hasCaptionsForSidecar: boolean;
+	/** Timeline duration in seconds, used for the pre-export size estimate. */
+	effectiveDurationSec: number;
 	nvidiaCudaExportAvailable: boolean;
 	experimentalNvidiaCudaExport: boolean;
 	setExperimentalNvidiaCudaExport: (enabled: boolean) => void;
@@ -70,6 +72,7 @@ export function EditorHeader(props: Props) {
 		exportDimensions,
 		exportStatus,
 		hasCaptionsForSidecar,
+		effectiveDurationSec,
 		nvidiaCudaExportAvailable,
 		experimentalNvidiaCudaExport,
 		setExperimentalNvidiaCudaExport,
@@ -222,6 +225,7 @@ export function EditorHeader(props: Props) {
 					exportDimensions={exportDimensions}
 					exportStatus={exportStatus}
 					hasCaptionsForSidecar={hasCaptionsForSidecar}
+					effectiveDurationSec={effectiveDurationSec}
 					nvidiaCudaExportAvailable={nvidiaCudaExportAvailable}
 					experimentalNvidiaCudaExport={experimentalNvidiaCudaExport}
 					setExperimentalNvidiaCudaExport={setExperimentalNvidiaCudaExport}

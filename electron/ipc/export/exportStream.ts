@@ -43,6 +43,11 @@ export function isOwnedExportPath(candidate: string): boolean {
 	return ownedExportPaths.has(normalizeOwnedPath(candidate));
 }
 
+/** Used by the export power guard to keep the machine awake while streaming. */
+export function getActiveExportStreamCount(): number {
+	return exportStreamSessions.size;
+}
+
 function generateStreamId() {
 	return `recordly-export-stream-${randomUUID()}`;
 }

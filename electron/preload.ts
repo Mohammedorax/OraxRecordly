@@ -494,6 +494,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		tempPath: string;
 		fileName: string;
 		outputPath?: string | null;
+		saveDirectory?: string | null;
 		captionSidecar?: {
 			format: "srt" | "vtt" | "both";
 			cues: Array<{
@@ -1268,6 +1269,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	getRecordingsDirectory: () => {
 		return ipcRenderer.invoke("get-recordings-directory");
+	},
+	getExportDirectory: () => {
+		return ipcRenderer.invoke("get-export-directory") as Promise<{
+			success: boolean;
+			path?: string;
+			error?: string;
+		}>;
+	},
+	warmNativeExport: (options?: { encodingMode?: string }) => {
+		return ipcRenderer.invoke("warm-native-export", options) as Promise<{
+			success: boolean;
+			error?: string;
+		}>;
+	},
+	setExportProgress: (value: number) => {
+		return ipcRenderer.invoke("set-export-progress", value) as Promise<{
+			success: boolean;
+			error?: string;
+		}>;
+	},
+	notifyExportComplete: (payload: { title?: string; body?: string; filePath?: string }) => {
+		return ipcRenderer.invoke("notify-export-complete", payload) as Promise<{
+			success: boolean;
+			error?: string;
+		}>;
 	},
 	chooseRecordingsDirectory: () => {
 		return ipcRenderer.invoke("choose-recordings-directory");

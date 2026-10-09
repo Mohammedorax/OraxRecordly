@@ -1,14 +1,13 @@
 import { useTimelineContext } from "dnd-timeline";
-import { useEffect, useState, type CSSProperties, type RefObject } from "react";
+import { type CSSProperties, type RefObject, useEffect, useState } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
-import { formatPlayheadTime } from "../../core/time";
-
 import {
+	type ClipPresentation,
 	getPlayheadDisplayTime,
 	getTimeAtClipSeam,
-	type ClipPresentation,
 } from "../../core/clipPresentation";
+import { formatPlayheadTime } from "../../core/time";
 
 interface PlaybackCursorProps {
 	clips: ClipPresentation[];

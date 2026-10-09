@@ -18,6 +18,13 @@ import type { Readable, Writable } from "node:stream";
 import { promisify } from "node:util";
 import type { WebContents } from "electron";
 import { app, powerSaveBlocker } from "electron";
+import { HIDDEN_WINDOW_OPTIONS, killProcessTree } from "../../childProcess";
+import {
+	acquireExportActivity,
+	releaseExportActivity,
+	releaseExportPowerGuard,
+} from "../../exportPowerGuard";
+
 import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import type {
 	NativeExportEncodingMode,
@@ -348,7 +355,7 @@ export function cleanupNativeVideoExportSessions() {
 			/* stream may already be closed */
 		}
 		try {
-			session.ffmpegProcess.kill("SIGKILL");
+			killProcessTree(session.ffmpegProcess);
 		} catch {
 			/* process may already be exited */
 		}
@@ -358,12 +365,18 @@ export function cleanupNativeVideoExportSessions() {
 	for (const [sessionId, session] of nativeStaticLayoutExportSessions) {
 		session.terminating = true;
 		try {
-			session.currentProcess?.kill("SIGKILL");
+			if (session.currentProcess) {
+				killProcessTree(session.currentProcess);
+			}
 		} catch {
 			/* process may already be exited */
 		}
 		nativeStaticLayoutExportSessions.delete(sessionId);
+		releaseExportActivity(`static:${sessionId}`);
 	}
+
+	// No session survives a quit: drop every power-guard token too.
+	releaseExportPowerGuard();
 }
 
 export function parseWindowsGpuExportSummary(stdout: string): WindowsGpuExportSummary | null {
@@ -956,7 +969,7 @@ export async function probeNativeVideoStreamStats(
 			"json",
 			inputPath,
 		],
-		{ timeout: 120_000, maxBuffer: 2 * 1024 * 1024 },
+		{ ...HIDDEN_WINDOW_OPTIONS, timeout: 120_000, maxBuffer: 2 * 1024 * 1024 },
 	);
 	const stats = parseNativeVideoStreamStatsProbeOutput(result.stdout);
 	if (!stats) {
@@ -1110,6 +1123,7 @@ async function runFfmpegWithMetrics(
 	const startedAt = getNowMs();
 	return await new Promise((resolve) => {
 		const child = spawn(ffmpegPath, args, {
+			...HIDDEN_WINDOW_OPTIONS,
 			stdio: ["ignore", "ignore", "pipe"],
 		});
 		if (session) {
@@ -1243,6 +1257,7 @@ async function runFfmpegAudioMux(
 ) {
 	if (!onProgress && !session) {
 		await execFileAsync(ffmpegPath, args, {
+			...HIDDEN_WINDOW_OPTIONS,
 			timeout: timeoutMs,
 			maxBuffer: 20 * 1024 * 1024,
 		});
@@ -1255,6 +1270,7 @@ async function runFfmpegAudioMux(
 	);
 	await new Promise<void>((resolve, reject) => {
 		const child = spawn(ffmpegPath, args, {
+			...HIDDEN_WINDOW_OPTIONS,
 			stdio: ["ignore", "ignore", "pipe"],
 		});
 		if (session) {
@@ -2913,6 +2929,7 @@ async function runExperimentalWindowsGpuStaticLayoutExport(
 		summary: WindowsGpuExportSummary;
 	}>((resolve, reject) => {
 		const child = spawn(executablePath, args, {
+			...HIDDEN_WINDOW_OPTIONS,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		session.currentProcess = child;
@@ -3107,6 +3124,7 @@ export async function exportNativeStaticLayoutVideo(
 
 	try {
 		nativeStaticLayoutExportSessions.set(sessionId, session);
+		acquireExportActivity(`static:${sessionId}`);
 		await fs.mkdir(chunkDirectory, { recursive: true });
 		const sourceInput = await prepareNativeStaticLayoutSourceInput(
 			ffmpegPath,
@@ -3716,6 +3734,7 @@ export async function enqueueNativeVideoExportFrameWrites(
 
 export async function getAvailableNativeVideoEncoders(ffmpegPath: string) {
 	const { stdout } = await execFileAsync(ffmpegPath, ["-hide_banner", "-encoders"], {
+		...HIDDEN_WINDOW_OPTIONS,
 		timeout: 15000,
 		maxBuffer: 20 * 1024 * 1024,
 	});
@@ -3746,6 +3765,7 @@ export async function probeNativeVideoEncoder(
 
 	return new Promise<boolean>((resolve) => {
 		const process = spawn(ffmpegPath, args, {
+			...HIDDEN_WINDOW_OPTIONS,
 			stdio: ["pipe", "ignore", "pipe"],
 		});
 		let stderrOutput = "";

@@ -1,10 +1,10 @@
 import { WebDemuxer } from "web-demuxer";
 import {
 	type ClipRegion,
+	findClipAtTimelineTime,
+	getTimelineDurationMs,
 	type SpeedRegion,
 	type TrimRegion,
-	getTimelineDurationMs,
-	findClipAtTimelineTime,
 } from "@/components/video-editor/types";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import { createFallbackDemuxerSource, resolveMediaResourceUrl } from "./localMediaSource";
@@ -19,13 +19,14 @@ const DEFAULT_MAX_DECODE_QUEUE = 12;
 const DEFAULT_MAX_PENDING_FRAMES = 32;
 
 import type { DecodedVideoInfo } from "./streamingDecoderSupport";
+
 export {
 	buildVideoDecodeFailure,
+	type DecodedVideoInfo,
 	getDecodedFrameStartupOffsetUs,
 	getDecodedFrameTimelineOffsetUs,
 	getVideoDecodeFailureCode,
 	preserveFirstVideoDecodeFailure,
-	type DecodedVideoInfo,
 	type VideoDecodeFailureContext,
 } from "./streamingDecoderSupport";
 

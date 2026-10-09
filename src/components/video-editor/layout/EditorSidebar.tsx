@@ -1,7 +1,7 @@
-import { ClosedCaptioning, Cursor, Gear, FrameCorners } from "@/components/ui/icons";
-import { ToggleButtonGroup, ToggleButton, Tooltip, Card, Switch, Label } from "@heroui/react";
+import { Card, Label, Switch, ToggleButton, ToggleButtonGroup, Tooltip } from "@heroui/react";
 import type { ComponentProps, ReactNode } from "react";
 import { memo, useMemo, useState } from "react";
+import { ClosedCaptioning, Cursor, FrameCorners, Gear } from "@/components/ui/icons";
 import type { useI18n } from "@/contexts/I18nContext";
 import ExtensionManager from "../ExtensionManager";
 import { SettingsPanel } from "../SettingsPanel";

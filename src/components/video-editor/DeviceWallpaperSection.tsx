@@ -1,5 +1,6 @@
-import { ArrowClockwise, CaretDown, FolderOpen, ImageSquare } from "@/components/ui/icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ArrowClockwise, CaretDown, FolderOpen, ImageSquare } from "@/components/ui/icons";
 import { useScopedT } from "@/contexts/I18nContext";
 import { getWallpaperThumbnailUrl } from "@/lib/assetPath";
 import {
@@ -8,9 +9,8 @@ import {
 	pickDeviceWallpaperImage,
 	withSelectedDeviceWallpaper,
 } from "@/lib/systemWallpapers";
-import { isDeviceImagePath } from "@/lib/wallpapers";
 import { cn } from "@/lib/utils";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { isDeviceImagePath } from "@/lib/wallpapers";
 import { WallpaperGrid } from "./WallpaperGrid";
 
 /**

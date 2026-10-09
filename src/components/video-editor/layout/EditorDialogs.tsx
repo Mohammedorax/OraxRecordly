@@ -10,8 +10,8 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { ProjectLibraryEntry } from "../ProjectBrowserDialog";
 import { Dashboard } from "../dashboard/Dashboard";
+import type { ProjectLibraryEntry } from "../ProjectBrowserDialog";
 
 export type UnsavedChangesDecision = "cancel" | "discard" | "save";
 

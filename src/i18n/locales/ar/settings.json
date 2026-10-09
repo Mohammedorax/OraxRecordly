@@ -318,6 +318,16 @@
 			"hint": "حرق اسم المقطع مع تاريخ ووقت التسجيل داخل الفيديو.",
 			"title": "إظهار اسم المقطع والتاريخ"
 		},
+		"exportLocation": {
+			"hint": "تُحفَظ الصادرات في {{path}}",
+			"hintFallback": "تُحفَظ الصادرات في مجلد OraxRecordly.",
+			"title": "اسأل عن مكان الحفظ"
+		},
+		"estimatedSize": "الحجم المتوقع: نحو {{size}}",
+		"history": {
+			"reveal": "إظهار في المجلد",
+			"title": "آخر الصادرات"
+		},
 		"encodingTitle": "الترميز",
 		"format": "الصيغة",
 		"nvidiaCuda": {

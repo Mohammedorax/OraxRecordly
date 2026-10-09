@@ -1,18 +1,15 @@
-import { RecordNewButton } from "./RecordNewButton";
-import { RawPreview } from "./RawRecordings";
-import { ScreenshotGrid } from "./ScreenshotLibrary";
-import { ImageSquare } from "@/components/ui/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ProjectPreviewData } from "@/types/projectPreview";
-
 import { Button } from "@/components/ui/button";
+import { ImageSquare } from "@/components/ui/icons";
 import { useScopedT } from "@/contexts/I18nContext";
-
+import type { ProjectPreviewData } from "@/types/projectPreview";
 import { DashboardSettings } from "./DashboardSettings";
-
 import { ProjectCard } from "./ProjectCard";
 import { ProjectHoverPreview } from "./ProjectHoverPreview";
 import type { ProjectHoverPreviewReport } from "./ProjectThumbnail";
+import { RawPreview } from "./RawRecordings";
+import { RecordNewButton } from "./RecordNewButton";
+import { ScreenshotGrid } from "./ScreenshotLibrary";
 import type { DashboardProps } from "./types";
 
 import type { DashboardModel } from "./useDashboardModel";

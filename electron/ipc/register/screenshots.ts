@@ -3,20 +3,20 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { dialog, ipcMain, shell } from "electron";
 import {
-	readScreenshotPreferences,
-	type ScreenshotPreferencesPatch,
-	updateScreenshotPreferences,
-} from "../settings/screenshotPreferencesStore";
-import { resolveScreenshotsFolder } from "../screenshotStorage";
-import { captureScreenshotFromGlobalShortcut } from "./screenshot";
-import { registerScreenshotGlobalShortcut } from "../../screenshotShortcut";
-import {
 	SCREENSHOT_CHOOSE_FOLDER_CHANNEL,
 	SCREENSHOT_GET_FOLDER_CHANNEL,
 	SCREENSHOT_OPEN_FOLDER_CHANNEL,
 	SCREENSHOT_PREFERENCES_GET_CHANNEL,
 	SCREENSHOT_PREFERENCES_SET_CHANNEL,
 } from "../../screenshotEvents";
+import { registerScreenshotGlobalShortcut } from "../../screenshotShortcut";
+import { resolveScreenshotsFolder } from "../screenshotStorage";
+import {
+	readScreenshotPreferences,
+	type ScreenshotPreferencesPatch,
+	updateScreenshotPreferences,
+} from "../settings/screenshotPreferencesStore";
+import { captureScreenshotFromGlobalShortcut } from "./screenshot";
 
 /** Re-reads the stored accelerator and (re)registers it. Safe to call anytime. */
 export async function notifyScreenshotPreferencesChanged(): Promise<boolean> {

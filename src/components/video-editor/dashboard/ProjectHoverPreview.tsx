@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectPreviewData } from "@/types/projectPreview";
-import VideoPlayback, { type VideoPlaybackRef } from "../VideoPlayback";
 import { normalizeProjectEditor } from "../projectPersistence";
 import type { CursorTelemetryPoint } from "../types";
+import VideoPlayback, { type VideoPlaybackRef } from "../VideoPlayback";
 
 const ignore = () => undefined;
 /**

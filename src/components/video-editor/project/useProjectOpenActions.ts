@@ -6,13 +6,13 @@ import {
 	useCallback,
 	useEffect,
 } from "react";
-import type { useProjectSaveActions } from "./useProjectSaveActions";
 import { toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
 import { fromFileUrl, resolveVideoUrl } from "../projectPersistence";
 import type { useAppearanceState } from "../state/useAppearanceState";
 import type { useProjectState } from "../state/useProjectState";
 import type { VideoPlaybackRef } from "../VideoPlayback";
+import type { useProjectSaveActions } from "./useProjectSaveActions";
 
 type Set<T> = Dispatch<SetStateAction<T>>;
 

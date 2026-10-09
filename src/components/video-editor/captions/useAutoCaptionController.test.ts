@@ -1,5 +1,6 @@
-import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useAutoCaptionController } from "./useAutoCaptionController";
+
 const state = vi.hoisted(() => ({ refs: [] as { current: unknown }[], index: 0 }));
 vi.mock("react", () => ({
 	useCallback: (callback: unknown) => callback,

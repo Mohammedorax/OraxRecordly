@@ -1,7 +1,7 @@
-import { moveProjectFolderReferences } from "../dashboard/useProjectFolders";
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
+import { moveProjectFolderReferences } from "../dashboard/useProjectFolders";
 import { createProjectData, type EditorProjectData } from "../projectPersistence";
 import type { useProjectState } from "../state/useProjectState";
 import { cloneStructured, getErrorMessage } from "../videoEditorUtils";

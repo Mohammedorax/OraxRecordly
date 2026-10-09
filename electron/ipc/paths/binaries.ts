@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { app } from "electron";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
 import { nativeHelperMigrationPromise, setNativeHelperMigrationPromise } from "../state";
 
 const execFileAsync = promisify(execFile);
@@ -230,6 +231,7 @@ export async function ensureSwiftHelperBinary(
 
 	try {
 		await execFileAsync("swiftc", ["-O", sourcePath, "-o", binaryPath], {
+			...HIDDEN_WINDOW_OPTIONS,
 			encoding: "utf8",
 			timeout: 120000,
 		});

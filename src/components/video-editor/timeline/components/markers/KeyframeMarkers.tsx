@@ -1,8 +1,8 @@
-import { useTimelinePresentation } from "../../core/TimelinePresentation";
-import { getPlayheadDisplayTime, getTimeAtClipSeam } from "../../core/clipPresentation";
 import { useTimelineContext } from "dnd-timeline";
-import { useScopedT } from "@/contexts/I18nContext";
 import React, { useEffect, useState } from "react";
+import { useScopedT } from "@/contexts/I18nContext";
+import { getPlayheadDisplayTime, getTimeAtClipSeam } from "../../core/clipPresentation";
+import { useTimelinePresentation } from "../../core/TimelinePresentation";
 
 interface Keyframe {
 	id: string;

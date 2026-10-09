@@ -318,6 +318,16 @@
 			"hint": "Burn the clip name with the recording date and time into the video.",
 			"title": "Show clip name and date"
 		},
+		"exportLocation": {
+			"hint": "Exports are saved to {{path}}",
+			"hintFallback": "Exports are saved to your OraxRecordly folder.",
+			"title": "Ask where to save"
+		},
+		"estimatedSize": "Estimated size: about {{size}}",
+		"history": {
+			"reveal": "Show in folder",
+			"title": "Recent exports"
+		},
 		"encodingTitle": "Encoding",
 		"format": "Format",
 		"nvidiaCuda": {

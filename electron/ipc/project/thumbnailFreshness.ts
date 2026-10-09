@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import {
-	PROJECT_THUMBNAIL_WIDTH,
 	PROJECT_THUMBNAIL_HEIGHT,
+	PROJECT_THUMBNAIL_WIDTH,
 } from "../../../src/lib/projectThumbnail";
 
 // Older releases wrote 320px previews. Hide those and previews predating edits;

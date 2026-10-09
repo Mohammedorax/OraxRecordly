@@ -588,6 +588,8 @@ interface Window {
 			tempPath: string;
 			fileName: string;
 			outputPath?: string | null;
+			/** Default destination folder; the main process picks a collision-free name. */
+			saveDirectory?: string | null;
 			captionSidecar?: {
 				format: "srt" | "vtt" | "both";
 				cues: Array<{
@@ -604,6 +606,17 @@ interface Window {
 			error?: string;
 		}>;
 		discardExportedTemp: (tempPath: string) => Promise<{ success: boolean; error?: string }>;
+		getExportDirectory: () => Promise<{ success: boolean; path?: string; error?: string }>;
+		warmNativeExport: (options?: {
+			encodingMode?: string;
+		}) => Promise<{ success: boolean; error?: string }>;
+		/** Windows taskbar progress; pass -1 to clear it. */
+		setExportProgress: (value: number) => Promise<{ success: boolean; error?: string }>;
+		notifyExportComplete: (payload: {
+			title?: string;
+			body?: string;
+			filePath?: string;
+		}) => Promise<{ success: boolean; error?: string }>;
 		getVideoAudioFallbackPaths: (videoPath: string) => Promise<{
 			success: boolean;
 			paths: string[];

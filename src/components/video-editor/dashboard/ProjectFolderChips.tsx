@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useScopedT } from "@/contexts/I18nContext";
 import { FolderSimple } from "@/components/ui/icons";
+import { useScopedT } from "@/contexts/I18nContext";
 
 type Folder = { id: string; name: string; color: string };
 export function ProjectFolderChips({

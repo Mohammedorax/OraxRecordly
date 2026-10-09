@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
 import type { Dirent, Stats } from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { SystemWallpaperSource } from "./types";
 

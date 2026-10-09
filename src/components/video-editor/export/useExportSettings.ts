@@ -24,6 +24,8 @@ export function useExportSettings(
 	// On by default: the label is the requested "clip name + recording date/time"
 	// badge, and the export dialog can switch it off per export.
 	const [showRecordingLabel, setShowRecordingLabel] = useState(true);
+	// Off by default: exports are written straight to the visible exports folder.
+	const [alwaysAskExportLocation, setAlwaysAskExportLocation] = useState(false);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(preferences.exportQuality);
 	const [exportEncodingMode, setExportEncodingMode] = useState<ExportEncodingMode>(
 		preferences.exportEncodingMode,
@@ -61,6 +63,8 @@ export function useExportSettings(
 		setIncludeCaptionSidecar,
 		showRecordingLabel,
 		setShowRecordingLabel,
+		alwaysAskExportLocation,
+		setAlwaysAskExportLocation,
 		exportQuality,
 		setExportQuality,
 		exportEncodingMode,

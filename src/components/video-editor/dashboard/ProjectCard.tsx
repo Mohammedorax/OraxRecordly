@@ -1,13 +1,13 @@
-import { ProjectFolderChips } from "./ProjectFolderChips";
-import { RawThumbnail } from "./RawRecordings";
 import { Dropdown } from "@heroui/react";
-import { Check, DotsThree, FolderSimple, Plus } from "@/components/ui/icons";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Check, DotsThree, FolderSimple, Plus } from "@/components/ui/icons";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { formatLocaleDate } from "@/utils/localeFormatUtils";
 import type { ProjectLibraryEntry } from "../ProjectBrowserDialog";
-import { ProjectThumbnail, type ProjectHoverPreviewReport } from "./ProjectThumbnail";
+import { ProjectFolderChips } from "./ProjectFolderChips";
+import { type ProjectHoverPreviewReport, ProjectThumbnail } from "./ProjectThumbnail";
+import { RawThumbnail } from "./RawRecordings";
 import type { DashboardProps } from "./types";
 import type { DashboardModel } from "./useDashboardModel";
 

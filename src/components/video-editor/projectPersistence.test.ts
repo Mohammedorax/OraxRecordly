@@ -1,17 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
+import {
+	createEditorHistoryStack,
+	type EditorHistorySnapshot,
+	recordEditorHistorySnapshot,
+	undoEditorHistoryStack,
+} from "./editorHistory";
 import {
 	getDefaultBorderRadiusPercent,
 	legacyBorderRadiusPixelsToPercent,
 	normalizeProjectEditor,
 	resolveVideoUrl,
 } from "./projectPersistence";
-import {
-	createEditorHistoryStack,
-	recordEditorHistorySnapshot,
-	undoEditorHistoryStack,
-	type EditorHistorySnapshot,
-} from "./editorHistory";
 import { ADVANCED_VERTICAL_PADDING_MAX } from "./types";
 
 afterEach(() => vi.unstubAllGlobals());

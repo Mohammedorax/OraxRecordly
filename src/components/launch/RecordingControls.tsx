@@ -1,4 +1,5 @@
 import { Button, Separator, Tooltip } from "@heroui/react";
+import { useEffect, useState } from "react";
 import {
 	House,
 	MicrophoneIcon,
@@ -8,7 +9,6 @@ import {
 	PlayIcon,
 	XIcon,
 } from "@/components/ui/icons";
-import { useEffect, useState } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import styles from "./LaunchWindow.module.css";
 import { ScreenshotButton } from "./ScreenshotButton";

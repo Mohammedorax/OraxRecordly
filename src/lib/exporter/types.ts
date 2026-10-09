@@ -194,6 +194,8 @@ export interface ExportSettings {
 	includeCaptionSidecar?: boolean;
 	/** Burn the clip name + recording date/time badge into the exported frames. */
 	showRecordingLabel?: boolean;
+	/** Show the save dialog instead of writing to the default exports folder. */
+	alwaysAskExportLocation?: boolean;
 	// MP4 settings
 	quality?: ExportQuality;
 	encodingMode?: ExportEncodingMode;

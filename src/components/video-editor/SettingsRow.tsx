@@ -1,4 +1,4 @@
-import { Label, Description } from "@heroui/react";
+import { Description, Label } from "@heroui/react";
 import type { ReactNode } from "react";
 
 /** One spacing and typography contract for editor and dashboard preferences. */

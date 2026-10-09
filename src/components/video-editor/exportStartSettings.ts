@@ -18,6 +18,7 @@ export function resolveExportStartSettings({
 	exportFormat,
 	includeCaptionSidecar,
 	showRecordingLabel,
+	alwaysAskExportLocation,
 	exportEncodingMode,
 	exportQuality,
 	mp4FrameRate,
@@ -32,6 +33,7 @@ export function resolveExportStartSettings({
 	exportFormat: ExportFormat;
 	includeCaptionSidecar: boolean;
 	showRecordingLabel: boolean;
+	alwaysAskExportLocation: boolean;
 	exportEncodingMode: ExportEncodingMode;
 	exportQuality: ExportQuality;
 	mp4FrameRate: ExportMp4FrameRate;
@@ -50,6 +52,7 @@ export function resolveExportStartSettings({
 		format: exportFormat,
 		includeCaptionSidecar: exportFormat === "mp4" ? includeCaptionSidecar : false,
 		showRecordingLabel: exportFormat === "mp4" ? showRecordingLabel : false,
+		alwaysAskExportLocation: exportFormat === "mp4" ? alwaysAskExportLocation : false,
 		encodingMode: exportFormat === "mp4" ? exportEncodingMode : undefined,
 		mp4FrameRate: exportFormat === "mp4" ? mp4FrameRate : undefined,
 		backendPreference: exportFormat === "mp4" ? exportBackendPreference : undefined,

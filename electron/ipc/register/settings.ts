@@ -1,8 +1,8 @@
-import { createCountdownController } from "../../countdownController";
 import fs from "node:fs/promises";
 import { app, BrowserWindow, ipcMain } from "electron";
-import { resolveAppSettingGet, resolveAppSettingSet } from "../../synchronousIpcBootstrap";
+import { createCountdownController } from "../../countdownController";
 import { hideCursor } from "../../cursorHider";
+import { resolveAppSettingGet, resolveAppSettingSet } from "../../synchronousIpcBootstrap";
 import { createCountdownWindow } from "../../windows";
 import { COUNTDOWN_SETTINGS_FILE, RECORDINGS_SETTINGS_FILE, SHORTCUTS_FILE } from "../constants";
 import {

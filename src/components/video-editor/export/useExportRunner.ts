@@ -11,6 +11,7 @@ import { resolveMp4ExportRouting } from "../mp4ExportRouting";
 import { resolveMp4ExportSettings } from "../mp4ExportSettings";
 import { createSmokeExportProgressSampler } from "../smokeExportProgress";
 import { buildExportRenderOptions } from "./buildExportRenderOptions";
+import { recordExportHistory } from "./exportHistory";
 import {
 	type PendingExportSave,
 	saveExportBlob,
@@ -99,6 +100,33 @@ export function useExportRunner(input: ExportRunnerInput) {
 						})
 					: undefined;
 
+			// Default destination: the app's visible exports folder. When the user asks
+			// to always choose, leave it null so the save dialog appears instead.
+			let exportSaveDirectory: string | null = null;
+			if (
+				settings.alwaysAskExportLocation !== true &&
+				!smokeExportConfig.enabled &&
+				window.electronAPI?.getExportDirectory
+			) {
+				const exportDirectoryResult = await window.electronAPI.getExportDirectory();
+				if (exportDirectoryResult?.success && exportDirectoryResult.path) {
+					exportSaveDirectory = exportDirectoryResult.path;
+				}
+			}
+
+			// Windows taskbar progress, throttled: the bar only needs a few updates
+			// per second and each one is an IPC round trip.
+			let lastTaskbarUpdateMs = 0;
+			const reportTaskbarProgress = (percentage: number) => {
+				if (smokeExportConfig.enabled || !Number.isFinite(percentage)) return;
+				const nowMs = performance.now();
+				if (nowMs - lastTaskbarUpdateMs < 250) return;
+				lastTaskbarUpdateMs = nowMs;
+				void window.electronAPI
+					?.setExportProgress?.(Math.min(1, Math.max(0, percentage / 100)))
+					.catch(() => undefined);
+			};
+
 			const exportRunId = exportRunIdRef.current + 1;
 			exportRunIdRef.current = exportRunId;
 			cancelledExportRunIdRef.current = null;
@@ -168,6 +196,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 							onProgress: (progress) => {
 								if (exportWasCancelled()) return;
 								recordSmokeProgress(progress);
+								reportTaskbarProgress(progress.percentage);
 								setExportProgress(progress);
 							},
 						}),
@@ -230,6 +259,24 @@ export function useExportRunner(input: ExportRunnerInput) {
 							}
 							showExportSuccessToast(saveResult.path);
 							setExportedFilePath(saveResult.path);
+							recordExportHistory({
+								path: saveResult.path,
+								name: fileName,
+								format: settings.format === "gif" ? "gif" : "mp4",
+							});
+							// Ping the user when the app is not in front: long exports are
+							// usually started and then left alone.
+							if (!smokeExportConfig.enabled && !document.hasFocus()) {
+								void window.electronAPI
+									?.notifyExportComplete?.({
+										title: t("export.completeTitle", "Export complete"),
+										body: t("export.completeBody", "{{name}} is ready.", {
+											name: fileName,
+										}),
+										filePath: saveResult.path,
+									})
+									.catch(() => undefined);
+							}
 							if (smokeExportConfig.enabled) {
 								window.close();
 								return;
@@ -354,6 +401,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 							onProgress: (progress) => {
 								if (exportWasCancelled()) return;
 								recordSmokeProgress(progress);
+								reportTaskbarProgress(progress.percentage);
 								setExportProgress(progress);
 							},
 						}),
@@ -437,6 +485,9 @@ export function useExportRunner(input: ExportRunnerInput) {
 									smokeExportConfig.enabled && smokeExportConfig.outputPath
 										? smokeExportConfig.outputPath
 										: null,
+								saveDirectory: smokeExportConfig.enabled
+									? null
+									: exportSaveDirectory,
 								captionSidecar: sidecarForThisExport,
 							});
 							if (exportWasCancelled()) {
@@ -461,6 +512,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 								fileName,
 								smokeExportConfig.enabled ? smokeExportConfig.outputPath : null,
 								sidecarForThisExport,
+								smokeExportConfig.enabled ? null : exportSaveDirectory,
 							);
 							if (exportWasCancelled()) {
 								await discardCancelledTemp(blobSave.pendingSave);
@@ -530,6 +582,24 @@ export function useExportRunner(input: ExportRunnerInput) {
 							}
 							showExportSuccessToast(saveResult.path);
 							setExportedFilePath(saveResult.path);
+							recordExportHistory({
+								path: saveResult.path,
+								name: fileName,
+								format: settings.format === "gif" ? "gif" : "mp4",
+							});
+							// Ping the user when the app is not in front: long exports are
+							// usually started and then left alone.
+							if (!smokeExportConfig.enabled && !document.hasFocus()) {
+								void window.electronAPI
+									?.notifyExportComplete?.({
+										title: t("export.completeTitle", "Export complete"),
+										body: t("export.completeBody", "{{name}} is ready.", {
+											name: fileName,
+										}),
+										filePath: saveResult.path,
+									})
+									.catch(() => undefined);
+							}
 							if (smokeExportConfig.enabled) {
 								window.close();
 								return;
@@ -635,6 +705,8 @@ export function useExportRunner(input: ExportRunnerInput) {
 					window.close();
 				}
 			} finally {
+				// Never leave a stuck taskbar progress bar behind.
+				void window.electronAPI?.setExportProgress?.(-1).catch(() => undefined);
 				if (exportWasExplicitlyCancelled() && exportRunIdRef.current === exportRunId + 1) {
 					video.currentTime = restoreTime;
 					if (wasPlaying) {

@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+
 const native = vi.hoisted(() =>
 	Object.assign(
 		vi.fn(() => "toast-key"),
@@ -12,7 +13,9 @@ const native = vi.hoisted(() =>
 	),
 );
 vi.mock("@heroui/react", () => ({ Toast: { Provider: () => null }, toast: native }));
+
 import { toast } from "./toast";
+
 afterEach(() => {
 	toast.dismiss();
 	vi.clearAllMocks();

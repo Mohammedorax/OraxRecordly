@@ -1,7 +1,7 @@
 import { Dropdown, Input } from "@heroui/react";
-import { DotsThree } from "@/components/ui/icons";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DotsThree } from "@/components/ui/icons";
 import { useScopedT } from "@/contexts/I18nContext";
 import { FolderColors } from "./FolderColors";
 import type { ProjectFolder } from "./useProjectFolders";

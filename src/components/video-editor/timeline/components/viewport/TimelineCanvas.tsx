@@ -1,6 +1,3 @@
-import { useTimelinePresentation } from "../../core/TimelinePresentation";
-import { Plus } from "@/components/ui/icons";
-import { useScopedT } from "@/contexts/I18nContext";
 import { useTimelineContext } from "dnd-timeline";
 import {
 	type MouseEvent,
@@ -12,11 +9,20 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { Plus } from "@/components/ui/icons";
 import type {
 	SourceAudioTrackSettings,
 	SourceAudioTrackWithPeaks,
 } from "@/components/video-editor/audio/audioTypes";
+import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
+import {
+	type ClipPresentation,
+	getEmbeddedCaptionSpan,
+	getPlayheadDisplayTime,
+	getRegionDisplaySpan,
+	getTimeAtClipSeam,
+} from "../../core/clipPresentation";
 import {
 	CAPTION_ROW_ID,
 	CLIP_ROW_ID,
@@ -31,19 +37,13 @@ import {
 	isAnnotationTrackRowId,
 	isAudioTrackRowId,
 } from "../../core/rows";
+import { useTimelinePresentation } from "../../core/TimelinePresentation";
 import type { TimelineRenderItem } from "../../core/timelineTypes";
 import { DEFAULT_CAPTION_DURATION_MS } from "../../hooks/actions/useTimelineCaptionActions";
 import { useTimelineAudioPeaks } from "../../hooks/useTimelineAudioPeaks";
 import Item from "../../Item";
 import glassStyles from "../../ItemGlass.module.css";
 import Row from "../../Row";
-import {
-	type ClipPresentation,
-	getEmbeddedCaptionSpan,
-	getTimeAtClipSeam,
-	getRegionDisplaySpan,
-	getPlayheadDisplayTime,
-} from "../../core/clipPresentation";
 import {
 	getTimelineContentMinHeightPx,
 	getTimelineRowsMinHeightPx,

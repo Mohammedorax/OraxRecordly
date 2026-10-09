@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 import { DashboardAnnouncements } from "./DashboardAnnouncements";
 
 // The component reads its labels from the i18n context, which is not mounted in

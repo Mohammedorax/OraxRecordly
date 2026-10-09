@@ -1,4 +1,4 @@
-import { Dropdown, Label, Separator, Kbd } from "@heroui/react";
+import { Dropdown, Kbd, Label, Separator } from "@heroui/react";
 import { type ComponentProps, type ReactNode } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 export function DropdownMenu({

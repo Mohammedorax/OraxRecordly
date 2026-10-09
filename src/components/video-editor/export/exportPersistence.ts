@@ -89,6 +89,7 @@ export async function saveExportBlob(
 	fileName: string,
 	outputPath: string | null = null,
 	captionSidecar?: PendingExportSave["captionSidecar"],
+	saveDirectory: string | null = null,
 ) {
 	const extension = fileName.split(".").pop()?.toLowerCase() || "bin";
 	const hasExportStreamApi =
@@ -106,6 +107,7 @@ export async function saveExportBlob(
 					tempPath: tempFilePath,
 					fileName,
 					outputPath,
+					saveDirectory,
 					captionSidecar,
 				}),
 				pendingSave: { fileName, tempFilePath, captionSidecar } satisfies PendingExportSave,

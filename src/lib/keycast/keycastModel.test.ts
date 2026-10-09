@@ -13,15 +13,15 @@ import {
 	formatKeycastKeys,
 	formatKeycastToken,
 	isSuppressedKeycastStroke,
+	KEYCAST_FADE_MS,
+	type KeycastKeystroke,
 	keycastKeyForKeycode,
 	keycastModifierForKeycode,
-	type KeycastKeystroke,
 	normalizeKeycastKeystrokes,
 	normalizeKeycastSettings,
 	resolveKeycastBadge,
 	resolveKeycastBadgeOrigin,
 	serializeKeycastSettings,
-	KEYCAST_FADE_MS,
 } from "./keycastModel";
 
 function stroke(timeMs: number, ...keys: string[]): KeycastKeystroke {

@@ -13,8 +13,9 @@ import {
 	systemPreferences,
 } from "electron";
 import { getHudCaptureExcludedProcessIds } from "../../../src/lib/hudCaptureProtection";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
 import { showCursor } from "../../cursorHider";
-import { getHudOverlayCaptureProtectionEnabled, beginHudCaptureProtection } from "../../windows";
+import { beginHudCaptureProtection, getHudOverlayCaptureProtectionEnabled } from "../../windows";
 import { ALLOW_RECORDLY_WINDOW_CAPTURE } from "../constants";
 import { startWindowBoundsCapture, stopWindowBoundsCapture } from "../cursor/bounds";
 import { startInteractionCapture, stopInteractionCapture } from "../cursor/interaction";
@@ -357,6 +358,7 @@ async function getSystemCursorAssets() {
 		"recordly-system-cursors",
 	);
 	const { stdout } = await execFileAsync(binaryPath, [], {
+		...HIDDEN_WINDOW_OPTIONS,
 		timeout: 15000,
 		maxBuffer: 20 * 1024 * 1024,
 	});
@@ -847,6 +849,7 @@ export function registerRecordingHandlers(
 					setWindowsCapturePaused(false);
 
 					wcProc = spawn(exePath, [JSON.stringify(config)], {
+						...HIDDEN_WINDOW_OPTIONS,
 						cwd: recordingsDir,
 						stdio: ["pipe", "pipe", "pipe"],
 						env: process.env,
@@ -1070,6 +1073,7 @@ export function registerRecordingHandlers(
 				setNativeCaptureStopRequested(false);
 				setNativeCapturePaused(false);
 				captProc = spawn(helperPath, [JSON.stringify(config)], {
+					...HIDDEN_WINDOW_OPTIONS,
 					cwd: recordingsDir,
 					stdio: ["pipe", "pipe", "pipe"],
 				});
@@ -1676,6 +1680,7 @@ export function registerRecordingHandlers(
 			setFfmpegCaptureOutputBuffer("");
 			setFfmpegCaptureTargetPath(outputPath);
 			const ffProc = spawn(ffmpegPath, args, {
+				...HIDDEN_WINDOW_OPTIONS,
 				cwd: recordingsDir,
 				stdio: ["pipe", "pipe", "pipe"],
 			});
@@ -1790,7 +1795,7 @@ export function registerRecordingHandlers(
 						"pcm_s16le",
 						sidecarPath,
 					],
-					{ timeout: 120000, maxBuffer: 10 * 1024 * 1024 },
+					{ ...HIDDEN_WINDOW_OPTIONS, timeout: 120000, maxBuffer: 10 * 1024 * 1024 },
 				);
 				if (shouldKeepRecordingAudioSidecars()) {
 					await fs.rename(tempWebmPath, sourceWebmPath).catch(async () => {

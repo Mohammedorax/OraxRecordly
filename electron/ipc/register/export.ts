@@ -4,7 +4,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Readable, Writable } from "node:stream";
 import type { SaveDialogOptions } from "electron";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from "electron";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
+import { acquireExportActivity, releaseExportActivity } from "../../exportPowerGuard";
+import { ensureExportDirectory, resolveAvailableExportPath } from "../export/exportDirectory";
 import {
 	closeExportStream,
 	isOwnedExportPath,
@@ -44,8 +47,12 @@ import {
 	type NativeExportEncodingMode,
 	type NativeVideoExportFinishOptions,
 } from "../nativeVideoExport";
-import { isAllowedLocalReadPath, resolveApprovedLocalMediaPath } from "../project/manager";
-import { approveUserPath } from "../utils";
+import {
+	isAllowedLocalReadPath,
+	isPathInsideDirectory,
+	resolveApprovedLocalMediaPath,
+} from "../project/manager";
+import { approveUserPath, getRecordingsDir } from "../utils";
 import {
 	type CaptionSidecarPayload,
 	parseCaptionSidecarPayload,
@@ -285,6 +292,7 @@ export function registerExportHandlers() {
 				}
 
 				const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs, {
+					...HIDDEN_WINDOW_OPTIONS,
 					stdio: ["pipe", "ignore", "pipe"],
 				}) as ChildProcessByStdio<Writable, null, Readable>;
 				// For rawvideo, frames are a fixed RGBA size. For h264-stream, chunks are variable.
@@ -363,6 +371,7 @@ export function registerExportHandlers() {
 				});
 
 				nativeVideoExportSessions.set(sessionId, session);
+				acquireExportActivity(`native:${sessionId}`);
 
 				console.log(
 					`[native-export] Started ${isHardwareAcceleratedVideoEncoder(encoderName) ? "hardware" : "software"} session ${sessionId} with ${encoderName}`,
@@ -668,6 +677,7 @@ export function registerExportHandlers() {
 					options ?? {},
 				);
 				nativeVideoExportSessions.delete(sessionId);
+				releaseExportActivity(`native:${sessionId}`);
 				// Register the finalized path so only app-produced paths can flow back
 				// through finalize-exported-video / discard-exported-temp.
 				registerOwnedExportPath(finalized.outputPath);
@@ -690,6 +700,7 @@ export function registerExportHandlers() {
 			} catch (error) {
 				flushNativeVideoExportPendingWriteRequests(sessionId, session, String(error));
 				nativeVideoExportSessions.delete(sessionId);
+				releaseExportActivity(`native:${sessionId}`);
 				await removeTemporaryExportFile(session.outputPath);
 				const finalizedSuffix = session.outputPath.replace(/\.mp4$/, "-final.mp4");
 				await removeTemporaryExportFile(finalizedSuffix);
@@ -771,6 +782,7 @@ export function registerExportHandlers() {
 	ipcMain.handle("export-stream-open", async (_event, options?: { extension?: string }) => {
 		try {
 			const result = await openExportStream(options);
+			acquireExportActivity(`stream:${result.streamId}`);
 			return { success: true, streamId: result.streamId, tempPath: result.tempPath };
 		} catch (error) {
 			return { success: false, error: String(error) };
@@ -794,6 +806,7 @@ export function registerExportHandlers() {
 		async (_event, streamId: string, options?: { abort?: boolean }) => {
 			try {
 				const result = await closeExportStream(streamId, options);
+				releaseExportActivity(`stream:${streamId}`);
 				return {
 					success: true,
 					tempPath: result.tempPath,
@@ -813,6 +826,7 @@ export function registerExportHandlers() {
 
 		session.terminating = true;
 		nativeVideoExportSessions.delete(sessionId);
+		releaseExportActivity(`native:${sessionId}`);
 		flushNativeVideoExportPendingWriteRequests(
 			sessionId,
 			session,
@@ -961,6 +975,82 @@ export function registerExportHandlers() {
 		},
 	);
 
+	ipcMain.handle("get-export-directory", async () => {
+		try {
+			const exportDir = await ensureExportDirectory(await getRecordingsDir());
+			return { success: true, path: exportDir };
+		} catch (error) {
+			return { success: false, error: String(error) };
+		}
+	});
+
+	// Resolving the native encoder runs `ffmpeg -encoders` plus probe encodes.
+	// Warming it while the export menu is open keeps that cost off the export.
+	ipcMain.handle(
+		"warm-native-export",
+		async (_event, options?: { encodingMode?: NativeExportEncodingMode }) => {
+			try {
+				await resolveNativeVideoEncoder(
+					getFfmpegBinaryPath(),
+					options?.encodingMode ?? "balanced",
+				);
+				return { success: true };
+			} catch (error) {
+				return { success: false, error: String(error) };
+			}
+		},
+	);
+
+	// Windows taskbar progress (-1 clears it, 2 would be indeterminate).
+	ipcMain.handle("set-export-progress", (event, value: number) => {
+		try {
+			const target =
+				BrowserWindow.fromWebContents(event.sender) ??
+				BrowserWindow.getAllWindows()[0] ??
+				null;
+			if (!target) {
+				return { success: false, error: "No window for export progress" };
+			}
+			const progress =
+				typeof value === "number" && Number.isFinite(value)
+					? Math.max(-1, Math.min(1, value))
+					: -1;
+			target.setProgressBar(progress);
+			return { success: true };
+		} catch (error) {
+			return { success: false, error: String(error) };
+		}
+	});
+
+	ipcMain.handle(
+		"notify-export-complete",
+		(_event, payload?: { title?: string; body?: string; filePath?: string }) => {
+			try {
+				if (!Notification.isSupported()) {
+					return { success: false, error: "Notifications are unavailable" };
+				}
+				const notification = new Notification({
+					title: payload?.title?.trim() || "Export complete",
+					body: payload?.body?.trim() || "Your video is ready.",
+				});
+				const filePath = payload?.filePath;
+				if (filePath) {
+					notification.on("click", () => {
+						try {
+							shell.showItemInFolder(filePath);
+						} catch {
+							// The file may have been moved; nothing else to do.
+						}
+					});
+				}
+				notification.show();
+				return { success: true };
+			} catch (error) {
+				return { success: false, error: String(error) };
+			}
+		},
+	);
+
 	ipcMain.handle(
 		"finalize-exported-video",
 		async (
@@ -969,6 +1059,7 @@ export function registerExportHandlers() {
 				tempPath: string;
 				fileName: string;
 				outputPath?: string | null;
+				saveDirectory?: string | null;
 				captionSidecar?: CaptionSidecarPayload;
 			},
 		) => {
@@ -996,8 +1087,7 @@ export function registerExportHandlers() {
 
 			try {
 				const sidecarPayload = parseCaptionSidecarPayload(payload.captionSidecar);
-				if (payload.outputPath) {
-					const resolvedPath = path.resolve(payload.outputPath);
+				const completeSave = async (resolvedPath: string) => {
 					await moveExportedTempFile(tempPath, resolvedPath);
 					releaseOwnedExportPath(tempPath);
 					const captionSidecarResult = await writeCaptionSidecarsBestEffort(
@@ -1014,6 +1104,27 @@ export function registerExportHandlers() {
 							captionSidecarResult,
 						),
 					};
+				};
+
+				if (payload.outputPath) {
+					return await completeSave(path.resolve(payload.outputPath));
+				}
+
+				// Default destination: the app's visible exports folder, so the file
+				// lands next to the recordings instead of a hidden temp folder.
+				if (payload.saveDirectory) {
+					const recordingsDir = await getRecordingsDir();
+					const resolvedDirectory = path.resolve(payload.saveDirectory);
+					if (!isPathInsideDirectory(resolvedDirectory, recordingsDir)) {
+						return {
+							success: false,
+							error: "Export folder is outside the app library",
+						};
+					}
+					await fs.mkdir(resolvedDirectory, { recursive: true });
+					return await completeSave(
+						await resolveAvailableExportPath(resolvedDirectory, fileName),
+					);
 				}
 
 				const isGif = fileName.toLowerCase().endsWith(".gif");

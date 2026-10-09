@@ -233,6 +233,8 @@
 		"canceled": "تم إلغاء التصدير",
 		"encodingNotSupported": "ترميز الفيديو غير مدعوم على هذا النظام. جرت محاولة الترميز {{codec}} عند {{frameRate}} FPS وبحد أقصى {{width}}x{{height}}.",
 		"exportedTo": "تم التصدير بنجاح إلى {{path}}",
+		"completeTitle": "اكتمل التصدير",
+		"completeBody": "{{name}} جاهز.",
 		"exportFailed": "فشل التصدير",
 		"exportFailedWithError": "فشل التصدير: {{error}}",
 		"failedToRevealInFolder": "فشل إظهار العنصر في المجلد.",

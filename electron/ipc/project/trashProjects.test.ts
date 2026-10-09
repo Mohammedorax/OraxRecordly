@@ -1,6 +1,7 @@
 import path from "node:path";
 import { expect, it, vi } from "vitest";
 import { trashLibraryProjects } from "./trashProjects";
+
 // The library paths the API returns are host paths: the module resolves every
 // input with `path.resolve`, so the expectations must go through it too instead
 // of hardcoding POSIX separators.

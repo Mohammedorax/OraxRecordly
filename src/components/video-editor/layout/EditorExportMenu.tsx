@@ -1,9 +1,14 @@
 import { Card, ProgressBar } from "@heroui/react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DownloadSimple as Download } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toast";
 import type { useI18n } from "@/contexts/I18nContext";
+import {
+	estimateMp4ExportSizeBytes,
+	formatEstimatedExportSize,
+} from "@/lib/exporter/exportSizeEstimate";
 import { ExportSettingsMenu } from "../ExportSettingsMenu";
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
@@ -17,6 +22,8 @@ type Props = {
 	exportDimensions: ReturnType<typeof useExportDimensions>;
 	exportStatus: ReturnType<typeof useExportStatusViewModel>;
 	hasCaptionsForSidecar: boolean;
+	/** Timeline duration in seconds, used for the pre-export size estimate. */
+	effectiveDurationSec: number;
 	nvidiaCudaExportAvailable: boolean;
 	experimentalNvidiaCudaExport: boolean;
 	setExperimentalNvidiaCudaExport: (enabled: boolean) => void;
@@ -37,6 +44,7 @@ export function EditorExportMenu(props: Props) {
 		exportDimensions,
 		exportStatus,
 		hasCaptionsForSidecar,
+		effectiveDurationSec,
 		nvidiaCudaExportAvailable,
 		experimentalNvidiaCudaExport,
 		setExperimentalNvidiaCudaExport,
@@ -68,6 +76,8 @@ export function EditorExportMenu(props: Props) {
 		setIncludeCaptionSidecar,
 		showRecordingLabel,
 		setShowRecordingLabel,
+		alwaysAskExportLocation,
+		setAlwaysAskExportLocation,
 	} = exportSettings;
 	const {
 		isExporting,
@@ -92,6 +102,54 @@ export function EditorExportMenu(props: Props) {
 		runtimeLabel: exportRuntimeLabel,
 		nativeSkipLabel: exportNativeSkipLabel,
 	} = exportStatus;
+
+	// Shown next to the "ask where to save" switch so the destination is obvious.
+	const [exportDirectoryPath, setExportDirectoryPath] = useState<string | null>(null);
+	const estimatedSizeLabel = useMemo(() => {
+		if (exportFormat !== "mp4" || effectiveDurationSec <= 0) {
+			return null;
+		}
+		const dimensions = mp4OutputDimensions?.[exportQuality];
+		if (!dimensions) {
+			return null;
+		}
+		const bytes = estimateMp4ExportSizeBytes({
+			width: dimensions.width,
+			height: dimensions.height,
+			frameRate: mp4FrameRate,
+			quality: exportQuality,
+			encodingMode: exportEncodingMode,
+			durationSec: effectiveDurationSec,
+		});
+		return formatEstimatedExportSize(bytes) || null;
+	}, [
+		exportFormat,
+		effectiveDurationSec,
+		mp4OutputDimensions,
+		exportQuality,
+		mp4FrameRate,
+		exportEncodingMode,
+	]);
+	useEffect(() => {
+		if (!showExportDropdown) return;
+		let cancelled = false;
+		void window.electronAPI
+			?.getExportDirectory?.()
+			.then((result) => {
+				if (!cancelled && result?.success && result.path) {
+					setExportDirectoryPath(result.path);
+				}
+			})
+			.catch(() => undefined);
+		// Warm the native encoder while the dialog is open so the first export
+		// does not pay for `ffmpeg -encoders` and the probe encode.
+		void window.electronAPI
+			?.warmNativeExport?.({ encodingMode: exportEncodingMode })
+			.catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, [showExportDropdown, exportEncodingMode]);
 
 	return (
 		<>
@@ -332,6 +390,10 @@ export function EditorExportMenu(props: Props) {
 							onIncludeCaptionSidecarChange={setIncludeCaptionSidecar}
 							showRecordingLabel={showRecordingLabel}
 							onShowRecordingLabelChange={setShowRecordingLabel}
+							alwaysAskExportLocation={alwaysAskExportLocation}
+							onAlwaysAskExportLocationChange={setAlwaysAskExportLocation}
+							exportDirectoryPath={exportDirectoryPath}
+							estimatedSizeLabel={estimatedSizeLabel}
 							mp4OutputDimensions={mp4OutputDimensions}
 							gifOutputDimensions={gifOutputDimensions}
 							onExport={handleStartExportFromDropdown}

@@ -1,10 +1,9 @@
+import { Button } from "@/components/ui/button";
+import { File, GearSix, House, ImageSquare, Plus } from "@/components/ui/icons";
+import { useScopedT } from "@/contexts/I18nContext";
+import { FolderRow } from "./FolderRow";
 import { RecordNewButton } from "./RecordNewButton";
 import { SidebarCards } from "./SidebarCards";
-import { FolderRow } from "./FolderRow";
-import { File, GearSix, House, ImageSquare, Plus } from "@/components/ui/icons";
-
-import { Button } from "@/components/ui/button";
-import { useScopedT } from "@/contexts/I18nContext";
 
 import type { DashboardProps } from "./types";
 

@@ -1,7 +1,5 @@
-import { Kbd, Description, Modal } from "@heroui/react";
-import { Keyboard, ArrowCounterClockwise as RotateCcw } from "@/components/ui/icons";
+import { Description, Kbd, Modal } from "@heroui/react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -10,6 +8,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { Keyboard, ArrowCounterClockwise as RotateCcw } from "@/components/ui/icons";
+import { toast } from "@/components/ui/toast";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
 import {
 	DEFAULT_SCREENSHOT_SHORTCUT,

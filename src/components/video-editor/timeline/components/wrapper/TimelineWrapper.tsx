@@ -1,4 +1,3 @@
-import { TimelinePresentation } from "../../core/TimelinePresentation";
 import { KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type {
 	DragEndEvent,
@@ -12,6 +11,7 @@ import type {
 import { TimelineContext } from "dnd-timeline";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useCallback, useRef } from "react";
+import { TimelinePresentation } from "../../core/TimelinePresentation";
 import type { ClipSequenceSpan, TimelineRegionSpan } from "../../core/timelineTypes";
 import { clampRange, resolveDragEnd, resolveResizeEnd } from "../../dnd/engine";
 

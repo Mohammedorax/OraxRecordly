@@ -1,5 +1,6 @@
 import { Label, Slider } from "@heroui/react";
 import { memo } from "react";
+
 interface SliderControlProps {
 	label: string;
 	ariaLabel?: string;

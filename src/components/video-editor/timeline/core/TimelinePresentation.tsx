@@ -1,8 +1,8 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useTimelineContext } from "dnd-timeline";
-import { CLIP_ROW_ID } from "./constants";
-import { getClipDisplaySpan, type ClipPresentation } from "./clipPresentation";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import type { DndEngineConfig } from "../dnd/engine";
+import { type ClipPresentation, getClipDisplaySpan } from "./clipPresentation";
+import { CLIP_ROW_ID } from "./constants";
 import type { TimelineRegionSpan } from "./timelineTypes";
 
 type PreviewConfig = Pick<

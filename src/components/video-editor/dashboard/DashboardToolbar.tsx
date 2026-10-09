@@ -1,6 +1,6 @@
-import { MagnifyingGlass, UploadSimple } from "@/components/ui/icons";
 import { type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
+import { MagnifyingGlass, UploadSimple } from "@/components/ui/icons";
 
 import { Input } from "@/components/ui/input";
 import { useScopedT } from "@/contexts/I18nContext";

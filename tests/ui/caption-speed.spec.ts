@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Locator } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { installDesktopBridge } from "./bridge";
 import { filmstripFrames } from "./filmstrip";
 

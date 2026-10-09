@@ -1,23 +1,23 @@
-import { probeNativeVideoMetadata } from "../ffmpeg/metadata";
-import { isLibrarySequenceSource } from "./sequenceSource";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import type { KeycastKeystroke } from "../../../src/lib/keycast/keycastModel";
+import type { RecordingImportResult } from "../../../src/types/recordingLibrary";
 import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
-import { getFfmpegBinaryPath } from "../ffmpeg/binary";
-import { rememberApprovedLocalReadPath, resolveApprovedLocalMediaPath } from "../project/manager";
-import { getRecordingsDir, getTelemetryPathForVideo } from "../utils";
-import { getUsableCompanionAudioCandidates } from "./diagnostics";
 import {
 	normalizeCursorTelemetrySamples,
 	normalizeKeycastTelemetry,
 	writeCursorTelemetry,
 } from "../cursor/telemetry";
+import { getFfmpegBinaryPath } from "../ffmpeg/binary";
+import { probeNativeVideoMetadata } from "../ffmpeg/metadata";
+import { rememberApprovedLocalReadPath, resolveApprovedLocalMediaPath } from "../project/manager";
+import { getRecordingsDir, getTelemetryPathForVideo } from "../utils";
+import { getUsableCompanionAudioCandidates } from "./diagnostics";
 import { listRecordings } from "./library";
-import type { KeycastKeystroke } from "../../../src/lib/keycast/keycastModel";
-import type { RecordingImportResult } from "../../../src/types/recordingLibrary";
+import { isLibrarySequenceSource } from "./sequenceSource";
 
 const run = promisify(execFile);
 async function ffmpeg(args: string[], signal?: AbortSignal) {

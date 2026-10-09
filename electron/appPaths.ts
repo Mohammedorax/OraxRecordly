@@ -59,4 +59,33 @@ function readUserDataPath(): string {
 }
 
 export const USER_DATA_PATH = readUserDataPath();
+/** Legacy recordings location, hidden inside the app's AppData folder. */
 export const RECORDINGS_DIR = path.join(USER_DATA_PATH, "recordings");
+
+/**
+ * Default recordings/export root: the user's visible Videos folder
+ * (`Videos\OraxRecordly` on Windows, `~/Movies/OraxRecordly` on macOS) instead of
+ * the hidden AppData folder, so recordings and exports are easy to find.
+ *
+ * `RECORDINGS_DIR` is kept as the legacy location and is the one-time migration
+ * source; see `electron/ipc/recordingDirMigration.ts`.
+ */
+export function getDefaultRecordingsDir(): string {
+	try {
+		if (typeof app?.getPath === "function") {
+			const videosPath = app.getPath("videos");
+			if (videosPath) {
+				return path.join(videosPath, "OraxRecordly");
+			}
+		}
+	} catch {
+		// Fall through to the legacy location when the platform has no videos dir.
+	}
+
+	return RECORDINGS_DIR;
+}
+
+/** Exports live in a subfolder so they never show up in the recordings library. */
+export function getDefaultExportDir(recordingsDir: string): string {
+	return path.join(recordingsDir, "Exports");
+}

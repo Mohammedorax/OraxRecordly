@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { HIDDEN_WINDOW_OPTIONS } from "../childProcess";
 
 /**
  * Represents a Windows monitor handle and its physical desktop coordinates.
@@ -57,6 +58,7 @@ public class MonitorHelper {
 		"powershell.exe",
 		["-NoProfile", "-NonInteractive", "-Command", psScript],
 		{
+			...HIDDEN_WINDOW_OPTIONS,
 			encoding: "utf-8",
 			timeout: 5000,
 		},

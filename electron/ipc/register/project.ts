@@ -1,19 +1,13 @@
-import { persistRecentMetadata } from "../project/recentMetadata";
-import { renameLibraryProject } from "../project/renameLibraryProject";
-import { createUntitledProject } from "../project/createUntitledProject";
-import { trashLibraryProjects } from "../project/trashProjects";
-import { getRecordingThumbnail } from "../recording/thumbnail";
-import { listRecordings, setRecordingsRemoved } from "../recording/library";
-import { importRecording, discardRecordingImport } from "../recording/importRecording";
 import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { RECORDINGS_DIR } from "../../appPaths";
+import { getDefaultRecordingsDir } from "../../appPaths";
 import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
 import { LEGACY_PROJECT_FILE_EXTENSIONS, PROJECT_FILE_EXTENSION } from "../constants";
 import { getProjectBackupPath, writeProjectFileAtomically } from "../project/atomicSave";
+import { createUntitledProject } from "../project/createUntitledProject";
 import {
 	getProjectsDir,
 	getProjectThumbnailPath,
@@ -21,9 +15,9 @@ import {
 	isTrustedProjectPath,
 	listProjectLibraryEntries,
 	loadProjectFromPath,
-	readProjectPreview,
 	loadRecentProjectPaths,
 	persistRecordingsDirectorySetting,
+	readProjectPreview,
 	rememberApprovedLocalReadPath,
 	rememberRecentProject,
 	replaceApprovedSessionLocalReadPaths,
@@ -31,7 +25,13 @@ import {
 	saveProjectThumbnail,
 	saveRecentProjectPaths,
 } from "../project/manager";
+import { persistRecentMetadata } from "../project/recentMetadata";
+import { renameLibraryProject } from "../project/renameLibraryProject";
 import { persistRecordingSessionManifest, resolveRecordingSession } from "../project/session";
+import { trashLibraryProjects } from "../project/trashProjects";
+import { discardRecordingImport, importRecording } from "../recording/importRecording";
+import { listRecordings, setRecordingsRemoved } from "../recording/library";
+import { getRecordingThumbnail } from "../recording/thumbnail";
 import {
 	currentProjectPath,
 	currentRecordingSession,
@@ -45,8 +45,8 @@ import {
 	getRecordingsDir,
 	getTelemetryPathForVideo,
 	isAutoRecordingPath,
-	normalizeVideoSourcePath,
 	normalizePath,
+	normalizeVideoSourcePath,
 	parseJsonWithByteOrderMark,
 } from "../utils";
 
@@ -380,17 +380,18 @@ export function registerProjectHandlers() {
 	});
 
 	ipcMain.handle("get-recordings-directory", async () => {
+		const defaultDir = getDefaultRecordingsDir();
 		try {
 			const recordingsDir = await getRecordingsDir();
 			return {
 				success: true,
 				path: recordingsDir,
-				isDefault: recordingsDir === RECORDINGS_DIR,
+				isDefault: recordingsDir === defaultDir,
 			};
 		} catch (error) {
 			return {
 				success: false,
-				path: RECORDINGS_DIR,
+				path: defaultDir,
 				isDefault: true,
 				error: String(error),
 			};
@@ -418,7 +419,7 @@ export function registerProjectHandlers() {
 			return {
 				success: true,
 				path: selectedPath,
-				isDefault: selectedPath === RECORDINGS_DIR,
+				isDefault: selectedPath === getDefaultRecordingsDir(),
 			};
 		} catch (error) {
 			return {

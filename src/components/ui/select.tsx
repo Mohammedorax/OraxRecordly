@@ -1,4 +1,4 @@
-import { Select as HeroSelect, ListBox, Label, Separator } from "@heroui/react";
+import { Select as HeroSelect, Label, ListBox, Separator } from "@heroui/react";
 import { type ComponentProps, type ReactNode } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";

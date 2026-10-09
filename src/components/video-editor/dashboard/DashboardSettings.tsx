@@ -1,12 +1,12 @@
-import { SettingsSections, SettingsCategory } from "../SettingsSections";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useAboutDialog } from "../AboutDialog";
-import { SettingsRow } from "../SettingsRow";
-import { Switch } from "@/components/ui/switch";
-import { supportsHudCaptureProtection } from "@/lib/hudCaptureProtection";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
+import { supportsHudCaptureProtection } from "@/lib/hudCaptureProtection";
+import { useAboutDialog } from "../AboutDialog";
+import { SettingsRow } from "../SettingsRow";
+import { SettingsCategory, SettingsSections } from "../SettingsSections";
 export const DashboardSettingsContext = createContext<ReactNode>(null);
 export function DashboardSettings({ onImportFile }: { onImportFile: () => Promise<void> }) {
 	const t = useScopedT("editor");

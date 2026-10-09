@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 import enCommon from "@/i18n/locales/en/common.json";
 import enDialogs from "@/i18n/locales/en/dialogs.json";
 import { AboutDialogBody } from "./AboutDialog";

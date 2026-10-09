@@ -36,6 +36,7 @@ import {
 import { Toaster, toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
+import styles from "./ImageEditorWindow.module.css";
 import {
 	canWriteClipboardImage,
 	fetchTrafficLightsVisible,
@@ -51,6 +52,8 @@ import {
 	arrowAngle,
 	arrowHeadPoints,
 	baseName,
+	CROP_HANDLE_SIZE,
+	type CropHandle,
 	canRedo,
 	canUndo,
 	canvasBackingSize,
@@ -58,10 +61,8 @@ import {
 	clampRegionToImage,
 	clampZoom,
 	computeViewport,
-	CROP_HANDLE_SIZE,
 	cropHandleSpots,
 	cropRectFromDrag,
-	type CropHandle,
 	ellipseFromDrag,
 	fitView,
 	hitCropHandle,
@@ -70,17 +71,17 @@ import {
 	isUsableCrop,
 	MAX_HISTORY,
 	MIN_ZOOM,
-	panKeepingViewCenter,
-	pixelBlockSize,
-	pixelateRegion,
 	type Point,
+	panKeepingViewCenter,
+	pixelateRegion,
+	pixelBlockSize,
 	pushSnapshot,
 	type Rect,
 	redoSnapshot,
 	resetSnapshotStack,
 	resizeCropRect,
-	type SnapshotStack,
 	type Size,
+	type SnapshotStack,
 	screenToImage,
 	textInset,
 	traceSmoothPath,
@@ -88,7 +89,6 @@ import {
 	type Viewport,
 	zoomAroundPoint,
 } from "./imageEditorGeometry";
-import styles from "./ImageEditorWindow.module.css";
 
 /* ------------------------------------------------------------------ *
  * Tool table

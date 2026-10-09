@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import { BrowserWindow } from "electron";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
 import { ensureNativeCursorMonitorBinary, getCursorMonitorExePath } from "../paths/binaries";
 import {
 	currentCursorVisualType,
@@ -114,6 +115,7 @@ export async function startNativeCursorMonitor() {
 		let proc: ReturnType<typeof spawn> | null;
 		try {
 			proc = spawn(helperPath, [], {
+				...HIDDEN_WINDOW_OPTIONS,
 				stdio: ["pipe", "pipe", "pipe"],
 			});
 		} catch (spawnError) {

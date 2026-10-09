@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { isHudInEditorMode } from "./hudEditorMode";
+
 it("allows New to prepare a recording despite an existing editor", () => {
 	expect(isHudInEditorMode(1, false, false)).toBe(true);
 	expect(isHudInEditorMode(1, true, false)).toBe(false);

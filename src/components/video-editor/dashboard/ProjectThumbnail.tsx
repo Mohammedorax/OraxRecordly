@@ -1,6 +1,6 @@
-import type { ProjectPreviewData } from "@/types/projectPreview";
+import { useEffect, useRef, useState } from "react";
 import { ImageSquare } from "@/components/ui/icons";
-import { useState, useEffect, useRef } from "react";
+import type { ProjectPreviewData } from "@/types/projectPreview";
 import { toFileUrl } from "../projectPersistence";
 
 /**

@@ -1,6 +1,8 @@
-import { ToggleButton } from "@heroui/react";
-import { Card } from "@heroui/react";
-import { TextArea } from "@/components/ui/input";
+import { Card, ToggleButton } from "@heroui/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ChoiceGroup, ChoiceItem } from "@/components/ui/choice-group";
+import { ColorControl, ColorPalette } from "@/components/ui/color-picker";
 import {
 	AlignCenterHorizontal as AlignCenter,
 	AlignLeft,
@@ -15,10 +17,7 @@ import {
 	TextUnderline as Underline,
 	UploadSimple as Upload,
 } from "@/components/ui/icons";
-import { ColorControl, ColorPalette } from "@/components/ui/color-picker";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "@/components/ui/toast";
-import { Button } from "@/components/ui/button";
+import { TextArea } from "@/components/ui/input";
 
 import {
 	Select,
@@ -28,7 +27,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { ChoiceGroup, ChoiceItem } from "@/components/ui/choice-group";
+import { toast } from "@/components/ui/toast";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type CustomFont, getCustomFonts } from "@/lib/customFonts";
 import { cn } from "@/lib/utils";

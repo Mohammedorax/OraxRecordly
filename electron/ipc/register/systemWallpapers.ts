@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { app, dialog, ipcMain } from "electron";
 import { USER_DATA_PATH } from "../../appPaths";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
 import { buildMediaUrl, ensureMediaServer } from "../../mediaServer";
 import { rememberApprovedLocalReadPath } from "../project/manager";
 import {
@@ -112,10 +113,11 @@ function defaultTranscodedWallpaperPath(): string | null {
 /** One `reg query` returns both the string value and the binary cache. */
 export async function queryWindowsDesktopRegistry(): Promise<WindowsDesktopRegistryValues> {
 	try {
-		const { stdout } = await execFileAsync("reg.exe", [
-			"query",
-			"HKCU\\Control Panel\\Desktop",
-		]);
+		const { stdout } = await execFileAsync(
+			"reg.exe",
+			["query", "HKCU\\Control Panel\\Desktop"],
+			HIDDEN_WINDOW_OPTIONS,
+		);
 		return {
 			wallpaper: extractRegistryString(stdout, "Wallpaper"),
 			transcodedImageCache: extractRegistryBinary(stdout, "TranscodedImageCache"),

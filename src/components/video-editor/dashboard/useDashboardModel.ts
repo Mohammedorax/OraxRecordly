@@ -1,5 +1,3 @@
-import { useRawLibrary } from "./useRawLibrary";
-import { useScreenshotLibrary } from "./useScreenshotLibrary";
 import { useMemo, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
@@ -7,6 +5,8 @@ import type { ProjectLibraryEntry } from "../ProjectBrowserDialog";
 import type { DashboardProps } from "./types";
 import { useDashboardMetadata } from "./useDashboardMetadata";
 import { useProjectFolders } from "./useProjectFolders";
+import { useRawLibrary } from "./useRawLibrary";
+import { useScreenshotLibrary } from "./useScreenshotLibrary";
 export function useDashboardModel({
 	entries,
 	onOpenChange,

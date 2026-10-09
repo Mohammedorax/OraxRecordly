@@ -1,12 +1,13 @@
-import { isLibrarySequenceSource } from "./sequenceSource";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import { promisify } from "node:util";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
 import { COMPANION_AUDIO_LAYOUTS } from "../constants";
 import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import { lastNativeCaptureDiagnostics, setLastNativeCaptureDiagnostics } from "../state";
 import type { CompanionAudioCandidate, NativeCaptureDiagnostics } from "../types";
 import { parseJsonWithByteOrderMark } from "../utils";
+import { isLibrarySequenceSource } from "./sequenceSource";
 
 const execFileAsync = promisify(execFile);
 export const MIN_VALID_RECORDED_VIDEO_BYTES = 1024;
@@ -194,7 +195,10 @@ export async function probeMediaDurationSeconds(filePath: string): Promise<numbe
 	const start = Date.now();
 	const ffmpegPath = getFfmpegBinaryPath();
 	try {
-		await execFileAsync(ffmpegPath, ["-i", filePath, "-hide_banner"], { timeout: 5000 });
+		await execFileAsync(ffmpegPath, ["-i", filePath, "-hide_banner"], {
+			...HIDDEN_WINDOW_OPTIONS,
+			timeout: 5000,
+		});
 	} catch (error) {
 		const stderr = (error as NodeJS.ErrnoException & { stderr?: string })?.stderr ?? "";
 		const duration = parseFfmpegDurationSeconds(stderr);
@@ -284,7 +288,7 @@ export async function probeVideoStreamDuration(
 				"json",
 				filePath,
 			],
-			{ timeout: 30000, maxBuffer: 2 * 1024 * 1024 },
+			{ ...HIDDEN_WINDOW_OPTIONS, timeout: 30000, maxBuffer: 2 * 1024 * 1024 },
 		);
 		const stdout = typeof result === "string" ? result : result.stdout;
 		return parseFfprobeVideoStreamDuration(stdout);
@@ -482,7 +486,7 @@ export async function hasEmbeddedAudioStream(videoPath: string) {
 		const result = await execFileAsync(
 			ffmpegPath,
 			["-hide_banner", "-i", videoPath, "-map", "0:a:0", "-frames:a", "1", "-f", "null", "-"],
-			{ timeout: 20000, maxBuffer: 10 * 1024 * 1024 },
+			{ ...HIDDEN_WINDOW_OPTIONS, timeout: 20000, maxBuffer: 10 * 1024 * 1024 },
 		);
 		stderr = result.stderr;
 	} catch (error) {
@@ -612,7 +616,7 @@ export async function validateRecordedVideo(videoPath: string) {
 		const result = await execFileAsync(
 			ffmpegPath,
 			["-hide_banner", "-i", videoPath, "-map", "0:v:0", "-frames:v", "1", "-f", "null", "-"],
-			{ timeout: 20000, maxBuffer: 10 * 1024 * 1024 },
+			{ ...HIDDEN_WINDOW_OPTIONS, timeout: 20000, maxBuffer: 10 * 1024 * 1024 },
 		);
 		stderr = result.stderr;
 	} catch (error) {

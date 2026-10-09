@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ipcMain, shell } from "electron";
+import type { ScreenshotLibraryEntry } from "../../../src/types/screenshotLibrary";
 import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
 import { rememberApprovedLocalReadPath } from "../project/manager";
 import { resolveScreenshotsFolder } from "../screenshotStorage";
-import type { ScreenshotLibraryEntry } from "../../../src/types/screenshotLibrary";
 
 // Captures can be saved as PNG or JPEG (see the format preference), so both
 // must be listed here and both must pass the delete path guard below.

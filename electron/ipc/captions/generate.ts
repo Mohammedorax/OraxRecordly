@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { app } from "electron";
+import { HIDDEN_WINDOW_OPTIONS } from "../../childProcess";
 import { getFfmpegBinaryPath } from "../ffmpeg/binary";
 import { getBundledWhisperExecutableCandidates } from "../paths/binaries";
 import {
@@ -12,10 +13,10 @@ import {
 } from "../recording/diagnostics";
 import { normalizeVideoSourcePath } from "../utils";
 import { type CaptionAudioCandidate, getCaptionCompanionAudioCandidates } from "./audioCandidates";
-import { shouldRetryWhisperWithoutJson } from "./parser";
-import { readWhisperCaptionOutput } from "./output";
-import { isMissingWindowsWhisperRuntimeDependency } from "./runtimeErrors";
 import { mergeCaptionSources } from "./mergeSources";
+import { readWhisperCaptionOutput } from "./output";
+import { shouldRetryWhisperWithoutJson } from "./parser";
+import { isMissingWindowsWhisperRuntimeDependency } from "./runtimeErrors";
 import { segmentCuesIntoPhrases } from "./segment";
 import {
 	parseSilenceIntervals,
@@ -31,6 +32,7 @@ class NoCaptionAudioError extends Error {}
 async function executeWhisper(whisperExecutablePath: string, args: string[]) {
 	try {
 		await execFileAsync(whisperExecutablePath, args, {
+			...HIDDEN_WINDOW_OPTIONS,
 			timeout: 30 * 60 * 1000,
 			maxBuffer: 20 * 1024 * 1024,
 		});
@@ -89,7 +91,10 @@ export async function resolveWhisperExecutablePath(preferredPath?: string | null
 			: ["whisper-cli", "whisper-cpp", "whisper", "main"];
 
 	for (const binaryName of binaryNames) {
-		const result = spawnSync(pathCommand, [binaryName], { encoding: "utf-8" });
+		const result = spawnSync(pathCommand, [binaryName], {
+			...HIDDEN_WINDOW_OPTIONS,
+			encoding: "utf-8",
+		});
 		if (result.status === 0) {
 			const resolvedPath = result.stdout
 				.split(/\r?\n/)
@@ -177,7 +182,7 @@ export async function extractCaptionAudioSource(options: {
 					"pcm_s16le",
 					options.wavPath,
 				],
-				{ timeout: 5 * 60 * 1000, maxBuffer: 20 * 1024 * 1024 },
+				{ ...HIDDEN_WINDOW_OPTIONS, timeout: 5 * 60 * 1000, maxBuffer: 20 * 1024 * 1024 },
 			);
 			attemptedCandidates.push({ ...candidate, readable: true, extractedAudio: true });
 			return candidate;
@@ -219,7 +224,7 @@ export async function detectSilenceIntervals(options: {
 			"null",
 			"-",
 		],
-		{ timeout: 5 * 60 * 1000, maxBuffer: 20 * 1024 * 1024 },
+		{ ...HIDDEN_WINDOW_OPTIONS, timeout: 5 * 60 * 1000, maxBuffer: 20 * 1024 * 1024 },
 	);
 
 	return parseSilenceIntervals(stderr ?? "");

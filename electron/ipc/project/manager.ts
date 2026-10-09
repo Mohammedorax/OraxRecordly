@@ -1,11 +1,10 @@
-import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
-import type { ProjectPreviewData } from "../../../src/types/projectPreview";
-import { hasFreshProjectThumbnail } from "./thumbnailFreshness";
 import { existsSync, constants as fsConstants, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
-import { RECORDINGS_DIR, USER_DATA_PATH } from "../../appPaths";
+import type { ProjectPreviewData } from "../../../src/types/projectPreview";
+import { getDefaultRecordingsDir, RECORDINGS_DIR, USER_DATA_PATH } from "../../appPaths";
+import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
 import { isSupportedLocalMediaPath } from "../../mediaTypes";
 import {
 	LEGACY_PROJECT_FILE_EXTENSIONS,
@@ -32,6 +31,7 @@ import {
 	normalizeVideoSourcePath,
 	parseJsonWithByteOrderMark,
 } from "../utils";
+import { hasFreshProjectThumbnail } from "./thumbnailFreshness";
 
 export { normalizePath, normalizeVideoSourcePath };
 
@@ -55,6 +55,7 @@ export function isPathInsideDirectory(candidatePath: string, directoryPath: stri
 export function isAllowedLocalReadPath(candidatePath: string) {
 	const allowedPrefixes = [
 		RECORDINGS_DIR,
+		getDefaultRecordingsDir(),
 		USER_DATA_PATH,
 		getAssetRootPath(),
 		app.getPath("temp"),

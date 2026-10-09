@@ -1,4 +1,4 @@
-import { Fragment, type CSSProperties } from "react";
+import { type CSSProperties, Fragment } from "react";
 import {
 	buildKeycastBadgeMetrics,
 	formatKeycastToken,

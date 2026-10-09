@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
+import { DEFAULT_KEYCAST_SETTINGS, normalizeKeycastSettings } from "./keycastModel";
 import {
 	KEYCAST_SETTINGS_STORAGE_KEY,
 	loadKeycastSettings,
 	saveKeycastSettings,
 } from "./keycastSettings";
-import { DEFAULT_KEYCAST_SETTINGS, normalizeKeycastSettings } from "./keycastModel";
 
 function createStorageMock(initialValues: Record<string, string> = {}): Storage {
 	const store = new Map(Object.entries(initialValues));

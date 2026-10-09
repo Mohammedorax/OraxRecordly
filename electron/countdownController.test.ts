@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import type { BrowserWindow } from "electron";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createCountdownController } from "./countdownController";
+
 function fixture(loading = false) {
 	const contents = Object.assign(new EventEmitter(), {
 		isLoadingMainFrame: () => loading,
