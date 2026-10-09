@@ -62,40 +62,31 @@ export function isAllowedLocalReadPath(candidatePath: string) {
 	];
 	const normalizedCandidatePath = normalizePath(candidatePath);
 
-	// Canonicalize so a symlink placed under an allowed prefix can't smuggle in a
-	// target that lives outside it. realpathSync throws when the path doesn't
-	// exist yet (e.g. a pending export approved before the file is written) — in
-	// that case fall back to the lexical path, which can only succeed via the
-	// approvedLocalReadPaths check below since no symlink target exists yet.
-	let canonicalCandidatePath = normalizedCandidatePath;
+	// Canonicalize so a path is judged by where it really lives. A symlink under
+	// an allowed prefix that points outside is still rejected, while a path that
+	// only *looks* foreign — a Windows 8.3 short name such as
+	// `C:\Users\RUNNER~1\AppData\Local\Temp\...`, or a junction into an allowed
+	// root — resolves inside the allowed root and is accepted. Requiring the
+	// lexical form to match as well rejected those outright.
+	let canonicalCandidatePath: string | null = null;
 	try {
 		canonicalCandidatePath = normalizePath(realpathSync(normalizedCandidatePath));
 	} catch {
-		// File may not exist yet; keep the lexical path.
+		// File may not exist yet; the lexical path decides.
 	}
 
 	// Security: only allow paths under app-managed directories or paths the user
 	// has explicitly opted into (recording session sources, files chosen via
-	// dialog, app-produced exports). The lexical path must satisfy the policy
-	// AND the canonical (real) path must satisfy it too, so a symlink under an
-	// allowed prefix that points outside the allowlist is rejected. Previously
-	// this returned true for any existing file, which made the allowlist a no-op
-	// for read-local-file and the local media URL handler.
-	const lexicalAllowed =
-		allowedPrefixes.some((prefix) => isPathInsideDirectory(normalizedCandidatePath, prefix)) ||
-		approvedLocalReadPaths.has(normalizedCandidatePath);
-	if (!lexicalAllowed) {
-		return false;
+	// dialog, app-produced exports).
+	const isAllowed = (candidate: string) =>
+		allowedPrefixes.some((prefix) => isPathInsideDirectory(candidate, prefix)) ||
+		approvedLocalReadPaths.has(candidate);
+
+	if (!canonicalCandidatePath || canonicalCandidatePath === normalizedCandidatePath) {
+		return isAllowed(normalizedCandidatePath);
 	}
 
-	if (canonicalCandidatePath === normalizedCandidatePath) {
-		return true;
-	}
-
-	return (
-		allowedPrefixes.some((prefix) => isPathInsideDirectory(canonicalCandidatePath, prefix)) ||
-		approvedLocalReadPaths.has(canonicalCandidatePath)
-	);
+	return isAllowed(canonicalCandidatePath);
 }
 
 // Keep loopback media-server access restricted to allowlisted or explicitly

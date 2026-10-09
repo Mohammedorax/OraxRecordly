@@ -53,6 +53,22 @@ type SmokeExportReport = {
 
 const MAIN_ENTRY = path.join(repoRoot, "dist-electron", "main.cjs");
 
+/** Everything a failing run needs in order to explain itself. */
+async function describePage(page: import("@playwright/test").Page): Promise<string> {
+	const url = page.url();
+	const title = await page.title().catch(() => "<title unavailable>");
+	const bodyText = await page
+		.evaluate(() => document.body?.innerText?.slice(0, 600) ?? "")
+		.catch(() => "<body unavailable>");
+	return `--- page ---\nurl: ${url}\ntitle: ${title}\nbody: ${bodyText.replace(/\s+/g, " ").trim()}`;
+}
+
+/** The renderer's console is the only explanation when the export never starts. */
+function rendererSummary(lines: string[]): string {
+	const tail = lines.slice(-40).join("\n");
+	return `--- renderer log (${lines.length} lines) ---\n${tail}`;
+}
+
 test.describe("Electron end-to-end export", () => {
 	test.skip(
 		!existsSync(MAIN_ENTRY),
@@ -60,21 +76,33 @@ test.describe("Electron end-to-end export", () => {
 	);
 
 	test("boots the app, renders, and writes a playable MP4", async () => {
-		const workDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "recordly-e2e-"));
+		// Canonicalize: `os.tmpdir()` returns the 8.3 short form on some Windows
+		// hosts (for example `C:\Users\RUNNER~1\...`), and the app compares paths
+		// textually against its allowlist of readable locations.
+		const workDirectory = await fs.realpath(
+			await fs.mkdtemp(path.join(os.tmpdir(), "recordly-e2e-")),
+		);
 		const samplePath = await ensureSampleVideo(workDirectory);
 		const outputPath = path.join(workDirectory, "e2e-export.mp4");
 		const reportPath = `${outputPath}.report.json`;
 		const cdpPort = await pickFreePort();
+
+		// Debug hook: `RECORDLY_E2E_ARGS="--disable-gpu"` reproduces a runner
+		// without a usable GPU locally.
+		const extraArgs = (process.env.RECORDLY_E2E_ARGS ?? "").trim().split(/\s+/).filter(Boolean);
 
 		// Playwright's runner marks Electron as a Node process; inheriting that
 		// makes the spawned app boot as Node and never open a window.
 		const childEnv: NodeJS.ProcessEnv = { ...process.env };
 		delete childEnv.ELECTRON_RUN_AS_NODE;
 
-		const appProcess: ChildProcess = spawn(resolveElectronBinary(), [repoRoot], {
+		const appProcess: ChildProcess = spawn(resolveElectronBinary(), [repoRoot, ...extraArgs], {
 			cwd: repoRoot,
 			env: {
 				...childEnv,
+				// Chromium logging goes to stderr; keep it so a timeout can
+				// explain itself.
+				ELECTRON_ENABLE_LOGGING: "1",
 				ELECTRON_CDP_PORT: String(cdpPort),
 				RECORDLY_SMOKE_EXPORT: "1",
 				RECORDLY_SMOKE_EXPORT_INPUT: samplePath,
@@ -97,14 +125,29 @@ test.describe("Electron end-to-end export", () => {
 			const context = browser.contexts()[0];
 			expect(context, "the app should expose a browser context over CDP").toBeTruthy();
 			const page = context.pages()[0] ?? (await context.waitForEvent("page"));
+			// Captured before the wait: a renderer that never reaches the export
+			// explains itself here and nowhere else.
+			const rendererLog: string[] = [];
+			page.on("console", (message) =>
+				rendererLog.push(`[${message.type()}] ${message.text()}`),
+			);
+			page.on("pageerror", (error) => rendererLog.push(`[pageerror] ${error.message}`));
 			await page.waitForLoadState("domcontentloaded");
+
+			// The whole run hinges on the automation query reaching the renderer;
+			// fail fast on that instead of waiting out the report timeout.
+			if (!page.url().includes("smokeExport=1")) {
+				throw new Error(
+					`The editor window did not open in smoke-export mode.\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${mainLog.join("")}`,
+				);
+			}
 
 			let report: SmokeExportReport;
 			try {
 				report = await waitForJson<SmokeExportReport>(reportPath, 240_000);
 			} catch (error) {
 				throw new Error(
-					`${String(error)}\n--- main process output ---\n${mainLog.join("")}`,
+					`${String(error)}\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${mainLog.join("")}`,
 				);
 			}
 

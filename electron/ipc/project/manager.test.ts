@@ -257,4 +257,62 @@ describe("local media path policy", () => {
 		expect(result.success).toBe(true);
 		await expect(resolveApprovedLocalMediaPath(audioPath)).resolves.toBe(resolvedAudioPath);
 	});
+
+	describe("allowlist canonicalization", () => {
+		let outsideRoot: string;
+
+		beforeEach(async () => {
+			// A sibling of the mocked temp root, so it is inside no allowed prefix.
+			outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "recordly-outside-"));
+		});
+
+		afterEach(async () => {
+			if (outsideRoot) {
+				await fs.rm(outsideRoot, { recursive: true, force: true });
+			}
+		});
+
+		it("accepts a readable file inside an allowed root and rejects one outside", async () => {
+			const { isAllowedLocalReadPath } = await import("./manager");
+			const allowedFile = path.join(tempPath, "clip.mp4");
+			const outsideFile = path.join(outsideRoot, "clip.mp4");
+			await fs.writeFile(allowedFile, "video");
+			await fs.writeFile(outsideFile, "video");
+
+			expect(isAllowedLocalReadPath(allowedFile)).toBe(true);
+			expect(isAllowedLocalReadPath(outsideFile)).toBe(false);
+		});
+
+		it("accepts a path that only looks foreign: it resolves inside an allowed root", async () => {
+			// Same class as a Windows 8.3 short name (`C:\Users\RUNNER~1\...`): the
+			// lexical string is outside every allowed prefix, the real location is
+			// inside one. This used to be rejected.
+			const { isAllowedLocalReadPath } = await import("./manager");
+			const linkedIntoAllowedRoot = path.join(outsideRoot, "into-temp");
+			await fs.symlink(tempPath, linkedIntoAllowedRoot, "junction");
+			const fileBehindLink = path.join(linkedIntoAllowedRoot, "clip.mp4");
+			await fs.writeFile(path.join(tempPath, "clip.mp4"), "video");
+
+			expect(isAllowedLocalReadPath(fileBehindLink)).toBe(true);
+		});
+
+		it("still rejects a link under an allowed root that points outside", async () => {
+			const { isAllowedLocalReadPath } = await import("./manager");
+			const secretFile = path.join(outsideRoot, "secret.mp4");
+			await fs.writeFile(secretFile, "video");
+			const escapingLink = path.join(tempPath, "escape");
+			await fs.symlink(outsideRoot, escapingLink, "junction");
+
+			expect(isAllowedLocalReadPath(path.join(escapingLink, "secret.mp4"))).toBe(false);
+		});
+
+		it("falls back to the lexical path for files that do not exist yet", async () => {
+			const { isAllowedLocalReadPath } = await import("./manager");
+
+			expect(isAllowedLocalReadPath(path.join(tempPath, "pending-export.mp4"))).toBe(true);
+			expect(isAllowedLocalReadPath(path.join(outsideRoot, "pending-export.mp4"))).toBe(
+				false,
+			);
+		});
+	});
 });
