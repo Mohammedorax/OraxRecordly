@@ -38,9 +38,15 @@ jobs:
 
       # `--ignore-scripts` skips the postinstall of Electron itself (the runtime
       # the suite launches) and of ffmpeg-static (the fixture generator and the
-      # export pipeline), so both binaries have to be fetched explicitly.
+      # export pipeline). `npm rebuild` does not re-run Electron's downloader, so
+      # its install script is invoked directly.
       - name: Install runtime binaries
-        run: npm rebuild electron ffmpeg-static
+        run: |
+          node node_modules/electron/install.js
+          npm rebuild ffmpeg-static
+
+      - name: Verify the Electron runtime
+        run: node scripts/verify-electron-runtime.mjs
 
       - name: Typecheck the E2E suite
         run: npm run typecheck:e2e
