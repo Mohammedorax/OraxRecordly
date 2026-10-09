@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { closeSync, existsSync, openSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -69,6 +69,33 @@ function rendererSummary(lines: string[]): string {
 	return `--- renderer log (${lines.length} lines) ---\n${tail}`;
 }
 
+/**
+ * The smoke-export window.
+ *
+ * CDP can expose an early blank page alongside the real window, so the page is
+ * selected by URL instead of by index; indexing made this suite flaky.
+ */
+async function waitForSmokeExportPage(
+	context: import("@playwright/test").BrowserContext,
+	timeoutMs: number,
+): Promise<import("@playwright/test").Page> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		for (const candidate of context.pages()) {
+			if (candidate.url().includes("smokeExport=1")) {
+				return candidate;
+			}
+		}
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(
+		`No smoke-export window appeared. Open pages: ${context
+			.pages()
+			.map((candidate) => candidate.url())
+			.join(", ")}`,
+	);
+}
+
 test.describe("Electron end-to-end export", () => {
 	test.skip(
 		!existsSync(MAIN_ENTRY),
@@ -86,6 +113,12 @@ test.describe("Electron end-to-end export", () => {
 		const outputPath = path.join(workDirectory, "e2e-export.mp4");
 		const reportPath = `${outputPath}.report.json`;
 		const cdpPort = await pickFreePort();
+
+		// Electron's own stdout is a pipe on Windows and can stay empty even when
+		// the app fails; a real file always receives it, so a timeout can explain
+		// itself (a failed preload, for instance).
+		const mainLogPath = path.join(workDirectory, "main-process.log");
+		const mainLogFd = openSync(mainLogPath, "a");
 
 		// Debug hook: `RECORDLY_E2E_ARGS="--disable-gpu"` reproduces a runner
 		// without a usable GPU locally.
@@ -110,12 +143,13 @@ test.describe("Electron end-to-end export", () => {
 				RECORDLY_SMOKE_EXPORT_QUALITY: "medium",
 				RECORDLY_SMOKE_EXPORT_FPS: "24",
 			},
-			stdio: ["ignore", "pipe", "pipe"],
+			stdio: ["ignore", mainLogFd, mainLogFd],
 		});
 
-		const mainLog: string[] = [];
-		appProcess.stdout?.on("data", (chunk) => mainLog.push(String(chunk)));
-		appProcess.stderr?.on("data", (chunk) => mainLog.push(String(chunk)));
+		const readMainLog = async () => {
+			const text = await fs.readFile(mainLogPath, "utf8").catch(() => "");
+			return text.split(/\r?\n/).slice(-60).join("\n");
+		};
 
 		let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | null = null;
 		try {
@@ -124,7 +158,7 @@ test.describe("Electron end-to-end export", () => {
 
 			const context = browser.contexts()[0];
 			expect(context, "the app should expose a browser context over CDP").toBeTruthy();
-			const page = context.pages()[0] ?? (await context.waitForEvent("page"));
+			const page = await waitForSmokeExportPage(context, 120_000);
 			// Captured before the wait: a renderer that never reaches the export
 			// explains itself here and nowhere else.
 			const rendererLog: string[] = [];
@@ -134,11 +168,19 @@ test.describe("Electron end-to-end export", () => {
 			page.on("pageerror", (error) => rendererLog.push(`[pageerror] ${error.message}`));
 			await page.waitForLoadState("domcontentloaded");
 
-			// The whole run hinges on the automation query reaching the renderer;
-			// fail fast on that instead of waiting out the report timeout.
-			if (!page.url().includes("smokeExport=1")) {
+			// The preload must have exposed the bridge before anything can work; fail
+			// fast on that instead of waiting out the report timeout.
+			const preloadPath = path.join(repoRoot, "dist-electron", "preload.mjs");
+			const hasBridge = await page
+				.evaluate(
+					() =>
+						typeof (globalThis as { electronAPI?: unknown }).electronAPI !==
+						"undefined",
+				)
+				.catch(() => false);
+			if (!hasBridge) {
 				throw new Error(
-					`The editor window did not open in smoke-export mode.\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${mainLog.join("")}`,
+					`The preload bridge never reached the renderer.\npreload exists: ${existsSync(preloadPath)} (${preloadPath})\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${await readMainLog()}`,
 				);
 			}
 
@@ -147,7 +189,7 @@ test.describe("Electron end-to-end export", () => {
 				report = await waitForJson<SmokeExportReport>(reportPath, 240_000);
 			} catch (error) {
 				throw new Error(
-					`${String(error)}\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${mainLog.join("")}`,
+					`${String(error)}\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${await readMainLog()}`,
 				);
 			}
 
@@ -181,6 +223,7 @@ test.describe("Electron end-to-end export", () => {
 			if (!appProcess.killed) {
 				appProcess.kill("SIGKILL");
 			}
+			closeSync(mainLogFd);
 			await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => undefined);
 		}
 	});
