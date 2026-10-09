@@ -36,10 +36,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      # The fixture generator and the export pipeline both use ffmpeg-static,
-      # which --ignore-scripts leaves without its binary.
-      - name: Install FFmpeg
-        run: npm rebuild ffmpeg-static
+      # `--ignore-scripts` skips the postinstall of Electron itself (the runtime
+      # the suite launches) and of ffmpeg-static (the fixture generator and the
+      # export pipeline), so both binaries have to be fetched explicitly.
+      - name: Install runtime binaries
+        run: npm rebuild electron ffmpeg-static
 
       - name: Typecheck the E2E suite
         run: npm run typecheck:e2e
