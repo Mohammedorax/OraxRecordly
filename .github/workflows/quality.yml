@@ -43,13 +43,16 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npx tsc --noEmit
 
+      - name: Check version consistency
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run check:versions
+
       - name: Lint
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run lint
 
-      - name: Check formatting (advisory)
+      - name: Check formatting
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        continue-on-error: true
         run: npm run format:check
 
       # Real recording-import tests require the binary skipped by --ignore-scripts.

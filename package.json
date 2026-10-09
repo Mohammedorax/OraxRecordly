@@ -17,6 +17,7 @@
 	"scripts": {
 		"dev": "vite --config vite.config.ts",
 		"postinstall": "node scripts/postinstall.mjs",
+		"prepare": "husky",
 		"build": "npm run build:platform-native-helpers && tsc && vite build --config vite.config.ts && npm run normalize:electron-main-cjs && npm run smoke:electron-main-cjs && electron-builder",
 		"lint": "biome lint .",
 		"lint:fix": "biome lint --write .",
@@ -35,6 +36,7 @@
 		"build:win": "npm run build:platform-native-helpers && tsc && vite build --config vite.config.ts && npm run normalize:electron-main-cjs && npm run smoke:electron-main-cjs && electron-builder --win",
 		"build:linux": "npm run build:platform-native-helpers && tsc && vite build --config vite.config.ts && npm run normalize:electron-main-cjs && npm run smoke:electron-main-cjs && electron-builder --linux",
 		"i18n:check": "node scripts/i18n-check.mjs",
+		"check:versions": "node scripts/check-versions.mjs",
 		"benchmark:export-queues": "node scripts/benchmark-export-queues.mjs",
 		"normalize:electron-main-cjs": "node scripts/normalize-electron-main-cjs.mjs",
 		"smoke:electron-main-cjs": "node scripts/smoke-electron-main-cjs.mjs",
@@ -46,7 +48,13 @@
 		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit",
 		"test:ui": "playwright test",
+		"test:e2e": "npm run typecheck:e2e && npm run build:app && playwright test --config playwright.electron.config.ts",
+		"typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
+		"build:app": "tsc && vite build --config vite.config.ts && npm run normalize:electron-main-cjs",
 		"dev:ui": "vite --mode ui --host 127.0.0.1"
+	},
+	"lint-staged": {
+		"*.{js,mjs,cjs,ts,mts,cts,tsx,jsx,json,json5,css}": "biome check --write --no-errors-on-unmatched"
 	},
 	"dependencies": {
 		"@phosphor-icons/react": "^2.1.10",
@@ -78,6 +86,8 @@
 		"emoji-picker-react": "^4.16.1",
 		"fast-check": "^4.5.2",
 		"gif.js": "^0.2.0",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.4.0",
 		"mediabunny": "^1.25.1",
 		"motion": "^12.23.24",
 		"mp4box": "^2.2.0",

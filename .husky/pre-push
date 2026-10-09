@@ -1,0 +1,2 @@
+# Type errors are cheap to catch here and expensive to find in a release build.
+npm run typecheck

@@ -1,0 +1,71 @@
+name: Electron E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  electron-e2e:
+    name: Real app export
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      CI: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # The fixture generator and the export pipeline both use ffmpeg-static,
+      # which --ignore-scripts leaves without its binary.
+      - name: Install FFmpeg
+        run: npm rebuild ffmpeg-static
+
+      - name: Typecheck the E2E suite
+        run: npm run typecheck:e2e
+
+      - name: Build the application
+        run: npm run build:app
+
+      # Advisory for now on purpose: the suite boots Electron, renders through
+      # WebGPU/WebGL and runs a real encode, and hosted-runner GPU support varies.
+      # A flaky required check would train everyone to ignore red builds, so this
+      # reports a warning plus artifacts until it has been green for a while —
+      # then drop `continue-on-error` to make it blocking.
+      - name: Run the Electron export test
+        id: e2e
+        continue-on-error: true
+        run: npx playwright test --config playwright.electron.config.ts
+
+      - name: Upload diagnostics
+        if: ${{ !cancelled() && steps.e2e.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-e2e-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Flag the advisory outcome
+        if: ${{ !cancelled() && steps.e2e.outcome == 'failure' }}
+        run: echo "::warning::The Electron E2E export test failed. Inspect the electron-e2e-results artifact."

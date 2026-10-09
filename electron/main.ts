@@ -94,6 +94,21 @@ if (typeof app.setPath === "function" && typeof app.getPath === "function") {
 const electronMainDir = path.dirname(fileURLToPath(import.meta.url));
 const IS_SMOKE_EXPORT = process.env.RECORDLY_SMOKE_EXPORT === "1";
 
+/**
+ * Remote debugging for the end-to-end suite (`npm run test:e2e`).
+ *
+ * Chromium 132+ rejects `--remote-debugging-port` passed on the command line, so
+ * Playwright's `_electron.launch()` cannot attach to this app any more. The
+ * suite spawns the binary with `ELECTRON_CDP_PORT` set and connects over CDP
+ * instead, which only works if the switch is registered through Electron's own
+ * API before the app is ready. Inert unless the variable is set, and never
+ * active in a packaged build.
+ */
+const e2eCdpPort = process.env.ELECTRON_CDP_PORT;
+if (e2eCdpPort && !app.isPackaged) {
+	app.commandLine.appendSwitch("remote-debugging-port", e2eCdpPort);
+}
+
 function ignoreBrokenConsolePipe(stream: NodeJS.WritableStream | undefined) {
 	stream?.on("error", (error: NodeJS.ErrnoException) => {
 		if (error.code === "EPIPE" || error.code === "EIO") {

@@ -1,0 +1,5 @@
+# Runs on every commit. Formatting/lint drift and version drift must never reach
+# a release again: the release pipeline requires the tag to match package.json,
+# and a stale package-lock version already slipped through once.
+npx lint-staged
+node scripts/check-versions.mjs
