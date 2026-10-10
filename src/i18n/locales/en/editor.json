@@ -161,6 +161,22 @@
 		"saveAgain": "Save Again",
 		"showInFolder": "Show In Folder"
 	},
+	"shortcutBar": {
+		"title": "Shortcuts on screen",
+		"show": "Show the shortcut bar",
+		"hide": "Hide this row",
+		"hideShort": "Hide",
+		"onVideo": "Burn into the video",
+		"oneLine": "One line",
+		"twoLines": "Two lines",
+		"styleLabel": "Look",
+		"styleHint": "Change the shape of the shortcut display",
+		"stylePill": "Capsule",
+		"styleBar": "Bar",
+		"styleMinimal": "Text only",
+		"previewHistory": "Ctrl + C",
+		"previewHistoryOlder": "Ctrl + V"
+	},
 	"project": {
 		"untitled": "Untitled",
 		"unsavedChangesTitle": "Unsaved changes",

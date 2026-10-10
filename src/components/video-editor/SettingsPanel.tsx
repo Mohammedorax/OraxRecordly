@@ -24,6 +24,7 @@ import {
 	KEYCAST_SIZE_MIN,
 	type KeycastPosition,
 	type KeycastSettings,
+	type KeycastStyle,
 	MAX_KEYCAST_HOLD_MS,
 	MIN_KEYCAST_HOLD_MS,
 } from "@/lib/keycast/keycastModel";
@@ -587,6 +588,9 @@ const BUILTIN_CURSOR_STYLE_OPTIONS: CursorStyleOption[] = [
 	{ value: "dot", label: "Dot" },
 	{ value: "figma", label: "Minimal" },
 ];
+
+/** Accent colours offered for the keystroke badge / shortcut bar. */
+const KEYCAST_ACCENT_PRESETS = ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#a855f7"];
 
 /** Corner choices for the keystroke badge, in display order. */
 const KEYCAST_POSITION_OPTIONS: Array<{
@@ -3046,6 +3050,101 @@ export function SettingsPanel({
 												</ChoiceItem>
 											))}
 										</ChoiceGroup>
+									</div>
+									<div className="grid gap-1.5">
+										<div className="text-xs text-muted-foreground">
+											{tSettings("keycast.style", "Look")}
+										</div>
+										<ChoiceGroup
+											type="single"
+											value={keycastSettings.style}
+											onValueChange={(value) => {
+												if (value) {
+													updateKeycastSettings({
+														style: value as KeycastStyle,
+													});
+												}
+											}}
+											className="grid grid-cols-3 gap-2"
+											aria-label={tSettings("keycast.style", "Look")}
+										>
+											{(
+												[
+													["pill", "keycast.stylePill", "Capsule"],
+													["bar", "keycast.styleBar", "Bar"],
+													[
+														"minimal",
+														"keycast.styleMinimal",
+														"Text only",
+													],
+												] as const
+											).map(([value, labelKey, fallback]) => (
+												<ChoiceItem
+													key={value}
+													value={value}
+													className="min-w-0 px-2 py-1.5 text-center text-xs"
+												>
+													{tSettings(labelKey, fallback)}
+												</ChoiceItem>
+											))}
+										</ChoiceGroup>
+									</div>
+									<SettingsRow
+										title={tSettings("keycast.secondLine", "Second line")}
+										description={tSettings(
+											"keycast.secondLineHint",
+											"Show the shortcuts pressed just before the current one.",
+										)}
+									>
+										<Switch
+											checked={keycastSettings.lines === 2}
+											onCheckedChange={(checked) =>
+												updateKeycastSettings({ lines: checked ? 2 : 1 })
+											}
+										/>
+									</SettingsRow>
+									<div className="grid gap-1.5">
+										<div className="text-xs text-muted-foreground">
+											{tSettings("keycast.accent", "Accent colour")}
+										</div>
+										<div className="flex flex-wrap items-center gap-2">
+											<Button
+												variant={
+													keycastSettings.accentColor === null
+														? "secondary"
+														: "ghost"
+												}
+												size="sm"
+												className="h-7 px-2 text-xs"
+												onClick={() =>
+													updateKeycastSettings({ accentColor: null })
+												}
+											>
+												{tSettings("keycast.accentDefault", "Default")}
+											</Button>
+											{KEYCAST_ACCENT_PRESETS.map((color) => (
+												<button
+													key={color}
+													type="button"
+													aria-label={tSettings(
+														"keycast.accentPreset",
+														"Accent {{color}}",
+														{ color },
+													)}
+													onClick={() =>
+														updateKeycastSettings({
+															accentColor: color,
+														})
+													}
+													className={`size-6 rounded-full border ${
+														keycastSettings.accentColor === color
+															? "border-foreground"
+															: "border-separator"
+													}`}
+													style={{ background: color }}
+												/>
+											))}
+										</div>
 									</div>
 									<SliderControl
 										label={tSettings("keycast.size", "Size")}

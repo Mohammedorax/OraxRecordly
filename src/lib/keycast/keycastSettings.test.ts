@@ -80,6 +80,9 @@ describe("keycast settings persistence", () => {
 			size: 1.4,
 			opacity: 0.8,
 			holdMs: 2_200,
+			style: "pill",
+			lines: 1,
+			accentColor: null,
 		});
 	});
 

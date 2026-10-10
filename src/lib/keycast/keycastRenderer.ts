@@ -1,10 +1,13 @@
 import {
 	buildKeycastBadgeMetrics,
+	formatKeycastKeys,
 	formatKeycastToken,
 	type KeycastKeystroke,
 	type KeycastSettings,
+	type KeycastStyle,
 	resolveKeycastBadge,
 	resolveKeycastBadgeOrigin,
+	resolveKeycastHistory,
 } from "./keycastModel";
 
 /**
@@ -29,6 +32,12 @@ const CAP_FILL = "#F8FAFC";
 const CAP_EDGE = "#CBD5E1";
 const CAP_TEXT = "#0F172A";
 const SEPARATOR_TEXT = "rgba(226, 232, 240, 0.85)";
+const HISTORY_TEXT = "rgba(226, 232, 240, 0.78)";
+const MINIMAL_TEXT = "#FFFFFF";
+const MINIMAL_TEXT_SHADOW = "rgba(0, 0, 0, 0.65)";
+
+/** Second line runs at this fraction of the cap height. */
+const HISTORY_FONT_RATIO = 0.4;
 
 export interface KeycastRenderInput {
 	events: readonly KeycastKeystroke[];
@@ -43,6 +52,8 @@ export interface KeycastRenderInput {
 export interface KeycastBadgePlan {
 	labels: string[];
 	capWidths: number[];
+	/** Formatted earlier combinations for the second line; empty for one line. */
+	historyLabels: string[];
 	boxWidth: number;
 	boxHeight: number;
 	/** Top-left of the plate in frame coordinates. */
@@ -53,6 +64,11 @@ export interface KeycastBadgePlan {
 	paddingX: number;
 	paddingY: number;
 	fontSize: number;
+	/** Font size and reserved height of the second line. */
+	historyFontSize: number;
+	historyLineHeight: number;
+	style: KeycastStyle;
+	accentColor: string | null;
 	scale: number;
 	opacity: number;
 	/** Small cache key: identical plans can reuse the rasterised texture. */
@@ -113,6 +129,12 @@ export function planKeycastBadge(
 
 	const metrics = buildKeycastBadgeMetrics(width, settings);
 	const labels = badge.keys.map((key) => formatKeycastToken(key, isMac));
+	const historyLabels =
+		settings.lines === 2
+			? resolveKeycastHistory(events, timeMs, { holdMs: settings.holdMs }).map((keys) =>
+					formatKeycastKeys(keys, isMac).join(" + "),
+				)
+			: [];
 
 	ctx.save();
 	ctx.direction = "ltr";
@@ -130,8 +152,16 @@ export function planKeycastBadge(
 
 	const capsWidth = capWidths.reduce((total, capWidth) => total + capWidth, 0);
 	const separatorsWidth = Math.max(0, labels.length - 1) * metrics.separatorWidth;
-	const boxWidth = capsWidth + separatorsWidth + metrics.paddingX * 2;
-	const boxHeight = metrics.capHeight + metrics.paddingY * 2;
+	// The second line sits under the caps on its own row, so the strip grows by it.
+	const historyFontSize = Math.max(1, Math.round(metrics.capHeight * HISTORY_FONT_RATIO));
+	const historyLineHeight = historyLabels.length > 0 ? Math.round(historyFontSize * 1.9) : 0;
+	const contentWidth = capsWidth + separatorsWidth + metrics.paddingX * 2;
+	// A "bar" spans the frame; the other styles hug their content.
+	const boxWidth =
+		settings.style === "bar"
+			? Math.max(contentWidth, width - metrics.margin * 2)
+			: contentWidth;
+	const boxHeight = metrics.capHeight + metrics.paddingY * 2 + historyLineHeight;
 	const origin = resolveKeycastBadgeOrigin(
 		settings.position,
 		width,
@@ -144,6 +174,7 @@ export function planKeycastBadge(
 	return {
 		labels,
 		capWidths,
+		historyLabels,
 		boxWidth,
 		boxHeight,
 		origin,
@@ -153,9 +184,13 @@ export function planKeycastBadge(
 		paddingX: metrics.paddingX,
 		paddingY: metrics.paddingY,
 		fontSize: metrics.fontSize,
+		historyFontSize,
+		historyLineHeight,
+		style: settings.style,
+		accentColor: settings.accentColor,
 		scale: metrics.scale,
 		opacity: settings.opacity * badge.opacity,
-		key: `${badge.keys.join("+")}|${settings.position}|${boxWidth}x${boxHeight}|${settings.opacity}|${Math.round(badge.opacity * 100)}|${isMac ? "mac" : "other"}`,
+		key: `${badge.keys.join("+")}|${historyLabels.join("|")}|${settings.position}|${settings.style}|${settings.lines}|${settings.accentColor ?? ""}|${boxWidth}x${boxHeight}|${settings.opacity}|${Math.round(badge.opacity * 100)}|${isMac ? "mac" : "other"}`,
 	};
 }
 
@@ -168,7 +203,7 @@ export function paintKeycastBadge(
 	plan: KeycastBadgePlan,
 	opacityScale = 1,
 ): void {
-	const { labels, capWidths, origin, capHeight, capRadius, separatorWidth } = plan;
+	const { labels, capWidths, origin, capHeight, capRadius, separatorWidth, style } = plan;
 	const alpha = Math.max(0, Math.min(1, plan.opacity * opacityScale));
 	if (alpha <= 0 || labels.length === 0) {
 		return;
@@ -181,37 +216,77 @@ export function paintKeycastBadge(
 	ctx.textBaseline = "middle";
 	ctx.globalAlpha = alpha;
 
-	// Dark translucent plate keeps the caps legible over light and dark content
-	// alike; the hairline border stops it dissolving into a dark background.
-	traceRoundedRect(ctx, origin.x, origin.y, plan.boxWidth, plan.boxHeight, capHeight * 0.32);
-	ctx.fillStyle = PLATE_FILL;
-	ctx.fill();
-	ctx.lineWidth = Math.max(1, plan.scale * 1.5);
-	ctx.strokeStyle = PLATE_STROKE;
-	ctx.stroke();
+	const accent = plan.accentColor;
+
+	// Plate / strip. `minimal` deliberately has none: the keys carry a shadow so
+	// they stay readable on their own.
+	if (style !== "minimal") {
+		traceRoundedRect(
+			ctx,
+			origin.x,
+			origin.y,
+			plan.boxWidth,
+			plan.boxHeight,
+			capHeight * (style === "bar" ? 0.12 : 0.32),
+		);
+		ctx.fillStyle = PLATE_FILL;
+		ctx.fill();
+		ctx.lineWidth = Math.max(1, plan.scale * 1.5);
+		ctx.strokeStyle = accent ?? PLATE_STROKE;
+		ctx.stroke();
+	}
+
+	// Keep both rows inside the strip, whatever the label lengths are.
+	ctx.beginPath();
+	ctx.rect(origin.x, origin.y, plan.boxWidth, plan.boxHeight);
+	ctx.clip();
 
 	const capY = origin.y + plan.paddingY;
-	let cursorX = origin.x + plan.paddingX;
+	const rowX = origin.x + plan.paddingX;
+	let cursorX = rowX;
 
 	labels.forEach((label, index) => {
 		const capWidth = capWidths[index];
-		traceRoundedRect(ctx, cursorX, capY, capWidth, capHeight, capRadius);
-		ctx.fillStyle = CAP_FILL;
-		ctx.fill();
-		ctx.lineWidth = Math.max(1, plan.scale * 1.5);
-		ctx.strokeStyle = CAP_EDGE;
-		ctx.stroke();
+		const capCenterX = cursorX + capWidth / 2;
+		const capCenterY = capY + capHeight / 2;
 
-		ctx.fillStyle = CAP_TEXT;
-		ctx.fillText(label, cursorX + capWidth / 2, capY + capHeight / 2);
+		if (style === "minimal") {
+			ctx.fillStyle = accent ?? MINIMAL_TEXT;
+			ctx.shadowColor = MINIMAL_TEXT_SHADOW;
+			ctx.shadowBlur = Math.max(2, plan.scale * 6);
+			ctx.fillText(label, capCenterX, capCenterY);
+			ctx.shadowBlur = 0;
+		} else {
+			traceRoundedRect(ctx, cursorX, capY, capWidth, capHeight, capRadius);
+			ctx.fillStyle = CAP_FILL;
+			ctx.fill();
+			ctx.lineWidth = Math.max(1, plan.scale * 1.5);
+			ctx.strokeStyle = accent ?? CAP_EDGE;
+			ctx.stroke();
+
+			ctx.fillStyle = CAP_TEXT;
+			ctx.fillText(label, capCenterX, capCenterY);
+		}
 
 		cursorX += capWidth;
 		if (index < labels.length - 1) {
-			ctx.fillStyle = SEPARATOR_TEXT;
-			ctx.fillText("+", cursorX + separatorWidth / 2, capY + capHeight / 2);
+			ctx.fillStyle = accent ?? SEPARATOR_TEXT;
+			ctx.fillText("+", cursorX + separatorWidth / 2, capCenterY);
 			cursorX += separatorWidth;
 		}
 	});
+
+	// Second line: the shortcuts pressed just before the one above.
+	if (plan.historyLabels.length > 0) {
+		ctx.font = `500 ${plan.historyFontSize}px ${KEYCAST_FONT_STACK}`;
+		ctx.textAlign = "left";
+		ctx.fillStyle = accent ?? HISTORY_TEXT;
+		ctx.fillText(
+			plan.historyLabels.join("   "),
+			rowX,
+			capY + capHeight + plan.historyLineHeight * 0.55,
+		);
+	}
 
 	ctx.restore();
 }

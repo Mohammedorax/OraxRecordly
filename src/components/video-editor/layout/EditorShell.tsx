@@ -26,6 +26,7 @@ import { EditorDialogs } from "./EditorDialogs";
 import { EditorHeader } from "./EditorHeader";
 import { EditorLoadingSkeleton } from "./EditorLoadingSkeleton";
 import { EditorPreviewPanel } from "./EditorPreviewPanel";
+import { EditorShortcutBar } from "./EditorShortcutBar";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorTimelinePanel } from "./EditorTimelinePanel";
 
@@ -246,6 +247,12 @@ export function EditorShell(props: Props) {
 				exportMessage={exportMessage}
 			/>
 			<EditorAnnouncementBanner />
+			{/* Quick control for the on-screen shortcuts; the row itself can be hidden. */}
+			<EditorShortcutBar
+				settings={appearance.keycastSettings}
+				onChange={appearance.setKeycastSettings}
+				isMac={/mac/i.test(navigator.platform)}
+			/>
 			<div
 				className="relative flex min-h-0 flex-1 flex-col"
 				onPointerDownCapture={(event) => {

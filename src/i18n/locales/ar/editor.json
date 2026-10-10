@@ -161,6 +161,22 @@
 		"saveAgain": "حفظ مرة أخرى",
 		"showInFolder": "إظهار في المجلد"
 	},
+	"shortcutBar": {
+		"title": "الاختصارات على الشاشة",
+		"show": "إظهار شريط الاختصارات",
+		"hide": "إخفاء هذا الشريط",
+		"hideShort": "إخفاء",
+		"onVideo": "حرقها في الفيديو",
+		"oneLine": "سطر واحد",
+		"twoLines": "سطران",
+		"styleLabel": "الشكل",
+		"styleHint": "تغيير شكل عرض الاختصارات",
+		"stylePill": "كبسولة",
+		"styleBar": "شريط",
+		"styleMinimal": "نص فقط",
+		"previewHistory": "Ctrl + C",
+		"previewHistoryOlder": "Ctrl + V"
+	},
 	"project": {
 		"untitled": "بلا عنوان",
 		"unsavedChangesTitle": "تغييرات غير محفوظة",

@@ -62,6 +62,21 @@ export const KEYCAST_POSITIONS = [
 
 export type KeycastPosition = (typeof KEYCAST_POSITIONS)[number];
 
+/**
+ * How the badge is drawn.
+ *
+ * - `pill`: today's rounded plate (legible over any footage).
+ * - `bar`: a full-width strip along the chosen edge, for tutorials that want the
+ *   shortcut to read as a caption line.
+ * - `minimal`: keys only, no plate, for a clean look on simple footage.
+ */
+export const KEYCAST_STYLES = ["pill", "bar", "minimal"] as const;
+export type KeycastStyle = (typeof KEYCAST_STYLES)[number];
+
+/** One or two lines: the second shows the shortcuts pressed just before. */
+export const KEYCAST_LINE_COUNTS = [1, 2] as const;
+export type KeycastLineCount = (typeof KEYCAST_LINE_COUNTS)[number];
+
 export interface KeycastSettings {
 	enabled: boolean;
 	position: KeycastPosition;
@@ -70,6 +85,11 @@ export interface KeycastSettings {
 	opacity: number;
 	/** How long a badge stays at full opacity after the keystroke. */
 	holdMs: number;
+	style: KeycastStyle;
+	/** 1 = the current combination only, 2 = plus the previous ones. */
+	lines: KeycastLineCount;
+	/** Optional accent for the caps/bar edge; `null` keeps the default theme. */
+	accentColor: string | null;
 }
 
 export const DEFAULT_KEYCAST_SETTINGS: KeycastSettings = {
@@ -79,7 +99,30 @@ export const DEFAULT_KEYCAST_SETTINGS: KeycastSettings = {
 	size: 1,
 	opacity: 1,
 	holdMs: DEFAULT_KEYCAST_HOLD_MS,
+	style: "pill",
+	lines: 1,
+	accentColor: null,
 };
+
+/** How many earlier shortcuts the second line can show. */
+export const MAX_KEYCAST_HISTORY_ENTRIES = 3;
+
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+export function isKeycastStyle(value: unknown): value is KeycastStyle {
+	return typeof value === "string" && (KEYCAST_STYLES as readonly string[]).includes(value);
+}
+
+export function isKeycastLineCount(value: unknown): value is KeycastLineCount {
+	return typeof value === "number" && (KEYCAST_LINE_COUNTS as readonly number[]).includes(value);
+}
+
+/** Accepts `#rrggbb` only; anything else falls back to the default theme. */
+export function normalizeKeycastAccent(value: unknown): string | null {
+	return typeof value === "string" && HEX_COLOR_PATTERN.test(value.trim())
+		? value.trim().toLowerCase()
+		: null;
+}
 
 export const KEYCAST_SIZE_MIN = 0.5;
 export const KEYCAST_SIZE_MAX = 3;
@@ -131,6 +174,9 @@ export function normalizeKeycastSettings(candidate: unknown): KeycastSettings {
 			typeof raw.holdMs === "number" && Number.isFinite(raw.holdMs)
 				? Math.round(clampNumber(raw.holdMs, MIN_KEYCAST_HOLD_MS, MAX_KEYCAST_HOLD_MS))
 				: DEFAULT_KEYCAST_SETTINGS.holdMs,
+		style: isKeycastStyle(raw.style) ? raw.style : DEFAULT_KEYCAST_SETTINGS.style,
+		lines: isKeycastLineCount(raw.lines) ? raw.lines : DEFAULT_KEYCAST_SETTINGS.lines,
+		accentColor: normalizeKeycastAccent(raw.accentColor),
 	};
 }
 
@@ -140,7 +186,10 @@ export function keycastSettingsEqual(left: KeycastSettings, right: KeycastSettin
 		left.position === right.position &&
 		left.size === right.size &&
 		left.opacity === right.opacity &&
-		left.holdMs === right.holdMs
+		left.holdMs === right.holdMs &&
+		left.style === right.style &&
+		left.lines === right.lines &&
+		left.accentColor === right.accentColor
 	);
 }
 
@@ -321,6 +370,58 @@ export function resolveKeycastBadge(
 
 	const opacity = fadeMs <= 0 || elapsed <= holdMs ? 1 : 1 - (elapsed - holdMs) / fadeMs;
 	return { keys: event.keys, opacity: Math.max(0, Math.min(1, opacity)), timeMs: event.timeMs };
+}
+
+/**
+ * Shortcuts for the badge's second line: the distinct combinations pressed
+ * before the current one, newest first.
+ *
+ * Only combinations whose own badge would still be on screen are listed, so the
+ * second line reads as "and just before that…" instead of resurfacing keystrokes
+ * from a minute ago. Duplicates of the newest entry are collapsed, which is what
+ * a held modifier plus repeated keys produces.
+ */
+export function resolveKeycastHistory(
+	events: readonly KeycastKeystroke[],
+	timeMs: number,
+	options: { holdMs?: number; fadeMs?: number; max?: number } = {},
+): string[][] {
+	const max = Math.max(0, options.max ?? MAX_KEYCAST_HISTORY_ENTRIES);
+	if (events.length === 0 || max === 0 || !Number.isFinite(timeMs)) {
+		return [];
+	}
+
+	const window = options.holdMs ?? DEFAULT_KEYCAST_HOLD_MS;
+	const fade = options.fadeMs ?? KEYCAST_FADE_MS;
+	const grace = Math.max(0, window) + Math.max(0, fade);
+	const history: string[][] = [];
+
+	for (let index = events.length - 1; index >= 0 && history.length < max; index -= 1) {
+		const event = events[index];
+		if (event.timeMs > timeMs) {
+			// Seeking backwards: events after "now" are not history yet.
+			continue;
+		}
+		const elapsed = timeMs - event.timeMs;
+		if (elapsed < 1) {
+			// The badge currently on screen.
+			continue;
+		}
+		if (elapsed > grace) {
+			break;
+		}
+
+		const newest = history[0];
+		const isDuplicate =
+			newest &&
+			newest.length === event.keys.length &&
+			newest.every((key, keyIndex) => key === event.keys[keyIndex]);
+		if (!isDuplicate) {
+			history.push([...event.keys]);
+		}
+	}
+
+	return history;
 }
 
 export interface KeycastBadgeMetrics {

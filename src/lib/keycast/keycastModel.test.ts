@@ -17,10 +17,12 @@ import {
 	type KeycastKeystroke,
 	keycastKeyForKeycode,
 	keycastModifierForKeycode,
+	MAX_KEYCAST_HISTORY_ENTRIES,
 	normalizeKeycastKeystrokes,
 	normalizeKeycastSettings,
 	resolveKeycastBadge,
 	resolveKeycastBadgeOrigin,
+	resolveKeycastHistory,
 	serializeKeycastSettings,
 } from "./keycastModel";
 
@@ -171,6 +173,9 @@ describe("KeycastSettings", () => {
 			size: 3,
 			opacity: 1,
 			holdMs: 6_000,
+			style: "pill",
+			lines: 1,
+			accentColor: null,
 		});
 
 		expect(normalizeKeycastSettings({ size: -1, opacity: -1, holdMs: 0 })).toMatchObject({
@@ -195,6 +200,9 @@ describe("KeycastSettings", () => {
 			size: 1.25,
 			opacity: 0.6,
 			holdMs: 2_000,
+			style: "pill",
+			lines: 1,
+			accentColor: null,
 		});
 	});
 
@@ -372,5 +380,69 @@ describe("layout helpers", () => {
 				margin,
 			),
 		).toEqual({ x: 810, y: 980 });
+	});
+
+	describe("shortcut bar appearance", () => {
+		it("defaults the new look to a single-line pill and migrates stored settings", () => {
+			expect(DEFAULT_KEYCAST_SETTINGS.style).toBe("pill");
+			expect(DEFAULT_KEYCAST_SETTINGS.lines).toBe(1);
+			expect(DEFAULT_KEYCAST_SETTINGS.accentColor).toBeNull();
+			expect(MAX_KEYCAST_HISTORY_ENTRIES).toBeGreaterThan(0);
+
+			// Settings stored before these options existed keep working.
+			const migrated = normalizeKeycastSettings({ enabled: true, size: 1.5 });
+			expect(migrated).toMatchObject({ enabled: true, size: 1.5, style: "pill", lines: 1 });
+
+			const invalid = normalizeKeycastSettings({
+				style: "fancy",
+				lines: 7,
+				accentColor: "red",
+			});
+			expect(invalid.style).toBe("pill");
+			expect(invalid.lines).toBe(1);
+			expect(invalid.accentColor).toBeNull();
+		});
+
+		it("accepts a two-line bar with an accent colour", () => {
+			const settings = normalizeKeycastSettings({
+				style: "bar",
+				lines: 2,
+				accentColor: "#2563EB",
+			});
+
+			expect(settings).toEqual({
+				...DEFAULT_KEYCAST_SETTINGS,
+				style: "bar",
+				lines: 2,
+				accentColor: "#2563eb",
+			});
+			expect(serializeKeycastSettings(settings)).toContain("#2563eb");
+			expect(deserializeKeycastSettings(serializeKeycastSettings(settings))).toEqual(
+				settings,
+			);
+		});
+
+		it("lists the shortcuts pressed just before the current one", () => {
+			const events = [
+				stroke(1_000, "Ctrl", "A"),
+				stroke(2_000, "Ctrl", "C"),
+				stroke(2_100, "Ctrl", "C"),
+				stroke(3_000, "Ctrl", "V"),
+			];
+
+			// At the moment of Ctrl+V, the newest history entry is Ctrl+C once only,
+			// followed by the earlier combination while its own badge would still show.
+			expect(resolveKeycastHistory(events, 3_000, { holdMs: 3_000, fadeMs: 220 })).toEqual([
+				["Ctrl", "C"],
+				["Ctrl", "A"],
+			]);
+
+			// Older strokes drop out of the window entirely.
+			expect(
+				resolveKeycastHistory(events, 9_000, { holdMs: 1_600, fadeMs: 220 }),
+			).toHaveLength(0);
+
+			expect(resolveKeycastHistory(events, 3_000, { max: 1 })).toEqual([["Ctrl", "C"]]);
+		});
 	});
 });
