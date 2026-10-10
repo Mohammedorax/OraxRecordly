@@ -54,24 +54,15 @@ jobs:
       - name: Build the application
         run: npm run build:app
 
-      # Advisory for now on purpose: the suite boots Electron, renders through
-      # WebGPU/WebGL and runs a real encode, and hosted-runner GPU support varies.
-      # A flaky required check would train everyone to ignore red builds, so this
-      # reports a warning plus artifacts until it has been green for a while —
-      # then drop `continue-on-error` to make it blocking.
+      # The suite boots Electron, renders through WebGPU/WebGL and runs a real
+      # encode. It is expected to pass on this runner: the app recovers by itself
+      # when a renderer starts without the preload bridge
+      # (`src/lib/preloadBridgeGuard.ts`), which is what used to fail here. Kept
+      # advisory until it has been green for a while — a flaky required check
+      # trains everyone to ignore red builds — then drop `continue-on-error`.
       - name: Run the Electron export test
         id: e2e
         continue-on-error: true
-        env:
-          # Some hosted Windows runners cannot start Electron's sandboxed
-          # renderer ("sandboxed_renderer.bundle.js script failed to run:
-          # Cannot destructure property 'preloadScripts' of
-          # 'binding.startupData'"), so the preload never reaches the page and
-          # the editor shows its error screen. That is an environment limitation
-          # of the runner, not an app path — the suite passes on a normal
-          # Windows desktop with the sandbox left at its default. Disabling it
-          # here only for the runner.
-          RECORDLY_E2E_ARGS: "--no-sandbox"
         run: npx playwright test --config playwright.electron.config.ts
 
       - name: Upload diagnostics
