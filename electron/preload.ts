@@ -1295,6 +1295,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			error?: string;
 		}>;
 	},
+	pathExists: (targetPath: string) => {
+		return ipcRenderer.invoke("path-exists", targetPath) as Promise<{ exists: boolean }>;
+	},
 	chooseRecordingsDirectory: () => {
 		return ipcRenderer.invoke("choose-recordings-directory");
 	},

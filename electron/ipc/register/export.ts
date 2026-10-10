@@ -1051,6 +1051,24 @@ export function registerExportHandlers() {
 		},
 	);
 
+	// Used by the export-history list to hide files that were moved or deleted.
+	// Answers only for paths the app is allowed to read, so it cannot be used to
+	// probe the filesystem.
+	ipcMain.handle("path-exists", async (_event, targetPath: string) => {
+		try {
+			if (typeof targetPath !== "string" || targetPath.trim().length === 0) {
+				return { exists: false };
+			}
+			if (!isAllowedLocalReadPath(path.resolve(targetPath))) {
+				return { exists: false };
+			}
+			await fs.access(targetPath);
+			return { exists: true };
+		} catch {
+			return { exists: false };
+		}
+	});
+
 	ipcMain.handle(
 		"finalize-exported-video",
 		async (

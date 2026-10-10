@@ -73,6 +73,19 @@ export function useProjectOpenActions({
 				const result = await window.electronAPI.openProjectFileAtPath(projectPath);
 				if (result.canceled) return;
 				if (!result.success) {
+					// A project whose recording was moved or deleted can never open.
+					// Say that in plain language instead of echoing a file path, and
+					// refresh the library so the unusable entry disappears.
+					if (result.code === "media-missing") {
+						project.setError(
+							t(
+								"project.mediaMissing",
+								"The recording this project was built from is no longer on disk, so it cannot be opened. It was moved or deleted; the project has been removed from your recent list.",
+							),
+						);
+						await refreshProjectLibrary();
+						return;
+					}
 					project.setError(
 						result.error ||
 							result.message ||

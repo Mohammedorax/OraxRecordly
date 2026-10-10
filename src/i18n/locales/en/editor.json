@@ -178,6 +178,7 @@
 		"loadFailed": "Failed to load project",
 		"mediaImported": "Media imported",
 		"mediaLoadFailed": "Could not load media",
+		"mediaMissing": "The recording this project was built from is no longer on disk, so it cannot be opened. It was moved or deleted; the project has been removed from your recent list.",
 		"nameRequired": "Project name is required",
 		"noMediaSelected": "No media file selected",
 		"noVideoLoaded": "No video loaded",

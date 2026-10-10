@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	type ExportHistoryEntry,
 	normalizeExportHistory,
@@ -47,5 +47,43 @@ describe("export history", () => {
 		expect(reExported).toHaveLength(8);
 		expect(reExported[0].path).toBe("/clip-5.mp4");
 		expect(reExported.filter((item) => item.path === "/clip-5.mp4")).toHaveLength(1);
+	});
+
+	it("drops entries whose file no longer exists and persists the change", async () => {
+		const store = new Map<string, string>();
+		const localStorageStub = {
+			getItem: (key: string) => store.get(key) ?? null,
+			setItem: (key: string, value: string) => {
+				store.set(key, value);
+			},
+			removeItem: (key: string) => {
+				store.delete(key);
+			},
+		};
+		vi.stubGlobal("localStorage", localStorageStub);
+
+		try {
+			const { readExportHistory, recordExportHistory, removeExportHistoryEntries } =
+				await import("./exportHistory");
+
+			recordExportHistory({
+				path: "/gone/export-1.mp4",
+				name: "export-1.mp4",
+				format: "mp4",
+			});
+			recordExportHistory({
+				path: "/kept/export-2.mp4",
+				name: "export-2.mp4",
+				format: "mp4",
+			});
+			expect(readExportHistory()).toHaveLength(2);
+
+			const remaining = removeExportHistoryEntries(["/gone/export-1.mp4"]);
+
+			expect(remaining.map((entry) => entry.path)).toEqual(["/kept/export-2.mp4"]);
+			expect(readExportHistory().map((entry) => entry.path)).toEqual(["/kept/export-2.mp4"]);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 });

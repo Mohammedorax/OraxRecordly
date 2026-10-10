@@ -22,6 +22,17 @@ function pinUserDataPath(): void {
 		return;
 	}
 
+	// Test seam: the end-to-end suite must never touch a real profile. `APPDATA`
+	// and Chromium's `--user-data-dir` are both ignored here (the path comes from
+	// the OS known-folder API and this pin respectively), so the suite sets this
+	// variable instead. Unpackaged builds only: a shipped app keeps its profile.
+	const overrideUserDataPath = process.env["RECORDLY_USER_DATA_DIR"];
+	if (overrideUserDataPath && !app.isPackaged) {
+		app.setPath("userData", overrideUserDataPath);
+		app.setPath("sessionData", path.join(overrideUserDataPath, "session"));
+		return;
+	}
+
 	app.setPath("userData", path.join(app.getPath("appData"), "Recordly"));
 
 	if (process.env["VITE_DEV_SERVER_URL"]) {
@@ -71,6 +82,14 @@ export const RECORDINGS_DIR = path.join(USER_DATA_PATH, "recordings");
  * source; see `electron/ipc/recordingDirMigration.ts`.
  */
 export function getDefaultRecordingsDir(): string {
+	// Test seam, mirroring `RECORDLY_USER_DATA_DIR`: the end-to-end suite must not
+	// write projects or exports into the developer's real Videos folder, which is
+	// an OS known folder and therefore unaffected by environment redirection.
+	const overrideRecordingsDir = process.env["RECORDLY_TEST_RECORDINGS_DIR"];
+	if (overrideRecordingsDir && !app?.isPackaged) {
+		return overrideRecordingsDir;
+	}
+
 	try {
 		if (typeof app?.getPath === "function") {
 			const videosPath = app.getPath("videos");

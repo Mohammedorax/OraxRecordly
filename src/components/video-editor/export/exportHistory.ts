@@ -65,16 +65,38 @@ export function readExportHistory(): ExportHistoryEntry[] {
 	}
 }
 
+function writeExportHistory(entries: ExportHistoryEntry[]): void {
+	if (typeof localStorage === "undefined") {
+		return;
+	}
+	try {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+	} catch {
+		// Storage may be full or unavailable; the caller keeps its own copy.
+	}
+}
+
+/**
+ * Drops entries whose files are gone.
+ *
+ * The list is history, not a guarantee: an export can be moved, deleted, or live
+ * in a temporary folder that was cleaned up, and offering "show in folder" for a
+ * file that no longer exists is worse than not listing it.
+ */
+export function removeExportHistoryEntries(projectPaths: readonly string[]): ExportHistoryEntry[] {
+	if (projectPaths.length === 0) {
+		return readExportHistory();
+	}
+	const missing = new Set(projectPaths);
+	const remaining = readExportHistory().filter((entry) => !missing.has(entry.path));
+	writeExportHistory(remaining);
+	return remaining;
+}
+
 export function recordExportHistory(
 	entry: Omit<ExportHistoryEntry, "at"> & { at?: number },
 ): ExportHistoryEntry[] {
 	const next = prependExportHistoryEntry(readExportHistory(), entry);
-	if (typeof localStorage !== "undefined") {
-		try {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-		} catch {
-			// Storage may be full or unavailable; the in-memory list still works.
-		}
-	}
+	writeExportHistory(next);
 	return next;
 }

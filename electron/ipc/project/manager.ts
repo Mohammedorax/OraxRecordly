@@ -172,21 +172,34 @@ export async function replaceApprovedSessionLocalReadPaths(
 	}
 }
 
-export async function resolveProjectMediaSources(
-	project: unknown,
-): Promise<{ success: true; videoPath: string } | { success: false; message: string }> {
+export async function resolveProjectMediaSources(project: unknown): Promise<
+	| { success: true; videoPath: string }
+	| {
+			success: false;
+			message: string;
+			code?: "invalid-project" | "missing-video-path" | "media-missing";
+	  }
+> {
 	if (!project || typeof project !== "object") {
-		return { success: false, message: "Invalid project file format" };
+		return { success: false, code: "invalid-project", message: "Invalid project file format" };
 	}
 
 	const rawVideoPath = (project as { videoPath?: unknown }).videoPath;
 	if (typeof rawVideoPath !== "string") {
-		return { success: false, message: "Project file is missing a video path" };
+		return {
+			success: false,
+			code: "missing-video-path",
+			message: "Project file is missing a video path",
+		};
 	}
 
 	const normalizedVideoPath = normalizeVideoSourcePath(rawVideoPath);
 	if (!normalizedVideoPath) {
-		return { success: false, message: "Project file is missing a valid video path" };
+		return {
+			success: false,
+			code: "missing-video-path",
+			message: "Project file is missing a valid video path",
+		};
 	}
 
 	try {
@@ -194,6 +207,10 @@ export async function resolveProjectMediaSources(
 	} catch {
 		return {
 			success: false,
+			// The renderer turns this into an explanation instead of showing the raw
+			// path: the recording a project points at can be moved or deleted after
+			// the project was saved.
+			code: "media-missing" as const,
 			message: `Project video file not found: ${normalizedVideoPath}`,
 		};
 	}
@@ -283,6 +300,22 @@ export async function rememberRecentProject(projectPath: string) {
 
 	const existingPaths = await loadRecentProjectPaths();
 	await saveRecentProjectPaths([projectPath, ...existingPaths]);
+}
+
+/**
+ * Drops a path from the recent list.
+ *
+ * Used when a project can no longer be opened because its recording is gone: an
+ * entry that always fails is worse than no entry, and it otherwise keeps coming
+ * back every time the editor starts.
+ */
+export async function forgetRecentProject(projectPath: string) {
+	const normalized = normalizePath(projectPath);
+	const existingPaths = await loadRecentProjectPaths();
+	const remaining = existingPaths.filter((value) => normalizePath(value) !== normalized);
+	if (remaining.length !== existingPaths.length) {
+		await saveRecentProjectPaths(remaining);
+	}
 }
 
 export async function buildProjectLibraryEntry(
@@ -433,9 +466,16 @@ export async function loadProjectFromPath(projectPath: string) {
 	const mediaSources = await resolveProjectMediaSources(project);
 
 	if (!mediaSources.success) {
+		// A project whose recording is gone can never open; stop offering it.
+		if (mediaSources.code === "media-missing") {
+			await forgetRecentProject(normalizedPath).catch((error) =>
+				console.warn("Could not drop the unusable recent project", error),
+			);
+		}
 		return {
 			success: false,
 			canceled: false,
+			code: mediaSources.code,
 			message: mediaSources.message,
 		};
 	}

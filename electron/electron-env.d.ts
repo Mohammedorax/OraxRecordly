@@ -617,6 +617,8 @@ interface Window {
 			body?: string;
 			filePath?: string;
 		}) => Promise<{ success: boolean; error?: string }>;
+		/** Existence check for app-readable paths (used by the export history). */
+		pathExists: (targetPath: string) => Promise<{ exists: boolean }>;
 		getVideoAudioFallbackPaths: (videoPath: string) => Promise<{
 			success: boolean;
 			paths: string[];
@@ -1059,6 +1061,8 @@ interface Window {
 			path?: string;
 			project?: unknown;
 			message?: string;
+			/** Machine-readable failure kind, e.g. `media-missing`. */
+			code?: string;
 			canceled?: boolean;
 			error?: string;
 		}>;

@@ -104,6 +104,18 @@ export async function runSmokeExport(options: SmokeExportOptions = {}): Promise<
 	const reportPath = `${outputPath}.report.json`;
 	const cdpPort = await pickFreePort();
 
+	// Everything the app persists (projects, settings, localStorage, recent lists)
+	// must land inside this run's temporary directory. Neither `APPDATA` nor
+	// Chromium's `--user-data-dir` changes the app's profile (it pins userData to
+	// `%APPDATA%\Recordly` from the OS known-folder API), so the app honors
+	// `RECORDLY_USER_DATA_DIR` for unpackaged builds and the suite points it here.
+	// Without this the suite writes into the developer's real profile: earlier runs
+	// left ~25 unusable projects and stale history entries behind.
+	const userDataDirectory = path.join(workDirectory, "userdata");
+	const recordingsDirectory = path.join(workDirectory, "recordings");
+	await fs.mkdir(userDataDirectory, { recursive: true });
+	await fs.mkdir(recordingsDirectory, { recursive: true });
+
 	// Electron's stdout is a pipe here and can stay empty even when the app
 	// fails, so the log goes to a real file and is read back on failure.
 	const mainLogPath = path.join(workDirectory, "main-process.log");
@@ -128,6 +140,9 @@ export async function runSmokeExport(options: SmokeExportOptions = {}): Promise<
 				RECORDLY_SMOKE_EXPORT_OUTPUT: outputPath,
 				RECORDLY_SMOKE_EXPORT_QUALITY: "medium",
 				RECORDLY_SMOKE_EXPORT_FPS: "24",
+				// Redirect the whole profile into the throwaway directory.
+				RECORDLY_USER_DATA_DIR: userDataDirectory,
+				RECORDLY_TEST_RECORDINGS_DIR: recordingsDirectory,
 				...(options.env ?? {}),
 			},
 			stdio: ["ignore", mainLogFd, mainLogFd],
@@ -202,6 +217,15 @@ export async function runSmokeExport(options: SmokeExportOptions = {}): Promise<
 		} catch (error) {
 			throw new Error(
 				`${String(error)}\n${await summarizePage(page)}\n--- renderer log ---\n${rendererLog.slice(-40).join("\n")}\n--- main process output ---\n${await readMainLog()}`,
+			);
+		}
+
+		// The isolated profile must have been used. If this fails, the app wrote into
+		// the developer's real %APPDATA%\Recordly and the suite is polluting it.
+		const profileEntries = await fs.readdir(userDataDirectory).catch(() => [] as string[]);
+		if (profileEntries.length === 0) {
+			throw new Error(
+				`The app did not use the isolated profile at ${userDataDirectory}; it may have written into the real user data directory instead.`,
 			);
 		}
 

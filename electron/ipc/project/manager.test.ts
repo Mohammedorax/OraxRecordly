@@ -207,6 +207,29 @@ describe("local media path policy", () => {
 		expect(result.project).toMatchObject({ videoPath });
 	});
 
+	it("reports a missing recording and drops the unusable project from the recent list", async () => {
+		const { loadProjectFromPath, loadRecentProjectPaths, rememberRecentProject } = await import(
+			"./manager"
+		);
+		const missingVideoPath = path.join(tempRoot, "gone", "recording.mp4");
+		const projectPath = path.join(tempPath, "missing-media.recordly");
+		await fs.writeFile(
+			projectPath,
+			JSON.stringify({ version: 1, videoPath: missingVideoPath, editor: {} }),
+			"utf-8",
+		);
+		await rememberRecentProject(projectPath);
+		expect(await loadRecentProjectPaths()).toContain(projectPath);
+
+		const result = await loadProjectFromPath(projectPath);
+
+		expect(result.success).toBe(false);
+		// The renderer translates this code instead of echoing a file path at the user.
+		expect(result.code).toBe("media-missing");
+		expect(result.message).toContain(missingVideoPath);
+		expect(await loadRecentProjectPaths()).not.toContain(projectPath);
+	});
+
 	it("rejects invalid project payloads before approving media paths", async () => {
 		const downloadsPath = path.join(tempRoot, "Downloads");
 		const videoPath = path.join(downloadsPath, "recording.mp4");

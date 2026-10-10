@@ -14,7 +14,11 @@ import type {
 	GifSizePreset,
 } from "@/lib/exporter/types";
 import { GIF_FRAME_RATES, GIF_SIZE_PRESETS, MP4_FRAME_RATES } from "@/lib/exporter/types";
-import { type ExportHistoryEntry, readExportHistory } from "./export/exportHistory";
+import {
+	type ExportHistoryEntry,
+	readExportHistory,
+	removeExportHistoryEntries,
+} from "./export/exportHistory";
 
 interface ExportSettingsMenuProps {
 	exportFormat: ExportFormat;
@@ -140,7 +144,22 @@ export function ExportSettingsMenu({
 	// finished exports without any cross-component subscription.
 	const [exportHistory, setExportHistory] = useState<ExportHistoryEntry[]>([]);
 	useEffect(() => {
-		setExportHistory(readExportHistory());
+		const entries = readExportHistory();
+		setExportHistory(entries);
+		// Drop entries whose file is gone: offering "show in folder" for a deleted
+		// export is worse than not listing it, and this also clears stale history.
+		void (async () => {
+			const missing: string[] = [];
+			for (const entry of entries) {
+				const result = await window.electronAPI?.pathExists?.(entry.path).catch(() => null);
+				if (result && !result.exists) {
+					missing.push(entry.path);
+				}
+			}
+			if (missing.length > 0) {
+				setExportHistory(removeExportHistoryEntries(missing));
+			}
+		})();
 	}, []);
 	const isLegacyModel = exportPipelineModel === "legacy";
 
