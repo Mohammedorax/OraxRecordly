@@ -30,6 +30,7 @@ import {
 	destroyPixiContainer,
 	initializePixiApplicationWithTimeout,
 } from "@/lib/pixiApplicationLifecycle";
+import { isBenignPlaybackInterruption } from "@/lib/playbackErrors";
 import {
 	DEFAULT_WALLPAPER_PATH,
 	DEFAULT_WALLPAPER_RELATIVE_PATH,
@@ -1933,6 +1934,16 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			video.pause();
 
 			let preserveCameraAcrossCut = false;
+			// Pausing, seeking, or finishing an export rejects a pending `play()` with
+			// an AbortError. Reporting that as an editor error replaced the whole
+			// editor with the "open projects" error screen right after a successful
+			// export, so only genuine failures reach the user.
+			const reportPlaybackError = (error: unknown) => {
+				if (isBenignPlaybackInterruption(error)) {
+					return;
+				}
+				onPlaybackErrorRef.current(error instanceof Error ? error.message : String(error));
+			};
 			const transport = createClipPlayback({
 				video,
 				getClips: () => clipRegionsRef.current,
@@ -1948,15 +1959,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					isPlayingRef.current = playing;
 					onPlayStateChange(playing);
 				},
-				onError: (error) =>
-					onPlaybackErrorRef.current(
-						error instanceof Error ? error.message : String(error),
-					),
+				onError: reportPlaybackError,
 			});
 			clipPlaybackRef.current = transport;
 			transport.seek(timelineTimeRef.current);
-			if (autoPlay)
-				void transport.play().catch((error) => onPlaybackErrorRef.current(String(error)));
+			if (autoPlay) void transport.play().catch(reportPlaybackError);
 			const handleSeeked = () => {
 				isSeekingRef.current = false;
 				// A source seek at a contiguous cut must not reset the camera springs.
@@ -2794,6 +2801,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				<video
 					ref={attachVideo}
 					src={videoPath}
+					// Keeps Chromium from showing the media URL (which contains the
+					// absolute file path) as the element's native tooltip.
+					title=""
 					className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
 					style={{ visibility: isGap ? "hidden" : "visible" }}
 					preload="auto"

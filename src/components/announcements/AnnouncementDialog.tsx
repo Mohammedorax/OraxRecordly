@@ -42,6 +42,8 @@ function AnnouncementMediaBanner({
 		return (
 			<video
 				key={media.url}
+				// Keeps Chromium from showing the media URL as a hover tooltip.
+				title={media.alt ?? ""}
 				className={cn(
 					"w-full bg-black",
 					cover ? "h-full object-cover" : "max-h-72 object-contain",

@@ -9,6 +9,7 @@ import type { useEditorExportController } from "../export/useEditorExportControl
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
 import type { useExportSettings } from "../export/useExportSettings";
+import { useRecordingActivity } from "../hooks/useRecordingActivity";
 import type { useTimelineEditingController } from "../hooks/useTimelineEditingController";
 import { useVideoSourceRecovery } from "../hooks/useVideoSourceRecovery";
 import { RecordingLibraryPanel } from "../library/RecordingLibraryPanel";
@@ -73,6 +74,7 @@ export function EditorShell(props: Props) {
 		previewAspectRatioValue,
 	} = props;
 	const library = useRecordingLibrary(project, timeline, ui, appearance);
+	const isRecordingActive = useRecordingActivity();
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Changing the active inspector closes the Videos view.
 	useEffect(() => {
 		library.setOpen(false);
@@ -313,7 +315,11 @@ export function EditorShell(props: Props) {
 						isPlaying={ui.isPlaying}
 						previewVolume={ui.previewVolume}
 						setPreviewVolume={ui.setPreviewVolume}
-						suspendRendering={exportStatus.shouldSuspendPreviewRendering}
+						// Recording shares the GPU and CPU with the capture encoder, so the
+						// preview stops drawing while a recording runs.
+						suspendRendering={
+							exportStatus.shouldSuspendPreviewRendering || isRecordingActive
+						}
 						appearance={appearance}
 						timeline={timeline}
 						audio={audio}
