@@ -81,6 +81,9 @@ export function RawThumbnail({ entry, active }: { entry: RecordingLibraryEntry; 
 					muted
 					playsInline
 					preload="metadata"
+					// Without this, Chromium shows the media URL (which contains the
+					// file path) as a tooltip on hover.
+					title={entry.name}
 					className="h-full w-full object-cover"
 					onTimeUpdate={(event) => {
 						if (event.currentTarget.currentTime >= 5) event.currentTarget.pause();
@@ -124,6 +127,7 @@ export function RawPreview({
 									<video
 										controls
 										src={entry.rawSource.url}
+										title={entry.name}
 										className="max-h-[65vh] w-full rounded-xl"
 									/>
 								))}

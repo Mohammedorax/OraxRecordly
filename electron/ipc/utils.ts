@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "electron";
 import { getLocalMediaServerPath } from "../../src/lib/localMediaUrl";
-import { getDefaultRecordingsDir, RECORDINGS_DIR } from "../appPaths";
+import { getDefaultRecordingsDir, getRecordingCacheDir, RECORDINGS_DIR } from "../appPaths";
 import { AUTO_RECORDING_PREFIX, RECORDINGS_SETTINGS_FILE } from "./constants";
 import { migrateRecordingsDirectoryOnce } from "./recordingDirMigration";
 import {
@@ -115,6 +115,17 @@ export async function getRecordingsDir() {
 		return customRecordingsDir;
 	}
 	return resolveDefaultRecordingsDir();
+}
+
+/**
+ * Where a new recording (video, audio sidecars, capture working directory) is
+ * written: the cache folder inside the recordings root, keeping the root for
+ * finished exports.
+ */
+export async function getRecordingOutputDir() {
+	const cacheDir = getRecordingCacheDir(await getRecordingsDir());
+	await fs.mkdir(cacheDir, { recursive: true });
+	return cacheDir;
 }
 
 /**

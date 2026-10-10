@@ -2426,6 +2426,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						muted
 						loop
 						playsInline
+						// Keeps Chromium from showing the media URL as a hover tooltip.
+						title={t("editor.wallpaper.backgroundVideo", "Background video")}
 						style={{
 							filter:
 								sceneEffects.backgroundBlurPx > 0

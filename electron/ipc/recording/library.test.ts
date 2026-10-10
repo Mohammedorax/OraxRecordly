@@ -64,6 +64,21 @@ afterEach(async () => {
 	await fs.rm(state.root, { recursive: true, force: true });
 });
 
+it("lists footage from the root and the cache folder but never a finished export", async () => {
+	const rootRecording = path.join(state.root, "recording-1700000000000.mp4");
+	const cacheDirectory = path.join(state.root, "Cache");
+	const cachedRecording = path.join(cacheDirectory, "recording-1700000000001.mp4");
+	const finishedExport = path.join(state.root, "export-1700000000002.mp4");
+	await fs.mkdir(cacheDirectory, { recursive: true });
+	for (const file of [rootRecording, cachedRecording, finishedExport]) {
+		await fs.writeFile(file, "fixture");
+	}
+
+	const listed = (await listRecordings()).map((entry) => entry.path).sort();
+
+	expect(listed).toEqual([cachedRecording, rootRecording].sort());
+});
+
 it("lists recordings, moves recordings and their companions to Trash with reversible removals, and excludes companion media and symlinks", async () => {
 	const first = path.join(state.root, "recording-old.mp4");
 	const second = path.join(state.root, "recording-new.mov");

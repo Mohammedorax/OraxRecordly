@@ -148,6 +148,7 @@ import {
 import type { CursorTelemetryPoint, NativeMacRecordingOptions, SelectedSource } from "../types";
 import {
 	getMacPrivacySettingsUrl,
+	getRecordingOutputDir,
 	getRecordingsDir,
 	getScreen,
 	getTelemetryPathForVideo,
@@ -727,7 +728,9 @@ export function registerRecordingHandlers(
 				let tempMicPath: string | null = null;
 				try {
 					const exePath = getWindowsCaptureExePath();
-					const recordingsDir = await getRecordingsDir();
+					// New footage goes to the cache folder so the recordings root stays
+					// the place where the user's finished, exported videos appear.
+					const recordingsDir = await getRecordingOutputDir();
 					const timestamp = Date.now();
 					const outputPath = path.join(recordingsDir, `recording-${timestamp}.mp4`);
 					tempVideoPath = path.join(
@@ -968,7 +971,7 @@ export function registerRecordingHandlers(
 
 			let captProc: ChildProcessWithoutNullStreams | null = null;
 			try {
-				const recordingsDir = await getRecordingsDir();
+				const recordingsDir = await getRecordingOutputDir();
 
 				// Warm up TCC: trigger an Electron-level screen capture API call so macOS
 				// activates the screen-recording grant for this process tree before the
@@ -1672,7 +1675,7 @@ export function registerRecordingHandlers(
 		}
 
 		try {
-			const recordingsDir = await getRecordingsDir();
+			const recordingsDir = await getRecordingOutputDir();
 			const ffmpegPath = getFfmpegBinaryPath();
 			const outputPath = path.join(recordingsDir, `recording-${Date.now()}.mp4`);
 			const args = await buildFfmpegCaptureArgs(source, outputPath);
@@ -1900,7 +1903,7 @@ export function registerRecordingHandlers(
 
 	ipcMain.handle("store-recorded-video", async (_, videoData: ArrayBuffer, fileName: unknown) => {
 		try {
-			const recordingsDir = await getRecordingsDir();
+			const recordingsDir = await getRecordingOutputDir();
 			const videoPath = resolveRecordedVideoStoragePath(recordingsDir, fileName);
 			await fs.writeFile(videoPath, Buffer.from(videoData));
 			return await finalizeStoredVideo(videoPath);
@@ -1916,16 +1919,24 @@ export function registerRecordingHandlers(
 
 	ipcMain.handle("get-recorded-video-path", async () => {
 		try {
-			const recordingsDir = await getRecordingsDir();
-			const entries = await fs.readdir(recordingsDir, { withFileTypes: true });
+			// New footage lives in the cache folder, but recordings made before that
+			// change are still in the root, so both are searched.
+			const rootDir = await getRecordingsDir();
+			const directories = [path.join(rootDir, "Cache"), rootDir];
+			const entries: Array<{ name: string; directory: string }> = [];
+			for (const directory of directories) {
+				const found = await fs.readdir(directory, { withFileTypes: true }).catch(() => []);
+				for (const entry of found) {
+					if (entry.isFile()) {
+						entries.push({ name: entry.name, directory });
+					}
+				}
+			}
 			const candidates = await Promise.all(
 				entries
-					.filter(
-						(entry) =>
-							entry.isFile() && /^recording-\d+\.(webm|mov|mp4)$/i.test(entry.name),
-					)
+					.filter((entry) => /^recording-\d+\.(webm|mov|mp4)$/i.test(entry.name))
 					.map(async (entry) => {
-						const fullPath = path.join(recordingsDir, entry.name);
+						const fullPath = path.join(entry.directory, entry.name);
 						const stat = await fs.stat(fullPath).catch(() => null);
 						return stat ? { path: fullPath, mtimeMs: stat.mtimeMs } : null;
 					}),

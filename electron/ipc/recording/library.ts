@@ -14,6 +14,27 @@ const isRecording = (name: string) =>
 const batchKey = (paths: string[]) => JSON.stringify([...new Set(paths)].sort());
 
 /**
+ * Finished exports land in the recordings root; new footage lands in its cache
+ * folder. Both are part of the library, and an export must not show up as
+ * footage to edit again.
+ */
+const EXPORT_FILE_PATTERN = /^export[-_ ]/i;
+const RECORDING_CACHE_DIR_NAME = "Cache";
+
+function getLibraryDirectories(root: string): string[] {
+	return [root, path.join(root, RECORDING_CACHE_DIR_NAME)];
+}
+
+function isSelectableRecordingPath(candidate: string, root: string): boolean {
+	const directory = path.dirname(candidate);
+	const inRoot = directory === root;
+	const inCache = directory === path.join(root, RECORDING_CACHE_DIR_NAME);
+	if (!inRoot && !inCache) return false;
+	if (inRoot && EXPORT_FILE_PATTERN.test(path.basename(candidate))) return false;
+	return isRecording(path.basename(candidate));
+}
+
+/**
  * The recorder names files `recording-<epochMs>`, so the capture *start* time is
  * recoverable from the name (mtime is the stop time). Falls back to mtime.
  */
@@ -43,26 +64,33 @@ export function listRecordings(includeSources = false): Promise<RecordingLibrary
 			}
 		}
 		const result: RecordingLibraryEntry[] = [];
-		for (const entry of entries) {
-			if (
-				!entry.isFile() ||
-				!(includeSources
-					? /\.(mp4|mov|webm|mkv|m4v|wav|m4a|mp3|ogg|flac)$/i.test(entry.name)
-					: isRecording(entry.name))
-			)
-				continue;
-			const filePath = path.join(root, entry.name);
-			const stat = await fs.stat(filePath);
-			if (!stat.size) continue;
-			await rememberApprovedLocalReadPath(filePath);
-			result.push({
-				path: filePath,
-				name: entry.name,
-				bytes: stat.size,
-				createdAt: stat.mtimeMs,
-				recordedAt: getRecordedAtMs(entry.name, stat.mtimeMs),
-				url: buildMediaUrl(server, filePath),
-			});
+		for (const directory of getLibraryDirectories(root)) {
+			const directoryEntries = await fs
+				.readdir(directory, { withFileTypes: true })
+				.catch(() => []);
+			const isRoot = directory === root;
+			for (const entry of directoryEntries) {
+				if (
+					!entry.isFile() ||
+					(isRoot && EXPORT_FILE_PATTERN.test(entry.name)) ||
+					!(includeSources
+						? /\.(mp4|mov|webm|mkv|m4v|wav|m4a|mp3|ogg|flac)$/i.test(entry.name)
+						: isRecording(entry.name))
+				)
+					continue;
+				const filePath = path.join(directory, entry.name);
+				const stat = await fs.stat(filePath);
+				if (!stat.size) continue;
+				await rememberApprovedLocalReadPath(filePath);
+				result.push({
+					path: filePath,
+					name: entry.name,
+					bytes: stat.size,
+					createdAt: stat.mtimeMs,
+					recordedAt: getRecordedAtMs(entry.name, stat.mtimeMs),
+					url: buildMediaUrl(server, filePath),
+				});
+			}
 		}
 		return result.sort((a, b) => b.createdAt - a.createdAt);
 	});
@@ -102,8 +130,9 @@ export function setRecordingsRemoved(paths: string[], removed: boolean): Promise
 		const root = await fs.realpath(await getRecordingsDir());
 		const selected = [...new Set(paths)];
 		for (const candidate of selected) {
-			if (path.dirname(candidate) !== root || !isRecording(path.basename(candidate)))
+			if (!isSelectableRecordingPath(candidate, root)) {
 				throw new Error("Recording is outside the Videos library");
+			}
 		}
 		const key = batchKey(selected);
 		if (!removed) {

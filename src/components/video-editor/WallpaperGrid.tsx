@@ -52,7 +52,7 @@ export function WallpaperGrid({
 							className="relative aspect-[4/3] h-auto w-full min-w-0 overflow-hidden rounded-md p-0"
 						>
 							{isVideoWallpaperSource(item.previewUrl) ? (
-								<WallpaperVideoPreview src={item.previewUrl} />
+								<WallpaperVideoPreview src={item.previewUrl} label={item.label} />
 							) : (
 								<img
 									src={item.previewUrl || undefined}
@@ -89,7 +89,7 @@ export function WallpaperGrid({
 	);
 }
 
-function WallpaperVideoPreview({ src }: { src: string }) {
+function WallpaperVideoPreview({ src, label }: { src: string; label?: string }) {
 	const [resolvedSrc, setResolvedSrc] = useState(src);
 
 	useEffect(() => {
@@ -120,6 +120,8 @@ function WallpaperVideoPreview({ src }: { src: string }) {
 			muted
 			playsInline
 			preload="metadata"
+			// Keeps Chromium from showing the media URL as a hover tooltip.
+			title={label ?? ""}
 			className="absolute inset-0 h-full w-full select-none object-cover"
 			draggable={false}
 			onMouseEnter={(e) => e.currentTarget.play().catch(() => undefined)}

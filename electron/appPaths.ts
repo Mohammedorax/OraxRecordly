@@ -104,7 +104,30 @@ export function getDefaultRecordingsDir(): string {
 	return RECORDINGS_DIR;
 }
 
-/** Exports live in a subfolder so they never show up in the recordings library. */
+/**
+ * Finished exports land in the root of the recordings folder.
+ *
+ * That is the folder a user opens to find their videos, so the result of an
+ * export is visible immediately instead of one level down. The recordings
+ * library skips `export-*` files, so the finished videos do not also appear as
+ * footage to edit.
+ */
 export function getDefaultExportDir(recordingsDir: string): string {
-	return path.join(recordingsDir, "Exports");
+	return recordingsDir;
+}
+
+/**
+ * Raw recordings and their sidecars.
+ *
+ * The cache folder keeps the root tidy: what a user sees at the top level is
+ * what they made (finished videos), while the generated footage the editor and
+ * the recorder need lives in its own folder. Existing recordings stay where they
+ * are — moving them would break the projects that reference them — and the
+ * library still reads both locations.
+ */
+export const RECORDING_CACHE_DIR_NAME = "Cache";
+
+export function getRecordingCacheDir(recordingsDir?: string): string {
+	const root = recordingsDir ?? getDefaultRecordingsDir();
+	return path.join(root, RECORDING_CACHE_DIR_NAME);
 }
