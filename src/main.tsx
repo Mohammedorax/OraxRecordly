@@ -4,7 +4,13 @@ import App from "./App.tsx";
 import { getInitialLocale, I18nProvider } from "./contexts/I18nContext.tsx";
 import { ThemeProvider } from "./contexts/ThemeContext.tsx";
 import { getLocaleDirection } from "./i18n/config";
+import { installPreloadBridgeGuard } from "./lib/preloadBridgeGuard";
 import "./index.css";
+
+// A renderer can come up without the preload bridge (Electron's sandbox
+// bootstrap occasionally fails); without this the app dies on its first
+// settings read and only shows the generic error screen.
+installPreloadBridgeGuard();
 
 document.documentElement.dataset.platform = /mac/i.test(navigator.platform) ? "macos" : "other";
 

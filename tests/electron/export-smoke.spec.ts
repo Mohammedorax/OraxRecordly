@@ -168,16 +168,25 @@ test.describe("Electron end-to-end export", () => {
 			page.on("pageerror", (error) => rendererLog.push(`[pageerror] ${error.message}`));
 			await page.waitForLoadState("domcontentloaded");
 
-			// The preload must have exposed the bridge before anything can work; fail
-			// fast on that instead of waiting out the report timeout.
+			// The preload must have exposed the bridge before anything can work. The
+			// app reloads itself once when a renderer starts without it, so this
+			// polls instead of failing on the first look.
 			const preloadPath = path.join(repoRoot, "dist-electron", "preload.mjs");
-			const hasBridge = await page
-				.evaluate(
-					() =>
-						typeof (globalThis as { electronAPI?: unknown }).electronAPI !==
-						"undefined",
-				)
-				.catch(() => false);
+			let hasBridge = false;
+			const bridgeDeadline = Date.now() + 30_000;
+			while (Date.now() < bridgeDeadline) {
+				hasBridge = await page
+					.evaluate(
+						() =>
+							typeof (globalThis as { electronAPI?: unknown }).electronAPI !==
+							"undefined",
+					)
+					.catch(() => false);
+				if (hasBridge) {
+					break;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 500));
+			}
 			if (!hasBridge) {
 				throw new Error(
 					`The preload bridge never reached the renderer.\npreload exists: ${existsSync(preloadPath)} (${preloadPath})\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${await readMainLog()}`,
