@@ -62,6 +62,16 @@ jobs:
       - name: Run the Electron export test
         id: e2e
         continue-on-error: true
+        env:
+          # Some hosted Windows runners cannot start Electron's sandboxed
+          # renderer ("sandboxed_renderer.bundle.js script failed to run:
+          # Cannot destructure property 'preloadScripts' of
+          # 'binding.startupData'"), so the preload never reaches the page and
+          # the editor shows its error screen. That is an environment limitation
+          # of the runner, not an app path — the suite passes on a normal
+          # Windows desktop with the sandbox left at its default. Disabling it
+          # here only for the runner.
+          RECORDLY_E2E_ARGS: "--no-sandbox"
         run: npx playwright test --config playwright.electron.config.ts
 
       - name: Upload diagnostics
