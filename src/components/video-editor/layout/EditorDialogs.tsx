@@ -43,6 +43,8 @@ interface EditorDialogsProps {
 	onRenameProject: (path: string, name: string) => Promise<string>;
 	handleImportMediaOrProject: () => Promise<void>;
 	handleOpenProjectFromLibrary: (projectPath: string) => Promise<unknown>;
+	/** Opens a raw recording from the dashboard in the editor. */
+	onEditRecording?: (path: string) => Promise<unknown> | void;
 	nativeCaptureUnavailableModalOpen: boolean;
 	setNativeCaptureUnavailableModalOpen: Dispatch<SetStateAction<boolean>>;
 }
@@ -69,6 +71,7 @@ export function EditorDialogs({
 	onRenameProject,
 	handleImportMediaOrProject,
 	handleOpenProjectFromLibrary,
+	onEditRecording,
 	nativeCaptureUnavailableModalOpen,
 	setNativeCaptureUnavailableModalOpen,
 }: EditorDialogsProps) {
@@ -184,6 +187,7 @@ export function EditorDialogs({
 				onRenameProject={onRenameProject}
 				onImportFile={handleImportMediaOrProject}
 				onOpenProject={handleOpenProjectFromLibrary}
+				onEditRecording={onEditRecording}
 			/>
 
 			<Dialog

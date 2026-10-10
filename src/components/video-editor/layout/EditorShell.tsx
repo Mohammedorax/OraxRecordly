@@ -171,6 +171,7 @@ export function EditorShell(props: Props) {
 				onRenameProject={openActions.handleRenameLibraryProject}
 				handleImportMediaOrProject={openActions.handleImportMediaOrProject}
 				handleOpenProjectFromLibrary={openActions.handleOpenProjectFromLibrary}
+				onEditRecording={openActions.handleOpenRecordingInEditor}
 				nativeCaptureUnavailableModalOpen={ui.nativeCaptureUnavailableModalOpen}
 				setNativeCaptureUnavailableModalOpen={ui.setNativeCaptureUnavailableModalOpen}
 			/>

@@ -20,6 +20,7 @@ type Props = Pick<
 	| "openEntry"
 	| "run"
 	| "onRenameProject"
+	| "onEditRecording"
 	| "folders"
 	| "save"
 	| "assignFolder"
@@ -38,6 +39,7 @@ export function ProjectCard({
 	openEntry,
 	run,
 	onRenameProject,
+	onEditRecording,
 	folders,
 	save,
 	assignFolder,
@@ -86,6 +88,13 @@ export function ProjectCard({
 				onFocus={() => onPreviewHover(true)}
 				onBlur={() => onPreviewHover(false)}
 				onClick={() => (selecting ? toggleSelected(entry.path) : openEntry(entry))}
+				// Double-click takes raw footage straight into the editor; clicking
+				// once only previews it, which left users unsure how to start editing.
+				onDoubleClick={() => {
+					if (entry.rawSource && onEditRecording) {
+						void onEditRecording(entry.path);
+					}
+				}}
 				aria-pressed={selecting ? selected.includes(entry.path) : undefined}
 				className="relative block h-auto w-full min-w-0 rounded-xl p-0"
 			>
@@ -234,6 +243,14 @@ export function ProjectCard({
 						<Dropdown.Menu
 							aria-label={t("dashboard.projectOptions", "Project options")}
 						>
+							{entry.rawSource && onEditRecording && (
+								<Dropdown.Item
+									id="edit"
+									onAction={() => void onEditRecording(entry.path)}
+								>
+									{t("dashboard.editRecording", "Edit in editor")}
+								</Dropdown.Item>
+							)}
 							<Dropdown.Item id="open" onAction={() => openEntry(entry)}>
 								{entry.rawSource
 									? t("dashboard.previewFile", "Preview file")

@@ -90,6 +90,7 @@ export function DashboardGrid({
 	hasActiveFilters,
 	setQuery,
 	run,
+	onEditRecording,
 }: Pick<
 	DashboardProps & DashboardModel,
 	| "onImportFile"
@@ -113,6 +114,7 @@ export function DashboardGrid({
 	| "selecting"
 	| "toggleSelected"
 	| "onRenameProject"
+	| "onEditRecording"
 	| "folders"
 	| "save"
 	| "assignFolder"
@@ -285,7 +287,11 @@ export function DashboardGrid({
 						)}
 					</div>
 				)}
-				<RawPreview entry={rawPreview} onClose={() => setRawPreview(null)} />
+				<RawPreview
+					entry={rawPreview}
+					onClose={() => setRawPreview(null)}
+					onEdit={onEditRecording}
+				/>
 			</main>
 		</>
 	);

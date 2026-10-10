@@ -1,5 +1,6 @@
 import { Modal } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { MusicNotes } from "@/components/ui/icons";
 import { useScopedT } from "@/contexts/I18nContext";
 import type { RecordingLibraryEntry } from "@/types/recordingLibrary";
@@ -92,11 +93,15 @@ export function RawThumbnail({ entry, active }: { entry: RecordingLibraryEntry; 
 export function RawPreview({
 	entry,
 	onClose,
+	onEdit,
 }: {
 	entry: ProjectLibraryEntry | null;
 	onClose: () => void;
+	/** Starts editing the previewed recording instead of only watching it. */
+	onEdit?: (path: string) => void;
 }) {
 	const t = useScopedT("editor");
+	const tCommon = useScopedT("common");
 	return (
 		<Modal
 			isOpen={!!entry}
@@ -123,6 +128,24 @@ export function RawPreview({
 									/>
 								))}
 						</Modal.Body>
+						{/* Watching the file is not the only thing a user wants here, and
+						    without an explicit action the editor felt unreachable. */}
+						{entry && onEdit && (
+							<Modal.Footer className="flex justify-end gap-3">
+								<Button variant="ghost" onClick={onClose}>
+									{tCommon("actions.close", "Close")}
+								</Button>
+								<Button
+									onClick={() => {
+										const path = entry.path;
+										onClose();
+										onEdit(path);
+									}}
+								>
+									{t("dashboard.editRecording", "Edit in editor")}
+								</Button>
+							</Modal.Footer>
+						)}
 					</Modal.Dialog>
 				</Modal.Container>
 			</Modal.Backdrop>

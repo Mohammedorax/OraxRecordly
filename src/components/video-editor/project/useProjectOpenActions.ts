@@ -65,6 +65,71 @@ export function useProjectOpenActions({
 		[hasUnsavedChanges, openUnsavedChangesDialog, saveProject],
 	);
 
+	// Loads a media file (a recording, or a file the user picked) as the editor's
+	// source. Shared by "import media" and by the dashboard's "edit recording"
+	// action, so both leave the editor in exactly the same state.
+	const loadSourcePathIntoEditor = useCallback(
+		async (sourcePath: string) => {
+			const setPathResult = await window.electronAPI.setCurrentVideoPath(sourcePath, {
+				preserveProjectPath: false,
+			});
+			if (!setPathResult.success) {
+				throw new Error(t("project.mediaLoadFailed", "Could not load media"));
+			}
+			const sourceVideoUrl = await resolveVideoUrl(sourcePath);
+			try {
+				videoPlaybackRef.current?.pause();
+			} catch {
+				// The preview may already be tearing down.
+			}
+			setIsPlaying(false);
+			setCurrentTime(0);
+			setDuration(0);
+			project.setVideoSourcePath(sourcePath);
+			project.setVideoPath(sourceVideoUrl);
+			project.setCurrentProjectPath(null);
+			project.setLastSavedSnapshot(null);
+			resetSourceScopedEditorState();
+			pendingFreshRecordingAutoZoomPathRef.current =
+				appearance.autoApplyFreshRecordingAutoZooms ? sourceVideoUrl : null;
+			applySessionPresentation(null);
+			project.setProjectBrowserOpen(false);
+			await refreshProjectLibrary();
+		},
+		[
+			appearance.autoApplyFreshRecordingAutoZooms,
+			applySessionPresentation,
+			pendingFreshRecordingAutoZoomPathRef,
+			project,
+			refreshProjectLibrary,
+			resetSourceScopedEditorState,
+			setCurrentTime,
+			setDuration,
+			setIsPlaying,
+			t,
+			videoPlaybackRef,
+		],
+	);
+
+	/** Opens a raw recording from the dashboard in the editor, ready to edit. */
+	const handleOpenRecordingInEditor = useCallback(
+		async (recordingPath: string) => {
+			const actionLabel = t("project.actionEditRecording", "edit this recording");
+			if (!(await confirmReplaceSourceWithUnsavedChanges(actionLabel))) return;
+			try {
+				await loadSourcePathIntoEditor(recordingPath);
+				toast.success(t("project.recordingOpened", "Recording opened in the editor"));
+			} catch (error) {
+				project.setError(
+					t("project.fileLoadError", "Could not load file: {{message}}", {
+						message: error instanceof Error ? error.message : String(error),
+					}),
+				);
+			}
+		},
+		[confirmReplaceSourceWithUnsavedChanges, loadSourcePathIntoEditor, project, t],
+	);
+
 	const handleOpenProjectFromLibrary = useCallback(
 		async (projectPath: string) => {
 			const actionLabel = t("project.actionOpenAnotherProject", "open another project");
@@ -158,31 +223,7 @@ export function useProjectOpenActions({
 				return;
 			}
 
-			const sourcePath = fromFileUrl(result.path);
-			const setPathResult = await window.electronAPI.setCurrentVideoPath(sourcePath, {
-				preserveProjectPath: false,
-			});
-			if (!setPathResult.success)
-				throw new Error(t("project.mediaLoadFailed", "Could not load media"));
-			const sourceVideoUrl = await resolveVideoUrl(sourcePath);
-			try {
-				videoPlaybackRef.current?.pause();
-			} catch {
-				// The preview may already be tearing down.
-			}
-			setIsPlaying(false);
-			setCurrentTime(0);
-			setDuration(0);
-			project.setVideoSourcePath(sourcePath);
-			project.setVideoPath(sourceVideoUrl);
-			project.setCurrentProjectPath(null);
-			project.setLastSavedSnapshot(null);
-			resetSourceScopedEditorState();
-			pendingFreshRecordingAutoZoomPathRef.current =
-				appearance.autoApplyFreshRecordingAutoZooms ? sourceVideoUrl : null;
-			applySessionPresentation(null);
-			project.setProjectBrowserOpen(false);
-			await refreshProjectLibrary();
+			await loadSourcePathIntoEditor(fromFileUrl(result.path));
 			toast.success(t("project.mediaImported", "Media imported"));
 		} catch (error) {
 			project.setError(
@@ -194,15 +235,8 @@ export function useProjectOpenActions({
 	}, [
 		confirmReplaceSourceWithUnsavedChanges,
 		applyLoadedProject,
+		loadSourcePathIntoEditor,
 		project,
-		appearance,
-		videoPlaybackRef,
-		setIsPlaying,
-		setCurrentTime,
-		setDuration,
-		resetSourceScopedEditorState,
-		pendingFreshRecordingAutoZoomPathRef,
-		applySessionPresentation,
 		refreshProjectLibrary,
 		t,
 	]);
@@ -284,6 +318,7 @@ export function useProjectOpenActions({
 	return {
 		handleRenameLibraryProject,
 		handleOpenProjectFromLibrary,
+		handleOpenRecordingInEditor,
 		handleImportMediaOrProject,
 		handleOpenProjectBrowser,
 		handleDeleteProjects,
