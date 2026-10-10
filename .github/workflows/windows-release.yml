@@ -41,8 +41,58 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A release is never published from a build that cannot export. This runs the
+  # same end-to-end suite as the advisory `electron-e2e` workflow, but here it is
+  # a gate: the installer job waits for it.
+  verify-app:
+    name: Verify the app exports before publishing
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag_name || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # `--ignore-scripts` skips Electron's own download and the bundled ffmpeg.
+      - name: Install runtime binaries
+        run: |
+          node node_modules/electron/install.js
+          node scripts/install-ffmpeg-static.mjs
+
+      - name: Typecheck the E2E suite
+        run: npm run typecheck:e2e
+
+      - name: Build the application
+        run: npm run build:app
+
+      - name: Run the end-to-end export tests
+        run: npx playwright test --config playwright.electron.config.ts
+
+      - name: Upload diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   build-and-publish:
     name: Build and publish Windows installer
+    needs: verify-app
     runs-on: windows-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"

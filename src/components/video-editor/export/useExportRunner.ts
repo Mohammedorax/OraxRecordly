@@ -2,8 +2,12 @@ import { useCallback, useRef } from "react";
 import { toast } from "@/components/ui/toast";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { getMp4ExportBitrate } from "@/lib/exporter/exportBitrate";
+import {
+	describePipelineFallbackMessage,
+	shouldFallBackToLegacyPipeline,
+} from "@/lib/exporter/exportFallback";
 import { DEFAULT_MP4_CODEC } from "@/lib/exporter/mp4Support";
-import type { ExportSettings } from "@/lib/exporter/types";
+import type { ExportPipelineModel, ExportSettings } from "@/lib/exporter/types";
 import { buildRecordingLabelText } from "@/utils/recordingLabelUtils";
 import { getRawLibraryNameOverride } from "../dashboard/useRawLibrary";
 import { calculateMp4ExportDimensions, capMp4ShareDimensions } from "../exportDimensions";
@@ -413,19 +417,80 @@ export function useExportRunner(input: ExportRunnerInput) {
 						sourceAudioTrackSettings: sourceAudioTrackSettingsForExport,
 					};
 
-					const Exporter =
-						pipelineModel === "modern"
-							? (await import("@/lib/exporter/modernVideoExporter"))
-									.ModernVideoExporter
-							: (await import("@/lib/exporter/videoExporter")).VideoExporter;
-					if (exportWasCancelled()) return;
-					const exporter =
-						pipelineModel === "modern"
-							? new Exporter({ ...exporterConfig, backendPreference })
-							: new Exporter(exporterConfig);
+					const createMp4Exporter = async (model: ExportPipelineModel) => {
+						if (model === "modern") {
+							if (smokeExportConfig.forceModernRendererFailure) {
+								// `smokeFailRenderer=1`: the same error a machine without a
+								// usable WebGL/WebGPU backend produces, so the automatic
+								// downgrade can be tested end to end.
+								throw new Error(
+									"No supported Pixi modern renderer was available. Attempted: webgpu: CanvasRenderer is not yet implemented (after 0ms)",
+								);
+							}
+							const { ModernVideoExporter } = await import(
+								"@/lib/exporter/modernVideoExporter"
+							);
+							return new ModernVideoExporter({
+								...exporterConfig,
+								backendPreference,
+							});
+						}
+						const { VideoExporter } = await import("@/lib/exporter/videoExporter");
+						return new VideoExporter(exporterConfig);
+					};
 
-					exporterRef.current = exporter;
-					const result = await exporter.export();
+					// The modern renderer throws when no WebGL/WebGPU backend comes up.
+					// That is a machine limitation, not a broken project, so the export
+					// is retried once on the legacy pipeline and the user is told why the
+					// result took longer. Every other failure keeps failing loudly.
+					let activePipelineModel: ExportPipelineModel = pipelineModel;
+					let fellBackToLegacy = false;
+					const runMp4Export = async (): Promise<Awaited<
+						ReturnType<Awaited<ReturnType<typeof createMp4Exporter>>["export"]>
+					> | null> => {
+						try {
+							const exporter = await createMp4Exporter(activePipelineModel);
+							if (exportWasCancelled()) return null;
+							exporterRef.current = exporter;
+							return await exporter.export();
+						} catch (error) {
+							const errorMessage =
+								error instanceof Error ? error.message : String(error);
+							if (
+								!shouldFallBackToLegacyPipeline({
+									pipelineModel: activePipelineModel,
+									alreadyFellBack: fellBackToLegacy,
+									errorMessage,
+								})
+							) {
+								throw error;
+							}
+
+							fellBackToLegacy = true;
+							activePipelineModel = "legacy";
+							exporterRef.current = null;
+							console.warn(
+								"[VideoExporter] Hardware rendering is unavailable; retrying this export on the legacy pipeline.",
+								error,
+							);
+							const fallbackCopy = describePipelineFallbackMessage({
+								title: t(
+									"export.gpuFallbackTitle",
+									"Exporting without GPU acceleration",
+								),
+								hint: t(
+									"export.gpuFallbackHint",
+									"Hardware rendering is unavailable on this machine, so frames are rendered on the processor. The export still finishes, just more slowly.",
+								),
+							});
+							toast.info(fallbackCopy.title, { description: fallbackCopy.hint });
+							setExportProgress(null);
+							return runMp4Export();
+						}
+					};
+
+					const result = await runMp4Export();
+					if (!result) return;
 					if (exportWasCancelled()) {
 						// A cancelled run can still finish with a temp MP4 on disk. Discard
 						// it here, otherwise the file stays in %TEMP% forever.
@@ -534,7 +599,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 									success: false,
 									phase: "save",
 									format: "mp4",
-									pipelineModel,
+									pipelineModel: activePipelineModel,
 									backendPreference,
 									encodingMode,
 									shadowIntensity: effectiveShadowIntensity,
@@ -565,7 +630,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 									success: true,
 									phase: "saved",
 									format: "mp4",
-									pipelineModel,
+									pipelineModel: activePipelineModel,
 									backendPreference,
 									encodingMode,
 									shadowIntensity: effectiveShadowIntensity,
@@ -610,7 +675,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 									success: false,
 									phase: "save",
 									format: "mp4",
-									pipelineModel,
+									pipelineModel: activePipelineModel,
 									backendPreference,
 									encodingMode,
 									shadowIntensity: effectiveShadowIntensity,
@@ -648,7 +713,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 								success: false,
 								phase: "export",
 								format: "mp4",
-								pipelineModel,
+								pipelineModel: activePipelineModel,
 								backendPreference,
 								encodingMode,
 								shadowIntensity: effectiveShadowIntensity,

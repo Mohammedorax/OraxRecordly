@@ -24,6 +24,8 @@ export type SmokeExportConfig = {
 	projectPath?: string | null;
 	quality?: ExportQuality;
 	fps?: ExportMp4FrameRate;
+	/** Fault injection for the E2E fallback test; requires `enabled`. */
+	forceModernRendererFailure: boolean;
 };
 
 export type DevOpenRecordingConfig = {
@@ -114,6 +116,10 @@ export function getSmokeExportConfig(search: string): SmokeExportConfig {
 		projectPath: enabled ? params.get("smokeProject") : null,
 		quality: enabled ? parseSmokeExportQuality(params.get("smokeQuality")) : undefined,
 		fps: enabled ? parseSmokeExportFps(params.get("smokeFps")) : undefined,
+		// Fault injection for the end-to-end fallback test: pretends the machine
+		// has no usable renderer so the automatic downgrade is exercised. Only
+		// ever honored together with `smokeExport=1`.
+		forceModernRendererFailure: enabled && params.get("smokeFailRenderer") === "1",
 	};
 }
 

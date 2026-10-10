@@ -1,18 +1,7 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { closeSync, existsSync, openSync } from "node:fs";
 import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { chromium, expect, test } from "@playwright/test";
-import {
-	ensureSampleVideo,
-	pickFreePort,
-	probeMedia,
-	repoRoot,
-	resolveElectronBinary,
-	waitForCdpEndpoint,
-	waitForJson,
-} from "./helpers";
+import { expect, test } from "@playwright/test";
+import { probeMedia } from "./helpers";
+import { runSmokeExport } from "./smokeExport";
 
 /**
  * What this covers that nothing else does.
@@ -23,199 +12,31 @@ import {
  * through the app's own automation entry point (`RECORDLY_SMOKE_EXPORT`) and
  * checks the artifact on disk with ffprobe.
  *
- * The app is spawned directly instead of with Playwright's `_electron.launch()`:
- * that helper passes `--remote-debugging-port=0` on the command line, which
- * Chromium 132+ (Electron 42+) refuses, so `main.ts` registers the switch from
- * `ELECTRON_CDP_PORT` and the test connects over CDP.
- *
  * Known limit: a native console window (the bug behind `childProcess.ts`) is not
- * a BrowserWindow, so it is invisible to CDP. That class of regression is guarded
- * by `electron/childProcessWindowsHide.test.ts`; this spec guards the pipeline it
- * used to be attached to.
+ * a BrowserWindow, so it is invisible over CDP. That class of regression is
+ * guarded by `electron/childProcessWindowsHide.test.ts`; this spec guards the
+ * pipeline it used to be attached to.
  */
-type SmokeExportReport = {
-	success?: boolean;
-	phase?: string;
-	error?: string;
-	outputPath?: string;
-	elapsedMs?: number;
-	format?: string;
-	pipelineModel?: string;
-	backendPreference?: string;
-	metrics?: {
-		frameCount?: number;
-		renderBackend?: string;
-		encodeBackend?: string;
-		encoderName?: string;
-		effectiveDurationSec?: number;
-	};
-};
-
-const MAIN_ENTRY = path.join(repoRoot, "dist-electron", "main.cjs");
-
-/** Everything a failing run needs in order to explain itself. */
-async function describePage(page: import("@playwright/test").Page): Promise<string> {
-	const url = page.url();
-	const title = await page.title().catch(() => "<title unavailable>");
-	const bodyText = await page
-		.evaluate(() => document.body?.innerText?.slice(0, 600) ?? "")
-		.catch(() => "<body unavailable>");
-	return `--- page ---\nurl: ${url}\ntitle: ${title}\nbody: ${bodyText.replace(/\s+/g, " ").trim()}`;
-}
-
-/** The renderer's console is the only explanation when the export never starts. */
-function rendererSummary(lines: string[]): string {
-	const tail = lines.slice(-40).join("\n");
-	return `--- renderer log (${lines.length} lines) ---\n${tail}`;
-}
-
-/**
- * The smoke-export window.
- *
- * CDP can expose an early blank page alongside the real window, so the page is
- * selected by URL instead of by index; indexing made this suite flaky.
- */
-async function waitForSmokeExportPage(
-	context: import("@playwright/test").BrowserContext,
-	timeoutMs: number,
-): Promise<import("@playwright/test").Page> {
-	const deadline = Date.now() + timeoutMs;
-	while (Date.now() < deadline) {
-		for (const candidate of context.pages()) {
-			if (candidate.url().includes("smokeExport=1")) {
-				return candidate;
-			}
-		}
-		await new Promise((resolve) => setTimeout(resolve, 250));
-	}
-	throw new Error(
-		`No smoke-export window appeared. Open pages: ${context
-			.pages()
-			.map((candidate) => candidate.url())
-			.join(", ")}`,
-	);
-}
-
 test.describe("Electron end-to-end export", () => {
-	test.skip(
-		!existsSync(MAIN_ENTRY),
-		`Missing ${MAIN_ENTRY}. Run \`npm run build:app\` (or \`npm run test:e2e\`) first.`,
-	);
-
 	test("boots the app, renders, and writes a playable MP4", async () => {
-		// Canonicalize: `os.tmpdir()` returns the 8.3 short form on some Windows
-		// hosts (for example `C:\Users\RUNNER~1\...`), and the app compares paths
-		// textually against its allowlist of readable locations.
-		const workDirectory = await fs.realpath(
-			await fs.mkdtemp(path.join(os.tmpdir(), "recordly-e2e-")),
-		);
-		const samplePath = await ensureSampleVideo(workDirectory);
-		const outputPath = path.join(workDirectory, "e2e-export.mp4");
-		const reportPath = `${outputPath}.report.json`;
-		const cdpPort = await pickFreePort();
+		const run = await runSmokeExport();
 
-		// Electron's own stdout is a pipe on Windows and can stay empty even when
-		// the app fails; a real file always receives it, so a timeout can explain
-		// itself (a failed preload, for instance).
-		const mainLogPath = path.join(workDirectory, "main-process.log");
-		const mainLogFd = openSync(mainLogPath, "a");
-
-		// Debug hook: `RECORDLY_E2E_ARGS="--disable-gpu"` reproduces a runner
-		// without a usable GPU locally.
-		const extraArgs = (process.env.RECORDLY_E2E_ARGS ?? "").trim().split(/\s+/).filter(Boolean);
-
-		// Playwright's runner marks Electron as a Node process; inheriting that
-		// makes the spawned app boot as Node and never open a window.
-		const childEnv: NodeJS.ProcessEnv = { ...process.env };
-		delete childEnv.ELECTRON_RUN_AS_NODE;
-
-		const appProcess: ChildProcess = spawn(resolveElectronBinary(), [repoRoot, ...extraArgs], {
-			cwd: repoRoot,
-			env: {
-				...childEnv,
-				// Chromium logging goes to stderr; keep it so a timeout can
-				// explain itself.
-				ELECTRON_ENABLE_LOGGING: "1",
-				ELECTRON_CDP_PORT: String(cdpPort),
-				RECORDLY_SMOKE_EXPORT: "1",
-				RECORDLY_SMOKE_EXPORT_INPUT: samplePath,
-				RECORDLY_SMOKE_EXPORT_OUTPUT: outputPath,
-				RECORDLY_SMOKE_EXPORT_QUALITY: "medium",
-				RECORDLY_SMOKE_EXPORT_FPS: "24",
-			},
-			stdio: ["ignore", mainLogFd, mainLogFd],
-		});
-
-		const readMainLog = async () => {
-			const text = await fs.readFile(mainLogPath, "utf8").catch(() => "");
-			return text.split(/\r?\n/).slice(-60).join("\n");
-		};
-
-		let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | null = null;
 		try {
-			await waitForCdpEndpoint(cdpPort, 120_000);
-			browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
-
-			const context = browser.contexts()[0];
-			expect(context, "the app should expose a browser context over CDP").toBeTruthy();
-			const page = await waitForSmokeExportPage(context, 120_000);
-			// Captured before the wait: a renderer that never reaches the export
-			// explains itself here and nowhere else.
-			const rendererLog: string[] = [];
-			page.on("console", (message) =>
-				rendererLog.push(`[${message.type()}] ${message.text()}`),
-			);
-			page.on("pageerror", (error) => rendererLog.push(`[pageerror] ${error.message}`));
-			await page.waitForLoadState("domcontentloaded");
-
-			// The preload must have exposed the bridge before anything can work. The
-			// app reloads itself once when a renderer starts without it, so this
-			// polls instead of failing on the first look.
-			const preloadPath = path.join(repoRoot, "dist-electron", "preload.mjs");
-			let hasBridge = false;
-			const bridgeDeadline = Date.now() + 30_000;
-			while (Date.now() < bridgeDeadline) {
-				hasBridge = await page
-					.evaluate(
-						() =>
-							typeof (globalThis as { electronAPI?: unknown }).electronAPI !==
-							"undefined",
-					)
-					.catch(() => false);
-				if (hasBridge) {
-					break;
-				}
-				await new Promise((resolve) => setTimeout(resolve, 500));
-			}
-			if (!hasBridge) {
-				throw new Error(
-					`The preload bridge never reached the renderer.\npreload exists: ${existsSync(preloadPath)} (${preloadPath})\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${await readMainLog()}`,
-				);
-			}
-
-			let report: SmokeExportReport;
-			try {
-				report = await waitForJson<SmokeExportReport>(reportPath, 240_000);
-			} catch (error) {
-				throw new Error(
-					`${String(error)}\n${await describePage(page)}\n${rendererSummary(rendererLog)}\n--- main process output ---\n${await readMainLog()}`,
-				);
-			}
-
-			expect(report.success, JSON.stringify(report)).toBe(true);
-			expect(report.phase).toBe("saved");
+			expect(run.report.success, JSON.stringify(run.report)).toBe(true);
+			expect(run.report.phase).toBe("saved");
 			// A copy of the input would satisfy the file checks below; these prove an
 			// encoder actually ran and produced the frames.
-			expect(report.format).toBe("mp4");
-			expect(report.metrics?.frameCount ?? 0).toBeGreaterThan(0);
-			expect(report.metrics?.encodeBackend ?? "").not.toBe("");
-			expect(report.metrics?.effectiveDurationSec ?? 0).toBeGreaterThan(1);
+			expect(run.report.format).toBe("mp4");
+			expect(run.report.pipelineModel).toBe("modern");
+			expect(run.report.metrics?.frameCount ?? 0).toBeGreaterThan(0);
+			expect(run.report.metrics?.encodeBackend ?? "").not.toBe("");
+			expect(run.report.metrics?.effectiveDurationSec ?? 0).toBeGreaterThan(1);
 
-			const stats = await fs.stat(outputPath);
+			const stats = await fs.stat(run.outputPath);
 			expect(stats.size).toBeGreaterThan(10_000);
 
 			// The artifact must be a real, playable file — not just bytes on disk.
-			const probe = await probeMedia(outputPath);
+			const probe = await probeMedia(run.outputPath);
 			const videoStream = probe.streams.find((stream) => stream.codec_type === "video");
 			expect(videoStream, JSON.stringify(probe.streams)).toBeTruthy();
 			expect(videoStream?.width ?? 0).toBeGreaterThan(0);
@@ -225,15 +46,7 @@ test.describe("Electron end-to-end export", () => {
 			expect(durationSeconds).toBeGreaterThan(1);
 			expect(durationSeconds).toBeLessThan(4);
 		} finally {
-			await browser?.close().catch(() => undefined);
-			appProcess.kill();
-			// The smoke run closes its own window, but never leave a stray process.
-			await new Promise((resolve) => setTimeout(resolve, 500));
-			if (!appProcess.killed) {
-				appProcess.kill("SIGKILL");
-			}
-			closeSync(mainLogFd);
-			await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => undefined);
+			await run.cleanup();
 		}
 	});
 });

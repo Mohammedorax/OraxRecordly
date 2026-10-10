@@ -20,6 +20,7 @@ describe("getSmokeExportConfig", () => {
 			projectPath: null,
 			quality: undefined,
 			fps: undefined,
+			forceModernRendererFailure: false,
 		});
 	});
 
@@ -58,6 +59,7 @@ describe("getSmokeExportConfig", () => {
 			projectPath: "/tmp/project.recordly",
 			quality: "source",
 			fps: 60,
+			forceModernRendererFailure: false,
 		});
 	});
 
@@ -89,6 +91,7 @@ describe("getSmokeExportConfig", () => {
 			maxPendingFrames: undefined,
 			quality: undefined,
 			fps: undefined,
+			forceModernRendererFailure: false,
 		});
 	});
 });

@@ -233,6 +233,8 @@
 		"canceled": "Export canceled",
 		"encodingNotSupported": "Video encoding not supported on this system. Tried codec {{codec}} at {{frameRate}} FPS up to {{width}}x{{height}}.",
 		"exportedTo": "Exported successfully to {{path}}",
+		"gpuFallbackTitle": "Exporting without GPU acceleration",
+		"gpuFallbackHint": "Hardware rendering is unavailable on this machine, so frames are rendered on the processor. The export still finishes, just more slowly.",
 		"completeTitle": "Export complete",
 		"completeBody": "{{name}} is ready.",
 		"exportFailed": "Export failed",

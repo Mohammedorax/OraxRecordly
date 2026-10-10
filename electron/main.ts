@@ -129,6 +129,14 @@ ignoreBrokenConsolePipe(process.stderr);
 app.commandLine.appendSwitch("enable-unsafe-webgpu");
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 
+// Chromium 132+ refuses WebGL on SwiftShader unless this is set explicitly, so a
+// machine without a usable GPU (virtual machines, remote desktops, blocklisted
+// drivers) ends up with no WebGL at all. Every export pipeline renders through
+// Pixi, so that machine could not export anything at all. Allowing the software
+// fallback keeps exports working there at software speed; a real GPU still takes
+// precedence whenever one is available.
+app.commandLine.appendSwitch("enable-unsafe-swiftshader");
+
 app.on("web-contents-created", (_event, contents) => {
 	if (!shouldHardenWebContentsType(contents.getType())) {
 		return;
