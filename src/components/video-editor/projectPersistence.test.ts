@@ -6,6 +6,7 @@ import {
 	undoEditorHistoryStack,
 } from "./editorHistory";
 import {
+	fromFileUrl,
 	getDefaultBorderRadiusPercent,
 	legacyBorderRadiusPixelsToPercent,
 	normalizeProjectEditor,
@@ -35,6 +36,40 @@ describe("resolveVideoUrl", () => {
 
 		await resolveVideoUrl("file:///Users/demo/My%20Clip.mp4");
 		expect(getLocalMediaUrl).toHaveBeenCalledWith("/Users/demo/My Clip.mp4");
+	});
+});
+
+describe("fromFileUrl", () => {
+	it("turns a preview URL into the path a project stores", () => {
+		// Preview URLs carry an opaque handle now, and a project has to be saved with
+		// the real path: storing the URL would break the next open.
+		vi.stubGlobal("window", {
+			electronAPI: {
+				resolveMediaTokenSync: (token: string) =>
+					token === "handle" ? "C:\\Videos\\Cache\\recording-1.mp4" : null,
+			},
+		});
+
+		expect(fromFileUrl("http://127.0.0.1:1234/video?i=handle")).toBe(
+			"C:\\Videos\\Cache\\recording-1.mp4",
+		);
+	});
+
+	it("keeps a stale handle out of the project instead of inventing a path", () => {
+		vi.stubGlobal("window", { electronAPI: { resolveMediaTokenSync: () => null } });
+
+		expect(fromFileUrl("http://127.0.0.1:1234/video?i=stale")).toBe(
+			"http://127.0.0.1:1234/video?i=stale",
+		);
+	});
+
+	it("still reads a legacy path URL and a file URL", () => {
+		vi.stubGlobal("window", {});
+
+		expect(fromFileUrl("http://127.0.0.1:1234/video?path=%2Ftmp%2Fclip.mp4")).toBe(
+			"/tmp/clip.mp4",
+		);
+		expect(fromFileUrl("file:///Users/demo/My%20Clip.mp4")).toContain("My Clip.mp4");
 	});
 });
 
