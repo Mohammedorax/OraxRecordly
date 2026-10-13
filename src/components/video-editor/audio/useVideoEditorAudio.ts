@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
 import { resolveSourceTrackRoutingPolicy } from "@/lib/exporter/sourceTrackRoutingPolicy";
+import { getLocalMediaServerPath } from "@/lib/localMediaUrl";
 import type { AudioRegion, ClipRegion } from "../types";
 import { findClipAtTimelineTime } from "../types";
 import { isClipMutedById } from "./clipAudio";
@@ -8,19 +9,12 @@ import { useAudioPreviewSync } from "./useAudioPreviewSync";
 import { useClipAudioSettingsController } from "./useClipAudioSettingsController";
 import { useSourceAudioFallback } from "./useSourceAudioFallback";
 
+/**
+ * The file behind the preview URL. The URL carries an opaque handle, never a path,
+ * so the shared resolver asks the main process for it.
+ */
 function extractLocalPathFromMediaServerUrl(input: string | null | undefined): string | null {
-	if (!input) return null;
-	try {
-		const url = new URL(input);
-		const isLocalMediaServer =
-			(url.protocol === "http:" || url.protocol === "https:") &&
-			(url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
-			url.pathname === "/video";
-		if (!isLocalMediaServer) return null;
-		return url.searchParams.get("path");
-	} catch {
-		return null;
-	}
+	return input ? getLocalMediaServerPath(input) : null;
 }
 
 interface UseVideoEditorAudioParams {

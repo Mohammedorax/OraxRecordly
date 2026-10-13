@@ -7,6 +7,7 @@ import type {
 } from "@/components/video-editor/audio/audioTypes";
 import { useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
+import { getLocalMediaServerPath } from "@/lib/localMediaUrl";
 import { fromFileUrl } from "../projectPersistence";
 import type {
 	AnnotationRegion,
@@ -94,19 +95,12 @@ export interface TimelineEditorProps {
  */
 const EMPTY_HIDDEN_ITEM_IDS: string[] = [];
 
+/**
+ * The file behind a preview URL. The URL carries an opaque handle rather than a
+ * path, so the shared resolver is used here as everywhere else.
+ */
 function extractLocalPathFromMediaServerUrl(input: string | null | undefined): string | null {
-	if (!input) return null;
-	try {
-		const url = new URL(input);
-		const isLocalMediaServer =
-			(url.protocol === "http:" || url.protocol === "https:") &&
-			(url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
-			url.pathname === "/video";
-		if (!isLocalMediaServer) return null;
-		return url.searchParams.get("path");
-	} catch {
-		return null;
-	}
+	return input ? getLocalMediaServerPath(input) : null;
 }
 
 export interface TimelineEditorHandle {

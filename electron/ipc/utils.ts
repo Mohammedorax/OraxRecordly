@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { app } from "electron";
 import { getLocalMediaServerPath } from "../../src/lib/localMediaUrl";
 import { getDefaultRecordingsDir, getRecordingCacheDir, RECORDINGS_DIR } from "../appPaths";
+import { resolveMediaUrlPath } from "../mediaTokens";
 import { AUTO_RECORDING_PREFIX, RECORDINGS_SETTINGS_FILE } from "./constants";
 import { migrateRecordingsDirectoryOnce } from "./recordingDirMigration";
 import {
@@ -48,7 +49,7 @@ export function normalizeVideoSourcePath(videoPath?: string | null): string | nu
 		}
 	}
 
-	return getLocalMediaServerPath(trimmed) ?? trimmed;
+	return getLocalMediaServerPath(trimmed) ?? resolveMediaUrlPath(trimmed) ?? trimmed;
 }
 
 export function stripJsonByteOrderMark(content: string) {

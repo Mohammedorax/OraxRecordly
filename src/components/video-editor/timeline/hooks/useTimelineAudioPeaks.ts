@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getVersionedAudioResourceUrl } from "@/components/video-editor/audio/audioResourceVersion";
 import { resolveMediaResourceUrl } from "@/lib/exporter/localMediaSource";
+import { getLocalMediaServerPath } from "@/lib/localMediaUrl";
 import { waveformGenerator } from "../../audio/waveform/WaveformGenerator";
 import { fromFileUrl } from "../../projectPersistence";
 import { WAVEFORM_DEFAULT_PEAK_COUNT } from "../core/constants";
@@ -26,18 +27,12 @@ function buildSidecarAudioCandidates(sourcePath: string): string[] {
 	];
 }
 
+/**
+ * The file behind a preview URL. The URL carries an opaque handle rather than a
+ * path, so the shared resolver is used here as everywhere else.
+ */
 function extractLocalPathFromMediaServerUrl(input: string): string | null {
-	try {
-		const url = new URL(input);
-		const isLocalMediaServer =
-			(url.protocol === "http:" || url.protocol === "https:") &&
-			(url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
-			url.pathname === "/video";
-		if (!isLocalMediaServer) return null;
-		return url.searchParams.get("path");
-	} catch {
-		return null;
-	}
+	return getLocalMediaServerPath(input);
 }
 
 interface TimelineAudioPeaksOptions {

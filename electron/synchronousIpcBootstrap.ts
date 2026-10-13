@@ -27,9 +27,16 @@
 
 import { ipcMain } from "electron";
 import { hasAppSetting, readAppSettingsStore, writeAppSettingsStore } from "./appSettingsStore";
+import { resolveMediaToken } from "./mediaTokens";
 
 export const APP_SETTING_GET_CHANNEL = "app-settings:get";
 export const APP_SETTING_SET_CHANNEL = "app-settings:set";
+/**
+ * Media URLs carry an opaque handle instead of a file path, and the renderer
+ * needs the path behind a handle synchronously (audio peaks, captions, project
+ * saving all resolve a URL to a file during render).
+ */
+export const MEDIA_TOKEN_RESOLVE_CHANNEL = "media-token:resolve";
 
 let registered = false;
 
@@ -97,6 +104,13 @@ export function registerSynchronousAppSettingHandlers(): void {
 
 	ipcMain.on(APP_SETTING_SET_CHANNEL, (event, key: unknown, value: unknown) => {
 		event.returnValue = resolveAppSettingSet(key, value);
+	});
+
+	ipcMain.on(MEDIA_TOKEN_RESOLVE_CHANNEL, (event, token: unknown) => {
+		// The reply is always produced: an unanswered synchronous IPC wedges the
+		// renderer, and an unknown handle simply resolves to no path.
+		const resolved = typeof token === "string" ? resolveMediaToken(token) : null;
+		event.returnValue = resolved ? { success: true, path: resolved } : { success: false };
 	});
 }
 

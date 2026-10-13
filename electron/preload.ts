@@ -1345,6 +1345,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		return result?.success === true;
 	},
 	/**
+	 * Resolves the file behind an opaque media handle. Synchronous because the
+	 * renderer resolves media URLs to paths while it renders.
+	 */
+	resolveMediaTokenSync: (token: string) => {
+		const result = ipcRenderer.sendSync("media-token:resolve", token) as {
+			success?: boolean;
+			path?: string;
+		};
+		return result?.success && typeof result.path === "string" ? result.path : null;
+	},
+	/**
 	 * Tells the main process which language the interface is in, so the
 	 * notification-area menu is labelled in that language too.
 	 */

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { approvedLocalReadPaths } from "./ipc/state";
+import { registerMediaPath, resolveMediaToken } from "./mediaTokens";
 import { getMediaContentType } from "./mediaTypes";
 
 let mediaServerBaseUrl: string | null = null;
@@ -75,10 +76,13 @@ async function handleMediaRequest(
 			return;
 		}
 
-		const rawPath = url.searchParams.get("path");
+		const token = url.searchParams.get("i");
+		const rawPath = token ? resolveMediaToken(token) : url.searchParams.get("path");
 		if (!rawPath) {
-			response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-			response.end("Missing path parameter");
+			response.writeHead(token ? 403 : 400, {
+				"Content-Type": "text/plain; charset=utf-8",
+			});
+			response.end(token ? "Forbidden" : "Missing path parameter");
 			return;
 		}
 
@@ -231,7 +235,15 @@ export async function ensureMediaServer(): Promise<string> {
 	return mediaServerStartPromise;
 }
 
+/**
+ * The URL the renderer uses for a local file.
+ *
+ * It carries an opaque handle rather than the file path: the URL ends up in
+ * `src` attributes, tooltips and logs, and the path is the user's own folder
+ * layout. A `?path=` URL is still served for anything built before a handle
+ * existed.
+ */
 export function buildMediaUrl(baseUrl: string, filePath: string): string {
 	const resolved = path.resolve(filePath);
-	return `${baseUrl}/video?path=${encodeURIComponent(resolved)}`;
+	return `${baseUrl}/video?i=${registerMediaPath(resolved)}`;
 }

@@ -1176,6 +1176,11 @@ interface Window {
 		getAppSetting: (key: string) => unknown;
 		setAppSetting: (key: string, value: unknown) => boolean;
 		/**
+		 * Resolves the file behind an opaque media handle. Synchronous because the
+		 * renderer resolves media URLs to paths while it renders.
+		 */
+		resolveMediaTokenSync: (token: string) => string | null;
+		/**
 		 * Tells the main process which language the interface is in, so the
 		 * notification-area menu is labelled in that language too.
 		 */
