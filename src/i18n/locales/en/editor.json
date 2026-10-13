@@ -519,5 +519,8 @@
 		"dark": "Dark",
 		"light": "Light",
 		"system": "System"
+	},
+	"wallpaper": {
+		"backgroundVideo": "Background video"
 	}
 }

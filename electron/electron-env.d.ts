@@ -1175,6 +1175,11 @@ interface Window {
 		saveShortcuts: (shortcuts: unknown) => Promise<{ success: boolean; error?: string }>;
 		getAppSetting: (key: string) => unknown;
 		setAppSetting: (key: string, value: unknown) => boolean;
+		/**
+		 * Tells the main process which language the interface is in, so the
+		 * notification-area menu is labelled in that language too.
+		 */
+		setUiLanguage: (language: string) => Promise<{ success: boolean }>;
 		setHasUnsavedChanges: (hasChanges: boolean) => void;
 		onRequestSaveBeforeClose: (callback: () => Promise<boolean>) => () => void;
 		isNativeWindowsCaptureAvailable: () => Promise<{ available: boolean }>;

@@ -1144,6 +1144,39 @@ function loadPackagedEditorWindow(win: BrowserWindow) {
 	});
 }
 
+/**
+ * Maximizes the editor window, with a fallback for window managers that ignore it.
+ *
+ * `maximize()` is advisory: some systems apply it only to a visible window, and a
+ * few ignore it for a window that was created at a fixed size. Filling the work
+ * area is the same result the user asked for ("open it maximized"), so it is used
+ * when the maximize call did not take effect.
+ */
+function ensureEditorWindowMaximized(win: BrowserWindow): void {
+	if (win.isDestroyed()) {
+		return;
+	}
+
+	if (!win.isMaximized()) {
+		win.maximize();
+	}
+
+	setTimeout(() => {
+		if (win.isDestroyed() || win.isMaximized()) {
+			return;
+		}
+
+		const { workArea } = getScreen().getDisplayMatching(win.getBounds());
+		console.warn("[editor-window] maximize() was ignored; filling the work area instead");
+		win.setBounds({
+			x: workArea.x,
+			y: workArea.y,
+			width: workArea.width,
+			height: workArea.height,
+		});
+	}, 150);
+}
+
 export function createEditorWindow(): BrowserWindow {
 	const perfStart = Date.now();
 	console.log("[PERF:MAIN] createEditorWindow: STARTED");
@@ -1207,14 +1240,19 @@ export function createEditorWindow(): BrowserWindow {
 
 	win.once("ready-to-show", () => {
 		console.log(`[PERF:MAIN] Editor Window: ready-to-show in ${Date.now() - perfStart}ms`);
-		// The editor is where the user spends their time, and on Windows it opened
-		// at the work-area size without ever asking to be maximized - on a large or
-		// scaled display that reads as a small window. macOS keeps its own
-		// convention and is left alone.
-		if (!isMac && !win.isMaximized()) {
-			win.maximize();
-		}
+		// The editor is where the user spends their time, so it opens maximized on
+		// Windows and Linux. macOS keeps its own convention.
+		//
+		// The order matters: several window managers ignore `maximize()` on a window
+		// that is not shown yet, which is why the editor could still come up as a
+		// work-area-sized window. Show first, then maximize, then make sure it really
+		// happened and fall back to filling the work area if it did not.
 		win.show();
+		if (isMac) {
+			return;
+		}
+
+		ensureEditorWindowMaximized(win);
 	});
 
 	win.webContents.on("did-finish-load", () => {

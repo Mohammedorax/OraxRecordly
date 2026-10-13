@@ -191,6 +191,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 	useEffect(() => {
 		applyDocumentLocale(locale);
+		// The notification-area menu is built in the main process, which cannot read
+		// these translations, so it is told the language on every change and at boot.
+		void window.electronAPI?.setUiLanguage?.(locale).catch(() => undefined);
 	}, [locale]);
 
 	const t = useCallback(

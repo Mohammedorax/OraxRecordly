@@ -1344,6 +1344,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		};
 		return result?.success === true;
 	},
+	/**
+	 * Tells the main process which language the interface is in, so the
+	 * notification-area menu is labelled in that language too.
+	 */
+	setUiLanguage: (language: string) => {
+		return ipcRenderer.invoke("set-ui-language", language) as Promise<{
+			success: boolean;
+		}>;
+	},
 	setHasUnsavedChanges: (hasChanges: boolean) => {
 		ipcRenderer.send("set-has-unsaved-changes", hasChanges);
 	},

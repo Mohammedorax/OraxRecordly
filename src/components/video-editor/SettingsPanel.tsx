@@ -18,6 +18,7 @@ import { toast } from "@/components/ui/toast";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getAssetPath, getRenderableVideoUrl, getWallpaperThumbnailUrl } from "@/lib/assetPath";
+import { loadBackgroundRunPreference, saveBackgroundRunPreference } from "@/lib/backgroundRun";
 import {
 	DEFAULT_KEYCAST_SETTINGS,
 	KEYCAST_SIZE_MAX,
@@ -1007,6 +1008,9 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
 	const tSettings = useScopedT("settings");
 	const { locale, setLocale, t } = useI18n();
+	const [backgroundRunEnabled, setBackgroundRunEnabled] = useState(() =>
+		loadBackgroundRunPreference(),
+	);
 	const { preference: themePreference, setPreference: setThemePreference } = useTheme();
 	const isBackgroundPanel = panelMode === "background";
 	const initialEditorPreferences = useMemo(() => loadEditorPreferences(), []);
@@ -2307,6 +2311,26 @@ export function SettingsPanel({
 							</SelectContent>
 						</Select>
 					</SettingsRow>
+
+					<SettingsRow
+						title={tSettings("backgroundRun.title", "Keep running in the background")}
+						description={tSettings(
+							"backgroundRun.description",
+							"Closing the window leaves Recordly in the notification area, ready to record again.",
+						)}
+					>
+						<Switch
+							aria-label={tSettings(
+								"backgroundRun.title",
+								"Keep running in the background",
+							)}
+							checked={backgroundRunEnabled}
+							onCheckedChange={(enabled) => {
+								setBackgroundRunEnabled(enabled);
+								saveBackgroundRunPreference(enabled);
+							}}
+						/>
+					</SettingsRow>
 				</SettingsCategory>
 				<SettingsCategory category="advanced">
 					{advanced && (
@@ -2571,10 +2595,93 @@ export function SettingsPanel({
 			</SettingsSections>
 		);
 
+		/**
+		 * Automatic transitions between clips that were cut apart.
+		 *
+		 * They belong in the Scene section, next to how the frame is composed: they
+		 * used to live inside the cursor-overlay section, where the user had no reason
+		 * to look for them.
+		 */
+		const clipTransitionsSectionContent = (
+			<section className="flex flex-col gap-4">
+				<div className="flex items-center justify-between gap-3">
+					<SectionLabel>{tSettings("transitions.title", "Transitions")}</SectionLabel>
+				</div>
+				<div className="flex flex-col gap-3">
+					<p className="text-xs text-muted-foreground">
+						{tSettings(
+							"transitions.description",
+							"At every point where you cut a clip apart, the two halves blend instead of jumping straight from one to the next.",
+						)}
+					</p>
+					<div className="grid gap-1.5">
+						<div className="text-xs text-muted-foreground">
+							{tSettings("transitions.kind", "Style")}
+						</div>
+						<ChoiceGroup
+							type="single"
+							value={clipTransitionSettings.kind}
+							onValueChange={(value) => {
+								if (value) {
+									onClipTransitionSettingsChange?.({
+										...clipTransitionSettings,
+										kind: value as ClipTransitionKind,
+									});
+								}
+							}}
+							className="grid grid-cols-3 gap-2"
+							aria-label={tSettings("transitions.kind", "Style")}
+						>
+							{(
+								[
+									["none", "transitions.kindNone", "None"],
+									["fade", "transitions.kindFade", "Through black"],
+									["crossfade", "transitions.kindCrossfade", "Cross-dissolve"],
+								] as const
+							).map(([value, labelKey, fallback]) => (
+								<ChoiceItem
+									key={value}
+									value={value}
+									className="min-w-0 px-2 py-1.5 text-center text-xs"
+								>
+									{tSettings(labelKey, fallback)}
+								</ChoiceItem>
+							))}
+						</ChoiceGroup>
+					</div>
+					{clipTransitionSettings.kind === "crossfade" ? (
+						<p className="text-xs text-muted-foreground">
+							{tSettings(
+								"transitions.crossfadeHint",
+								"The outgoing clip holds on its last frame while the next one dissolves in.",
+							)}
+						</p>
+					) : null}
+					{clipTransitionSettings.kind !== "none" ? (
+						<SliderControl
+							label={tSettings("transitions.duration", "Transition length")}
+							value={clipTransitionSettings.durationMs}
+							min={MIN_CLIP_TRANSITION_DURATION_MS}
+							max={MAX_CLIP_TRANSITION_DURATION_MS}
+							step={20}
+							onChange={(durationMs) =>
+								onClipTransitionSettingsChange?.({
+									...clipTransitionSettings,
+									durationMs,
+								})
+							}
+							formatValue={(v) => `${Math.round(v)} ms`}
+						/>
+					) : null}
+				</div>
+			</section>
+		);
+
 		const sceneSectionContent = (
 			<div className="space-y-5">
 				{backgroundSettingsContent}
 				{frameSectionContent}
+				{clipTransitionsSectionContent}
 				{advanced && cropSectionContent}
 			</div>
 		);
@@ -3191,92 +3298,6 @@ export function SettingsPanel({
 											"Keystrokes come from the global input hook, which Recordly only starts on Windows and Linux.",
 										)}
 									</p>
-									<div className="grid gap-3 border-separator border-t pt-4">
-										<div className="grid gap-1">
-											<div className="text-sm font-medium">
-												{tSettings(
-													"transitions.title",
-													"Transitions between clips",
-												)}
-											</div>
-											<p className="text-xs text-muted-foreground">
-												{tSettings(
-													"transitions.description",
-													"Wherever you cut a clip apart, the two halves fade through black instead of jumping straight from one to the next.",
-												)}
-											</p>
-										</div>
-										<div className="grid gap-1.5">
-											<div className="text-xs text-muted-foreground">
-												{tSettings("transitions.kind", "Style")}
-											</div>
-											<ChoiceGroup
-												type="single"
-												value={clipTransitionSettings.kind}
-												onValueChange={(value) => {
-													if (value) {
-														onClipTransitionSettingsChange?.({
-															...clipTransitionSettings,
-															kind: value as ClipTransitionKind,
-														});
-													}
-												}}
-												className="grid grid-cols-3 gap-2"
-												aria-label={tSettings("transitions.kind", "Style")}
-											>
-												{(
-													[
-														["none", "transitions.kindNone", "None"],
-														[
-															"fade",
-															"transitions.kindFade",
-															"Through black",
-														],
-														[
-															"crossfade",
-															"transitions.kindCrossfade",
-															"Cross-dissolve",
-														],
-													] as const
-												).map(([value, labelKey, fallback]) => (
-													<ChoiceItem
-														key={value}
-														value={value}
-														className="min-w-0 px-2 py-1.5 text-center text-xs"
-													>
-														{tSettings(labelKey, fallback)}
-													</ChoiceItem>
-												))}
-											</ChoiceGroup>
-										</div>
-										{clipTransitionSettings.kind === "crossfade" ? (
-											<p className="text-xs text-muted-foreground">
-												{tSettings(
-													"transitions.crossfadeHint",
-													"The outgoing clip holds on its last frame while the next one dissolves in.",
-												)}
-											</p>
-										) : null}
-										{clipTransitionSettings.kind !== "none" ? (
-											<SliderControl
-												label={tSettings(
-													"transitions.duration",
-													"Transition length",
-												)}
-												value={clipTransitionSettings.durationMs}
-												min={MIN_CLIP_TRANSITION_DURATION_MS}
-												max={MAX_CLIP_TRANSITION_DURATION_MS}
-												step={20}
-												onChange={(durationMs) =>
-													onClipTransitionSettingsChange?.({
-														...clipTransitionSettings,
-														durationMs,
-													})
-												}
-												formatValue={(v) => `${Math.round(v)} ms`}
-											/>
-										) : null}
-									</div>
 								</>
 							) : null}
 						</div>

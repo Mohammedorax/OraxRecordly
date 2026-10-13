@@ -15,6 +15,8 @@ import {
 	systemPreferences,
 	Tray,
 } from "electron";
+import { BACKGROUND_RUN_SETTING_KEY } from "../src/lib/backgroundRun";
+import { readAppSetting } from "./appSettingsStore";
 import { readStartupPreferences, shouldStartMinimizedOnLaunch } from "./autoLaunch";
 import { showCursor } from "./cursorHider";
 import { releaseExportPowerGuard } from "./exportPowerGuard";
@@ -46,6 +48,7 @@ import {
 	type StartupWindowSnapshot,
 } from "./startupVisibility";
 import { registerSynchronousAppSettingHandlers } from "./synchronousIpcBootstrap";
+import { buildTrayMenuTemplate, normalizeUiLanguage, trayLabels } from "./trayMenu";
 import {
 	checkForAppUpdates,
 	deferUpdateReminder,
@@ -252,6 +255,10 @@ let trayContextMenu: Menu | null = null;
 let selectedSourceName = "";
 /** True between `set-recording-state(true)` and `(false)`; guards the quit path. */
 let isRecordingActive = false;
+/** Set by "stop recording and quit" so the quit happens once the file is finished. */
+let quitAfterStoppingRecording = false;
+/** The app language, reported by the renderer; used for the tray menu labels. */
+let uiLanguage: string = "en";
 let editorHasUnsavedChanges = false;
 let isForceClosing = false;
 let isAppQuitting = false;
@@ -860,6 +867,17 @@ function shouldUseTray() {
 }
 
 /**
+ * Whether the app is set to keep running after its windows are closed.
+ *
+ * The preference is written by the renderer into the shared app settings file,
+ * which this process reads directly, so the behaviour survives a restart without
+ * any extra plumbing.
+ */
+function isBackgroundRunEnabled() {
+	return readAppSetting(BACKGROUND_RUN_SETTING_KEY) === true;
+}
+
+/**
  * Whether the notification area should hold an entry **while recording**.
  *
  * On Windows the app has no permanent tray entry, so a recording used to make
@@ -875,6 +893,13 @@ function shouldShowRecordingTray() {
 /** Removes the recording-only Windows tray entry once it is no longer needed. */
 function destroyRecordingTrayIfUnused() {
 	if (process.platform !== "win32" || !tray) {
+		return;
+	}
+
+	// A resident app keeps its entry: it is the only way back in after the windows
+	// are closed, so only the recording menu is taken down here.
+	if (isBackgroundRunEnabled()) {
+		updateTrayMenu(false);
 		return;
 	}
 
@@ -1055,45 +1080,42 @@ ipcMain.handle("check-for-app-updates", async () => {
 function updateTrayMenu(recording: boolean = false) {
 	if (!tray) return;
 	const trayIcon = recording ? getRecordingTrayIcon() : getDefaultTrayIcon();
-	const trayToolTip = recording ? `Recording: ${selectedSourceName}` : "OraxRecordly";
-	const menuTemplate = recording
-		? [
-				{
-					label: "Show Controls",
-					click: () => {
-						revealAfterStartMinimized();
-						if (!showHudOverlayFromTray()) {
-							focusOrCreateMainWindow();
-						}
-					},
-				},
-				{
-					label: "Stop Recording",
-					click: () => {
-						if (mainWindow && !mainWindow.isDestroyed()) {
-							mainWindow.webContents.send("stop-recording-from-tray");
-						}
-					},
-				},
-			]
-		: [
-				{
-					label: "Open",
-					click: () => {
-						revealAfterStartMinimized();
-						if (!showHudOverlayFromTray()) {
-							focusOrCreateMainWindow();
-						}
-					},
-				},
-				{
-					label: "Quit",
-					click: () => {
-						app.quit();
-					},
-				},
-			];
-	const menu = Menu.buildFromTemplate(menuTemplate);
+	const labels = trayLabels(uiLanguage);
+	const trayToolTip = recording ? labels.recordingTooltip(selectedSourceName) : labels.tooltip;
+	const reveal = () => {
+		revealAfterStartMinimized();
+		if (!showHudOverlayFromTray()) {
+			focusOrCreateMainWindow();
+		}
+	};
+	const menuTemplate = buildTrayMenuTemplate({
+		language: uiLanguage,
+		recording,
+		runsInBackground: isBackgroundRunEnabled(),
+		actions: {
+			open: reveal,
+			showControls: reveal,
+			stopRecording: () => {
+				if (mainWindow && !mainWindow.isDestroyed()) {
+					mainWindow.webContents.send("stop-recording-from-tray");
+				}
+			},
+			stopAndQuit: () => {
+				// Finish the take before leaving: quitting mid-recording used to end the
+				// process with an unfinished file and no way to recover it.
+				quitAfterStoppingRecording = true;
+				if (mainWindow && !mainWindow.isDestroyed()) {
+					mainWindow.webContents.send("stop-recording-from-tray");
+				} else {
+					app.quit();
+				}
+			},
+			quit: () => {
+				app.quit();
+			},
+		},
+	});
+	const menu = Menu.buildFromTemplate(menuTemplate as Electron.MenuItemConstructorOptions[]);
 	trayContextMenu = menu;
 	tray.setImage(trayIcon);
 	tray.setToolTip(trayToolTip);
@@ -1241,6 +1263,17 @@ app.on("window-all-closed", () => {
 		return;
 	}
 
+	// The user asked the app to keep running in the notification area: closing the
+	// windows leaves it in standby instead of ending the process. The tray entry is
+	// created here because it is now the only way back into the app.
+	if (isBackgroundRunEnabled() && !IS_SMOKE_EXPORT) {
+		if (!tray) {
+			createTray();
+		}
+		updateTrayMenu();
+		return;
+	}
+
 	if (IS_SMOKE_EXPORT || process.platform !== "darwin") {
 		app.quit();
 	}
@@ -1339,7 +1372,9 @@ app.whenReady().then(async () => {
 		await app.dock.show();
 	}
 	syncDockIcon();
-	if (shouldUseTray()) {
+	// A resident app needs its notification-area entry from the start, otherwise
+	// closing the first window would leave it running with no way back.
+	if (shouldUseTray() || isBackgroundRunEnabled()) {
 		createTray();
 		updateTrayMenu();
 	}
@@ -1368,7 +1403,13 @@ app.whenReady().then(async () => {
 			selectedSourceName = sourceName;
 			setHudOverlayRecordingActive(recording);
 			isRecordingActive = recording;
-			if (shouldUseTray() || (recording && shouldShowRecordingTray())) {
+			// The tray is permanent while the app is set to stay resident, and during a
+			// recording it is the only way back to the controls.
+			if (
+				isBackgroundRunEnabled() ||
+				shouldUseTray() ||
+				(recording && shouldShowRecordingTray())
+			) {
 				if (!tray) createTray();
 				updateTrayMenu(recording);
 			}
@@ -1381,9 +1422,22 @@ app.whenReady().then(async () => {
 			if (!recording) {
 				destroyRecordingTrayIfUnused();
 				restoreWindowSafely(mainWindow);
+				if (quitAfterStoppingRecording) {
+					// The take is finished and saved; leave as the user asked.
+					quitAfterStoppingRecording = false;
+					app.quit();
+				}
 			}
 		},
 	);
+
+	// The renderer owns the language choice, so it reports it here and the tray is
+	// rebuilt straight away; the menu was English whatever the app language was.
+	ipcMain.handle("set-ui-language", (_event, language: unknown) => {
+		uiLanguage = normalizeUiLanguage(language);
+		updateTrayMenu(isRecordingActive);
+		return { success: true };
+	});
 
 	// System-wide region-capture shortcut ("snip"). Registration failures (another
 	// app already owns the accelerator) are logged and ignored.

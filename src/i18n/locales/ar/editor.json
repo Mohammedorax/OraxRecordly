@@ -519,5 +519,8 @@
 		"dark": "داكن",
 		"light": "فاتح",
 		"system": "النظام"
+	},
+	"wallpaper": {
+		"backgroundVideo": "فيديو الخلفية"
 	}
 }

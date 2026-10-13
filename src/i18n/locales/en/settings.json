@@ -169,6 +169,10 @@
 		"openNativeCaptureWarning": "Open warning"
 	},
 	"keycast": {
+		"backgroundRun": {
+			"title": "Keep running in the background",
+			"description": "Closing the window leaves Recordly in the notification area, ready to record again, and a recording is never cut short by closing a window."
+		},
 		"title": "Keyboard shortcuts on screen",
 		"description": "Show the keys you press as a key-cap badge on the recording, so viewers can follow the shortcut.",
 		"position": "Position",

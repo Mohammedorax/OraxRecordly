@@ -29,10 +29,9 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { toast } from "@/components/ui/toast";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type CustomFont, getCustomFonts } from "@/lib/customFonts";
+import { loadSystemFontFamilies } from "@/lib/systemFonts";
 import { cn } from "@/lib/utils";
 import { useScopedT } from "../../contexts/I18nContext";
-import { AddCustomFontDialog } from "./AddCustomFontDialog";
 import { getArrowComponent } from "./ArrowSvgs";
 import type { AnnotationRegion, AnnotationType, ArrowDirection, FigureData } from "./types";
 
@@ -72,16 +71,36 @@ export function AnnotationSettingsPanel({
 }: AnnotationSettingsPanelProps) {
 	const t = useScopedT("editor");
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
+	/**
+	 * The fonts installed on this machine. Formatting a text overlay with a font
+	 * the renderer does not have produced a silent fallback, so the picker offers
+	 * what the device actually has.
+	 */
+	const [deviceFonts, setDeviceFonts] = useState<string[]>([]);
 
-	const fontFamilies = useMemo(
+	const fallbackFamilies = useMemo(
 		() => FONT_FAMILY_VALUES.map((f) => ({ value: f.value, label: t(f.labelKey) })),
 		[t],
 	);
 
-	// Load custom fonts on mount
+	const fontFamilies = useMemo(() => {
+		if (deviceFonts.length === 0) {
+			return fallbackFamilies;
+		}
+
+		return deviceFonts.map((family) => ({ value: `"${family}"`, label: family }));
+	}, [deviceFonts, fallbackFamilies]);
+
 	useEffect(() => {
-		setCustomFonts(getCustomFonts());
+		let cancelled = false;
+		void loadSystemFontFamilies().then((families) => {
+			if (!cancelled) {
+				setDeviceFonts(families);
+			}
+		});
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	const colorPalette = [
@@ -240,20 +259,15 @@ export function AnnotationSettingsPanel({
 														(font) =>
 															font.value ===
 															annotation.style.fontFamily,
-													) &&
-														!customFonts.some(
-															(font) =>
-																font.fontFamily ===
-																annotation.style.fontFamily,
-														) && (
-															<SelectItem
-																value={annotation.style.fontFamily}
-															>
-																{annotation.style.fontFamily
-																	.split(",")[0]
-																	.replace(/"/g, "")}
-															</SelectItem>
-														)}
+													) && (
+														<SelectItem
+															value={annotation.style.fontFamily}
+														>
+															{annotation.style.fontFamily
+																.split(",")[0]
+																.replace(/"/g, "")}
+														</SelectItem>
+													)}
 													{fontFamilies.map((font) => (
 														<SelectItem
 															key={font.value}
@@ -263,27 +277,6 @@ export function AnnotationSettingsPanel({
 															{font.label}
 														</SelectItem>
 													))}
-													{customFonts.length > 0 && (
-														<>
-															<div className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-																{t(
-																	"annotations.customFonts",
-																	"Custom Fonts",
-																)}
-															</div>
-															{customFonts.map((font) => (
-																<SelectItem
-																	key={font.id}
-																	value={font.fontFamily}
-																	style={{
-																		fontFamily: font.fontFamily,
-																	}}
-																>
-																	{font.name}
-																</SelectItem>
-															))}
-														</>
-													)}
 												</SelectContent>
 											</Select>
 										</div>
@@ -314,16 +307,6 @@ export function AnnotationSettingsPanel({
 												</SelectContent>
 											</Select>
 										</div>
-									</div>
-
-									{/* Add Custom Font Button */}
-									<div>
-										<AddCustomFontDialog
-											onFontAdded={(font) => {
-												setCustomFonts(getCustomFonts());
-												onStyleChange({ fontFamily: font.fontFamily });
-											}}
-										/>
 									</div>
 
 									{/* Formatting Toggles */}
