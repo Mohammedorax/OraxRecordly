@@ -16,7 +16,13 @@ import {
 	Tray,
 } from "electron";
 import { BACKGROUND_RUN_SETTING_KEY } from "../src/lib/backgroundRun";
-import { readAppSetting } from "./appSettingsStore";
+import { readAppSetting, writeAppSetting } from "./appSettingsStore";
+import { PROJECTS_DIRECTORY_NAME } from "./ipc/constants";
+import { migrateLegacyRecordings } from "./recordingsMigration";
+
+/** Set once the old recordings have been moved into Cache. */
+const LEGACY_RECORDINGS_MIGRATION_SETTING_KEY = "recordly.recordingsMigration.v1";
+
 import { readStartupPreferences, shouldStartMinimizedOnLaunch } from "./autoLaunch";
 import { showCursor } from "./cursorHider";
 import { releaseExportPowerGuard } from "./exportPowerGuard";
@@ -878,6 +884,37 @@ function isBackgroundRunEnabled() {
 }
 
 /**
+ * Moves old recordings out of the recordings root and into `Cache`, once.
+ *
+ * The flag is written even when the pass fails, so a locked file cannot make the
+ * app rescan the folder on every launch; the log records what was left behind.
+ */
+async function migrateLegacyRecordingsOnce() {
+	if (IS_SMOKE_EXPORT || readAppSetting(LEGACY_RECORDINGS_MIGRATION_SETTING_KEY) === true) {
+		return;
+	}
+
+	try {
+		const rootDir = await getRecordingsDir();
+		const result = await migrateLegacyRecordings({
+			rootDir,
+			projectsDir: path.join(rootDir, PROJECTS_DIRECTORY_NAME),
+		});
+		if (result.moved > 0 || result.projectsUpdated > 0 || result.errors.length > 0) {
+			console.log(
+				`[recordings] Moved ${result.moved} old recording file(s) into Cache, ` +
+					`updated ${result.projectsUpdated} project(s)` +
+					(result.errors.length > 0 ? `; ${result.errors.join(" | ")}` : ""),
+			);
+		}
+	} catch (error) {
+		console.warn("[recordings] Legacy recording migration failed:", error);
+	} finally {
+		writeAppSetting(LEGACY_RECORDINGS_MIGRATION_SETTING_KEY, true);
+	}
+}
+
+/**
  * Whether the notification area should hold an entry **while recording**.
  *
  * On Windows the app has no permanent tray entry, so a recording used to make
@@ -1438,6 +1475,10 @@ app.whenReady().then(async () => {
 		updateTrayMenu(isRecordingActive);
 		return { success: true };
 	});
+
+	// Recordings made before footage moved into `Cache` are tidied up once, and the
+	// projects that reference them are repointed in the same pass.
+	void migrateLegacyRecordingsOnce();
 
 	// System-wide region-capture shortcut ("snip"). Registration failures (another
 	// app already owns the accelerator) are logged and ignored.
