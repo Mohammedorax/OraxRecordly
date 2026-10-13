@@ -28,6 +28,12 @@ import {
 	MAX_KEYCAST_HOLD_MS,
 	MIN_KEYCAST_HOLD_MS,
 } from "@/lib/keycast/keycastModel";
+import {
+	type ClipTransitionSettings,
+	DEFAULT_CLIP_TRANSITION_SETTINGS,
+	MAX_CLIP_TRANSITION_DURATION_MS,
+	MIN_CLIP_TRANSITION_DURATION_MS,
+} from "@/lib/transitions/clipTransitions";
 import { cn } from "@/lib/utils";
 import type { BuiltInWallpaper } from "@/lib/wallpapers";
 import {
@@ -519,6 +525,9 @@ interface SettingsPanelProps {
 	/** Keystroke overlay (opt-in) settings. */
 	keycastSettings?: KeycastSettings;
 	onKeycastSettingsChange?: (settings: KeycastSettings) => void;
+	/** Automatic fade between clips that were cut apart while editing. */
+	clipTransitionSettings?: ClipTransitionSettings;
+	onClipTransitionSettingsChange?: (settings: ClipTransitionSettings) => void;
 	borderRadius?: number;
 	onBorderRadiusChange?: (radius: number) => void;
 	padding?: Padding;
@@ -953,6 +962,8 @@ export function SettingsPanel({
 	onCursorSwayChange,
 	keycastSettings = DEFAULT_KEYCAST_SETTINGS,
 	onKeycastSettingsChange,
+	clipTransitionSettings = DEFAULT_CLIP_TRANSITION_SETTINGS,
+	onClipTransitionSettingsChange,
 	borderRadius = getDefaultBorderRadiusPercent(),
 	onBorderRadiusChange,
 	padding = DEFAULT_PADDING,
@@ -3179,6 +3190,61 @@ export function SettingsPanel({
 											"Keystrokes come from the global input hook, which Recordly only starts on Windows and Linux.",
 										)}
 									</p>
+									<div className="grid gap-3 border-separator border-t pt-4">
+										<div className="grid gap-1">
+											<div className="text-sm font-medium">
+												{tSettings(
+													"transitions.title",
+													"Transitions between clips",
+												)}
+											</div>
+											<p className="text-xs text-muted-foreground">
+												{tSettings(
+													"transitions.description",
+													"Wherever you cut a clip apart, the two halves fade through black instead of jumping straight from one to the next.",
+												)}
+											</p>
+										</div>
+										<SettingsRow
+											title={tSettings(
+												"transitions.enabled",
+												"Fade between clips",
+											)}
+											description={tSettings(
+												"transitions.enabledHint",
+												"Applies automatically to every cut on the timeline.",
+											)}
+										>
+											<Switch
+												checked={clipTransitionSettings.kind === "fade"}
+												onCheckedChange={(checked) =>
+													onClipTransitionSettingsChange?.({
+														...clipTransitionSettings,
+														kind: checked ? "fade" : "none",
+													})
+												}
+											/>
+										</SettingsRow>
+										{clipTransitionSettings.kind === "fade" ? (
+											<SliderControl
+												label={tSettings(
+													"transitions.duration",
+													"Fade length",
+												)}
+												value={clipTransitionSettings.durationMs}
+												min={MIN_CLIP_TRANSITION_DURATION_MS}
+												max={MAX_CLIP_TRANSITION_DURATION_MS}
+												step={20}
+												onChange={(durationMs) =>
+													onClipTransitionSettingsChange?.({
+														...clipTransitionSettings,
+														durationMs,
+													})
+												}
+												formatValue={(v) => `${Math.round(v)} ms`}
+											/>
+										) : null}
+									</div>
 								</>
 							) : null}
 						</div>

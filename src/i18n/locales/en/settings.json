@@ -192,6 +192,13 @@
 		"hold": "Display duration",
 		"platformNote": "Keystrokes come from the global input hook, which Recordly only starts on Windows and Linux."
 	},
+	"transitions": {
+		"title": "Transitions between clips",
+		"description": "Wherever you cut a clip apart, the two halves fade through black instead of jumping straight from one to the next.",
+		"enabled": "Fade between clips",
+		"enabledHint": "Applies automatically to every cut on the timeline.",
+		"duration": "Fade length"
+	},
 	"sections": {
 		"scene": "Scene",
 		"captions": "Captions",

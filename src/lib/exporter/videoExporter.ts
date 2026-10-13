@@ -17,6 +17,7 @@ import type {
 } from "@/components/video-editor/types";
 import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
+import type { ClipTransitionSettings } from "@/lib/transitions/clipTransitions";
 import { AudioProcessor, isAacAudioEncodingSupported } from "./audioEncoder";
 import { requiresClipTimelineRendering } from "./clipTimeline";
 import { buildEditedTrackSourceSegments, classifyEditedTrackStrategy } from "./editedTrackStrategy";
@@ -77,6 +78,8 @@ interface VideoExporterConfig extends ExportConfig {
 	/** Recorded keystrokes for the optional on-screen key badge. */
 	keycastEvents?: KeycastKeystroke[];
 	keycastSettings?: KeycastSettings;
+	/** Fade between clips that were cut apart while editing. */
+	clipTransitionSettings?: ClipTransitionSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -261,6 +264,8 @@ export class VideoExporter {
 				cursorTelemetry: this.config.cursorTelemetry,
 				keycastEvents: this.config.keycastEvents,
 				keycastSettings: this.config.keycastSettings,
+				clipRegions: this.config.clipRegions,
+				clipTransitionSettings: this.config.clipTransitionSettings,
 				showCursor: this.config.showCursor,
 				cursorStyle: this.config.cursorStyle,
 				cursorSize: this.config.cursorSize,

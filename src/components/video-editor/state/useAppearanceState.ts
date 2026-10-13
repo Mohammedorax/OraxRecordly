@@ -1,6 +1,11 @@
 import { useCallback, useState } from "react";
 import type { KeycastSettings } from "@/lib/keycast/keycastModel";
 import { loadKeycastSettings, saveKeycastSettings } from "@/lib/keycast/keycastSettings";
+import {
+	loadClipTransitionSettings,
+	saveClipTransitionSettings,
+} from "@/lib/transitions/clipTransitionSettings";
+import type { ClipTransitionSettings } from "@/lib/transitions/clipTransitions";
 import type { EditorPreferences } from "../editorPreferences";
 import type {
 	CropRegion,
@@ -126,6 +131,16 @@ export function useAppearanceState(preferences: EditorPreferences) {
 		void window.electronAPI?.setKeycastSettings?.(saved);
 	}, []);
 
+	/**
+	 * Automatic transitions between cut clips are an app-level preference too, so
+	 * a fade chosen once keeps applying to the next project.
+	 */
+	const [clipTransitionSettings, setClipTransitionSettingsState] =
+		useState<ClipTransitionSettings>(() => loadClipTransitionSettings());
+	const setClipTransitionSettings = useCallback((next: ClipTransitionSettings) => {
+		setClipTransitionSettingsState(saveClipTransitionSettings(next));
+	}, []);
+
 	return {
 		wallpaper,
 		setWallpaper,
@@ -209,5 +224,7 @@ export function useAppearanceState(preferences: EditorPreferences) {
 		setCropRegion,
 		keycastSettings,
 		setKeycastSettings,
+		clipTransitionSettings,
+		setClipTransitionSettings,
 	};
 }

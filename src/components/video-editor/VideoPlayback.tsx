@@ -32,6 +32,12 @@ import {
 } from "@/lib/pixiApplicationLifecycle";
 import { isBenignPlaybackInterruption } from "@/lib/playbackErrors";
 import {
+	type ClipTransitionSettings,
+	clipTransitionBlackAlpha,
+	DEFAULT_CLIP_TRANSITION_SETTINGS,
+	resolveClipTransitionWindows,
+} from "@/lib/transitions/clipTransitions";
+import {
 	DEFAULT_WALLPAPER_PATH,
 	DEFAULT_WALLPAPER_RELATIVE_PATH,
 	isDeviceImagePath,
@@ -390,6 +396,8 @@ interface VideoPlaybackProps {
 	/** Recorded keystrokes for the optional on-screen key badge. */
 	keycastEvents?: KeycastKeystroke[];
 	keycastSettings?: KeycastSettings;
+	/** Fade between clips that were cut apart while editing. */
+	clipTransitionSettings?: ClipTransitionSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -476,6 +484,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cursorTelemetry = [],
 			keycastEvents = [],
 			keycastSettings = DEFAULT_KEYCAST_SETTINGS,
+			clipTransitionSettings = DEFAULT_CLIP_TRANSITION_SETTINGS,
 			showCursor = false,
 			cursorStyle = DEFAULT_CURSOR_STYLE,
 			cursorSize = DEFAULT_CURSOR_SIZE,
@@ -529,6 +538,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const [previewViewportWidth, setPreviewViewportWidth] = useState(640);
 		// Modifier glyphs in the key badge follow the host OS (⌃⌥⇧⌘ vs words).
 		const isMacPlatform = useMemo(() => detectMacPlatform(), []);
+		// Fade coverage at the playhead, recomputed only when the timeline or the
+		// settings change - the render body runs on every playhead frame.
+		const clipTransitionWindows = useMemo(
+			() => resolveClipTransitionWindows(clipRegions, clipTransitionSettings),
+			[clipRegions, clipTransitionSettings],
+		);
 		const [annotationSceneTransform, setAnnotationSceneTransform] =
 			useState<SceneTransformState>({
 				scale: 1,
@@ -2729,6 +2744,23 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 							containerWidth={previewViewportWidth}
 							timeMs={currentTime * 1000}
 						/>
+						{/*
+						 * Automatic fade between cut clips. The exporters paint the very
+						 * same coverage from the same model, so the previewed fade is the
+						 * fade that lands in the file.
+						 */}
+						{clipTransitionBlackAlpha(currentTime * 1000, clipTransitionWindows) > 0 ? (
+							<div
+								aria-hidden="true"
+								className="pointer-events-none absolute inset-0 z-40 bg-black"
+								style={{
+									opacity: clipTransitionBlackAlpha(
+										currentTime * 1000,
+										clipTransitionWindows,
+									),
+								}}
+							/>
+						) : null}
 						<div
 							className="absolute inset-0"
 							style={{

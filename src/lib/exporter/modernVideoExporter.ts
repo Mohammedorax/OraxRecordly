@@ -35,6 +35,7 @@ import { getCursorStyleSizeMultiplier } from "@/components/video-editor/videoPla
 import { computeZoomTransform } from "@/components/video-editor/videoPlayback/zoomTransform";
 import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
+import type { ClipTransitionSettings } from "@/lib/transitions/clipTransitions";
 import {
 	DEFAULT_WALLPAPER_PATH,
 	DEFAULT_WALLPAPER_RELATIVE_PATH,
@@ -116,6 +117,8 @@ interface VideoExporterConfig extends ExportConfig {
 	/** Recorded keystrokes for the optional on-screen key badge. */
 	keycastEvents?: KeycastKeystroke[];
 	keycastSettings?: KeycastSettings;
+	/** Fade between clips that were cut apart while editing. */
+	clipTransitionSettings?: ClipTransitionSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -628,6 +631,8 @@ export class ModernVideoExporter {
 					cursorTelemetry: this.config.cursorTelemetry,
 					keycastEvents: this.config.keycastEvents,
 					keycastSettings: this.config.keycastSettings,
+					clipRegions: this.config.clipRegions,
+					clipTransitionSettings: this.config.clipTransitionSettings,
 					showCursor: this.config.showCursor,
 					cursorStyle: this.config.cursorStyle,
 					cursorSize: this.config.cursorSize,

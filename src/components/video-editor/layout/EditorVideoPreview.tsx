@@ -106,6 +106,7 @@ export function EditorVideoPreview({
 			cursorTelemetry={effectiveCursorTelemetry}
 			keycastEvents={effectiveKeycastEvents}
 			keycastSettings={keycastSettings}
+			clipTransitionSettings={appearance.clipTransitionSettings}
 			showCursor={effectiveShowCursor}
 			cursorStyle={appearance.cursorStyle}
 			cursorSize={appearance.cursorSize}

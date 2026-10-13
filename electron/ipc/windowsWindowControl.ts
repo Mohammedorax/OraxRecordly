@@ -7,26 +7,50 @@ import { convertPhysicalBoundsToDip } from "./windowsCaptureSelection";
 
 const execFileAsync = promisify(execFile);
 
-export async function bringWindowsWindowForward(windowId: number): Promise<void> {
-	const script = [
+/**
+ * PowerShell that restores the selected window only when it could not be
+ * captured otherwise.
+ *
+ * Windows Graphics Capture reads a window's own content, so an occluded window
+ * records perfectly well. Raising it unconditionally therefore only had one
+ * effect: yanking focus away from whatever the user was doing the moment a
+ * recording started. The window is raised only when it is minimized or hidden,
+ * where capture would otherwise produce nothing.
+ */
+export function buildWindowsWindowForwardScript(): string {
+	return [
 		'Add-Type -TypeDefinition @"',
 		"using System; using System.Runtime.InteropServices;",
 		"public static class RecordlyForegroundWindow {",
 		'  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);',
 		'  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);',
+		'  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);',
 		'  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);',
 		"}",
 		'"@',
 		"$handle = [IntPtr][Int64]$env:RECORDLY_WINDOW_ID",
-		"if ([RecordlyForegroundWindow]::IsIconic($handle)) { [RecordlyForegroundWindow]::ShowWindowAsync($handle, 9) | Out-Null }",
-		"[RecordlyForegroundWindow]::SetForegroundWindow($handle) | Out-Null",
+		"$needsRaise = $false",
+		"if ([RecordlyForegroundWindow]::IsIconic($handle)) {",
+		"  [RecordlyForegroundWindow]::ShowWindowAsync($handle, 9) | Out-Null",
+		"  $needsRaise = $true",
+		"} elseif (-not [RecordlyForegroundWindow]::IsWindowVisible($handle)) {",
+		"  [RecordlyForegroundWindow]::ShowWindowAsync($handle, 5) | Out-Null",
+		"  $needsRaise = $true",
+		"}",
+		"if ($needsRaise) { [RecordlyForegroundWindow]::SetForegroundWindow($handle) | Out-Null }",
 	].join("\n");
+}
 
-	await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], {
-		...HIDDEN_WINDOW_OPTIONS,
-		timeout: 5000,
-		env: { ...process.env, RECORDLY_WINDOW_ID: String(windowId) },
-	});
+export async function bringWindowsWindowForward(windowId: number): Promise<void> {
+	await execFileAsync(
+		"powershell.exe",
+		["-NoProfile", "-Command", buildWindowsWindowForwardScript()],
+		{
+			...HIDDEN_WINDOW_OPTIONS,
+			timeout: 5000,
+			env: { ...process.env, RECORDLY_WINDOW_ID: String(windowId) },
+		},
+	);
 }
 
 export async function resolveWindowsWindowBounds(

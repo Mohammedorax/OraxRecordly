@@ -192,6 +192,8 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 			onCursorSwayChange: appearance.setCursorSway,
 			keycastSettings: appearance.keycastSettings,
 			onKeycastSettingsChange: appearance.setKeycastSettings,
+			clipTransitionSettings: appearance.clipTransitionSettings,
+			onClipTransitionSettingsChange: appearance.setClipTransitionSettings,
 			borderRadius: appearance.borderRadius,
 			onBorderRadiusChange: appearance.setBorderRadius,
 			padding: appearance.padding,

@@ -67,6 +67,14 @@ import {
 	destroyPixiApplication,
 	initializePixiApplicationWithTimeout,
 } from "@/lib/pixiApplicationLifecycle";
+import {
+	type ClipTransitionClipLike,
+	type ClipTransitionSettings,
+	type ClipTransitionWindow,
+	clipTransitionBlackAlpha,
+	DEFAULT_CLIP_TRANSITION_SETTINGS,
+	resolveClipTransitionWindows,
+} from "@/lib/transitions/clipTransitions";
 import { isVideoWallpaperSource } from "@/lib/wallpapers";
 import {
 	type AnnotationRenderAssets,
@@ -118,6 +126,10 @@ interface FrameRenderConfig {
 	keycastEvents?: KeycastKeystroke[];
 	/** Keystroke badge appearance; disabled means nothing is drawn. */
 	keycastSettings?: Partial<KeycastSettings>;
+	/** Clip regions on the timeline: the automatic fades are resolved from them. */
+	clipRegions?: readonly ClipTransitionClipLike[];
+	/** Fade between clips that were cut apart while editing. */
+	clipTransitionSettings?: ClipTransitionSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -382,6 +394,9 @@ export class FrameRenderer {
 	private layoutCache: LayoutCache | null = null;
 	private cursorOverlay: PixiCursorOverlay | null = null;
 	private keycastLayer: KeycastOverlayLayer | null = null;
+	/** Black overlay that fades the frame out and back in at a clip boundary. */
+	private transitionOverlay: Graphics | null = null;
+	private transitionWindows: ClipTransitionWindow[] = [];
 	private videoTextureUsesStartupStaging = false;
 	private retainedSceneSourceFrame: VideoFrame | null = null;
 	private retainedSceneTextureFrame: VideoFrame | null = null;
@@ -489,6 +504,24 @@ export class FrameRenderer {
 			events: this.config.keycastEvents,
 			settings: this.config.keycastSettings,
 		});
+
+		// A fade between two cut clips covers the whole frame, so it is the very
+		// last thing drawn. One black rectangle whose alpha the frame loop moves is
+		// all a fade through black needs - no second decoder, no second source.
+		if (this.config.clipTransitionSettings?.kind !== "none") {
+			this.transitionWindows = resolveClipTransitionWindows(
+				this.config.clipRegions ?? [],
+				this.config.clipTransitionSettings ?? DEFAULT_CLIP_TRANSITION_SETTINGS,
+			);
+			if (this.transitionWindows.length > 0) {
+				const overlay = new Graphics();
+				overlay.rect(0, 0, this.config.width, this.config.height);
+				overlay.fill(0x000000);
+				overlay.alpha = 0;
+				this.app!.stage.addChild(overlay);
+				this.transitionOverlay = overlay;
+			}
+		}
 
 		this.videoMaskGraphics = new Graphics();
 		this.videoEffectsContainer.addChild(this.videoMaskGraphics);
@@ -2204,6 +2237,9 @@ export class FrameRenderer {
 	}
 
 	private async renderOutput(timeMs: number): Promise<void> {
+		if (this.transitionOverlay) {
+			this.transitionOverlay.alpha = clipTransitionBlackAlpha(timeMs, this.transitionWindows);
+		}
 		if (this.hasActiveBlurAnnotations(timeMs)) {
 			const annotationContainerVisible = this.annotationContainer?.visible ?? true;
 			const captionContainerVisible = this.captionContainer?.visible ?? true;
@@ -2475,6 +2511,11 @@ export class FrameRenderer {
 			this.keycastLayer.destroy();
 			this.keycastLayer = null;
 		}
+
+		// The app teardown below releases the overlay itself; only the reference is
+		// dropped here so a later render cannot touch a destroyed graphics.
+		this.transitionOverlay = null;
+		this.transitionWindows = [];
 
 		if (this.videoEffectsContainer) {
 			this.videoEffectsContainer.filters = null;

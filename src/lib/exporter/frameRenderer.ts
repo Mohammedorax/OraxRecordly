@@ -58,6 +58,13 @@ import {
 	destroyPixiApplication,
 	initializePixiApplicationWithTimeout,
 } from "@/lib/pixiApplicationLifecycle";
+import {
+	type ClipTransitionClipLike,
+	type ClipTransitionSettings,
+	type ClipTransitionWindow,
+	clipTransitionBlackAlpha,
+	resolveClipTransitionWindows,
+} from "@/lib/transitions/clipTransitions";
 import { isVideoWallpaperSource } from "@/lib/wallpapers";
 import { renderAnnotations } from "./annotationRenderer";
 import { renderCaptions } from "./captionRenderer";
@@ -101,6 +108,9 @@ interface FrameRenderConfig {
 	/** Recorded keystrokes for the optional on-screen key badge. */
 	keycastEvents?: KeycastKeystroke[];
 	keycastSettings?: KeycastSettings;
+	/** Fade between clips that were cut apart while editing. */
+	clipRegions?: readonly ClipTransitionClipLike[];
+	clipTransitionSettings?: ClipTransitionSettings;
 	showCursor?: boolean;
 	cursorStyle?: CursorStyle;
 	cursorSize?: number;
@@ -225,6 +235,7 @@ export class FrameRenderer {
 	private shadowCanvas: HTMLCanvasElement | null = null;
 	private shadowCtx: CanvasRenderingContext2D | null = null;
 	private compositeCanvas: HTMLCanvasElement | null = null;
+	private transitionWindows: ClipTransitionWindow[] = [];
 	private compositeCtx: CanvasRenderingContext2D | null = null;
 	private backgroundForwardFrameSource: ForwardFrameSource | null = null;
 	private backgroundForwardFrameSourceUrl: string | null = null;
@@ -1269,6 +1280,40 @@ export class FrameRenderer {
 				height: this.config.height,
 			});
 		}
+
+		// A fade between two cut clips covers the whole frame, so it is the last
+		// layer: one black rectangle whose alpha the frame loop moves.
+		this.paintClipTransition(cursorTimeMs);
+	}
+
+	/** Black coverage for the automatic fade at a clip boundary, if any. */
+	private paintClipTransition(timeMs: number): void {
+		const settings = this.config.clipTransitionSettings;
+		if (!this.compositeCtx || !settings || settings.kind === "none") {
+			return;
+		}
+
+		if (this.transitionWindows.length === 0) {
+			this.transitionWindows = resolveClipTransitionWindows(
+				this.config.clipRegions ?? [],
+				settings,
+			);
+		}
+		if (this.transitionWindows.length === 0) {
+			return;
+		}
+
+		const alpha = clipTransitionBlackAlpha(timeMs, this.transitionWindows);
+		if (alpha <= 0) {
+			return;
+		}
+
+		const ctx = this.compositeCtx;
+		ctx.save();
+		ctx.globalAlpha = Math.min(1, alpha);
+		ctx.fillStyle = "#000000";
+		ctx.fillRect(0, 0, this.config.width, this.config.height);
+		ctx.restore();
 	}
 
 	private updateLayout(): void {

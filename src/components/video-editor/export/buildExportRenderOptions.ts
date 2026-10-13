@@ -62,6 +62,8 @@ export function buildExportRenderOptions({
 		cursorTelemetry: effectiveCursorTelemetry,
 		keycastEvents: timeline.keycastEvents,
 		keycastSettings: appearance.keycastSettings,
+		// The renderers turn the clip list plus these settings into the fades.
+		clipTransitionSettings: appearance.clipTransitionSettings,
 		showCursor: effectiveShowCursor,
 		cursorStyle: appearance.cursorStyle,
 		cursorSize: appearance.cursorSize,
