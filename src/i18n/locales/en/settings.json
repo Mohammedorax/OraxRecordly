@@ -197,6 +197,11 @@
 		"description": "Wherever you cut a clip apart, the two halves fade through black instead of jumping straight from one to the next.",
 		"enabled": "Fade between clips",
 		"enabledHint": "Applies automatically to every cut on the timeline.",
+		"kind": "Style",
+		"kindNone": "None",
+		"kindFade": "Through black",
+		"kindCrossfade": "Cross-dissolve",
+		"crossfadeHint": "The outgoing clip holds on its last frame while the next one dissolves in.",
 		"duration": "Fade length"
 	},
 	"sections": {

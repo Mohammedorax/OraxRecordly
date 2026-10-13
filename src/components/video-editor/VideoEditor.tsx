@@ -37,6 +37,15 @@ export default function VideoEditor() {
 	const { videoPath, setVideoPath, videoSourcePath, setVideoSourcePath, loading, error } =
 		project;
 	const appearance = useAppearanceState(initialEditorPreferences);
+	// The end-to-end transition test pins the style instead of depending on
+	// whatever app preference the machine happens to hold.
+	useEffect(() => {
+		if (!smokeExportConfig.transitionKind) return;
+		appearance.setClipTransitionSettings({
+			kind: smokeExportConfig.transitionKind,
+			durationMs: 600,
+		});
+	}, [smokeExportConfig.transitionKind, appearance.setClipTransitionSettings]);
 	const { showCursor, setShowCursor, cropRegion, setCropRegion } = appearance;
 	const ui = useEditorUiState(initialEditorPreferences, cropRegion, setCropRegion);
 	const {

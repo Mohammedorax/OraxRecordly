@@ -7,6 +7,7 @@ import {
 	type ExportRenderBackend,
 	isValidMp4FrameRate,
 } from "@/lib/exporter/types";
+import { type ClipTransitionKind, isClipTransitionKind } from "@/lib/transitions/clipTransitions";
 
 export type SmokeExportConfig = {
 	enabled: boolean;
@@ -24,6 +25,8 @@ export type SmokeExportConfig = {
 	projectPath?: string | null;
 	quality?: ExportQuality;
 	fps?: ExportMp4FrameRate;
+	/** Transition style to force for the E2E transition test. */
+	transitionKind?: ClipTransitionKind;
 	/** Fault injection for the E2E fallback test; requires `enabled`. */
 	forceModernRendererFailure: boolean;
 };
@@ -116,6 +119,12 @@ export function getSmokeExportConfig(search: string): SmokeExportConfig {
 		projectPath: enabled ? params.get("smokeProject") : null,
 		quality: enabled ? parseSmokeExportQuality(params.get("smokeQuality")) : undefined,
 		fps: enabled ? parseSmokeExportFps(params.get("smokeFps")) : undefined,
+		// The transition style is an app preference, so the end-to-end test needs a
+		// way to pin it instead of relying on whatever the machine last stored.
+		transitionKind:
+			enabled && isClipTransitionKind(params.get("smokeTransitionKind"))
+				? (params.get("smokeTransitionKind") as ClipTransitionKind)
+				: undefined,
 		// Fault injection for the end-to-end fallback test: pretends the machine
 		// has no usable renderer so the automatic downgrade is exercised. Only
 		// ever honored together with `smokeExport=1`.

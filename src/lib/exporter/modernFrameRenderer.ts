@@ -72,9 +72,12 @@ import {
 	type ClipTransitionSettings,
 	type ClipTransitionWindow,
 	clipTransitionBlackAlpha,
+	clipTransitionMixProgress,
 	DEFAULT_CLIP_TRANSITION_SETTINGS,
+	findActiveTransitionWindow,
 	paintClipTransitionCoverage,
 	resolveClipTransitionWindows,
+	resolveTransitionClockMs,
 } from "@/lib/transitions/clipTransitions";
 import { isVideoWallpaperSource } from "@/lib/wallpapers";
 import {
@@ -398,6 +401,14 @@ export class FrameRenderer {
 	/** Black overlay that fades the frame out and back in at a clip boundary. */
 	private transitionOverlay: Graphics | null = null;
 	private transitionWindows: ClipTransitionWindow[] = [];
+	/**
+	 * Cross-dissolve state: the held last frame of the outgoing clip, the sprite
+	 * that shows it, and which window it belongs to. The held texture is what
+	 * makes a dissolve possible without decoding two sources at once.
+	 */
+	private crossfadeTexture: Texture | null = null;
+	private crossfadeSprite: Sprite | null = null;
+	private crossfadeWindowKey: string | null = null;
 	private videoTextureUsesStartupStaging = false;
 	private retainedSceneSourceFrame: VideoFrame | null = null;
 	private retainedSceneTextureFrame: VideoFrame | null = null;
@@ -1462,10 +1473,45 @@ export class FrameRenderer {
 			return;
 		}
 
-		this.transitionOverlay.alpha = clipTransitionBlackAlpha(
-			timelineTimestampUs / 1000,
-			this.transitionWindows,
-		);
+		// A running dissolve must not also darken the frame; the black coverage is
+		// only for a fade, or when a dissolve could not take hold.
+		const dissolveActive = this.crossfadeSprite !== null && this.crossfadeWindowKey !== null;
+		this.transitionOverlay.alpha = dissolveActive
+			? 0
+			: clipTransitionBlackAlpha(timelineTimestampUs / 1000, this.transitionWindows);
+	}
+
+	/** The clock the clip regions are expressed in: the project timeline. */
+	private resolveFrameTimeMs(sourceTimestampUs: number, timelineTimestampUs: number): number {
+		return resolveTransitionClockMs({
+			timelineEffects: Boolean(this.config.timelineEffects),
+			sourceTimestampUs,
+			timelineTimestampUs,
+		});
+	}
+
+	/** The dissolve window the playhead is inside, when a crossfade is selected. */
+	private windowForCrossfade(timeMs: number): ClipTransitionWindow | null {
+		if (this.config.clipTransitionSettings?.kind !== "crossfade") {
+			return null;
+		}
+
+		return findActiveTransitionWindow(timeMs, this.transitionWindows);
+	}
+
+	/** Releases the held frame once its dissolve window is over. */
+	private retireCrossfadeIfFinished(activeWindow: ClipTransitionWindow | null): void {
+		if (activeWindow !== null || (!this.crossfadeSprite && !this.crossfadeTexture)) {
+			return;
+		}
+
+		if (this.crossfadeSprite) {
+			this.videoContainer?.removeChild(this.crossfadeSprite);
+			this.crossfadeSprite.destroy({ texture: false, textureSource: false });
+			this.crossfadeSprite = null;
+		}
+		this.crossfadeTexture?.destroy(true);
+		this.crossfadeTexture = null;
 	}
 
 	private async setupAnnotationLayer(): Promise<void> {
@@ -2189,12 +2235,39 @@ export class FrameRenderer {
 		);
 		const usesStartupStaging = resolvedVideoSource !== videoFrame;
 
+		// The dissolve (when selected) keeps the texture the sprite is holding -
+		// the outgoing clip's last decoded frame - and gives the sprite a fresh one
+		// for the incoming frame, so both pictures exist at once.
+		const frameTimelineMs = this.resolveFrameTimeMs(timestamp, backgroundTimelineTimestamp);
+		const crossfadeWindow = this.windowForCrossfade(frameTimelineMs);
+		const crossfadeMix = clipTransitionMixProgress(frameTimelineMs, crossfadeWindow);
+		const crossfadeKey = crossfadeWindow ? String(crossfadeWindow.boundaryMs) : null;
+		const startingCrossfade =
+			crossfadeWindow !== null && this.crossfadeWindowKey !== crossfadeKey;
+		this.retireCrossfadeIfFinished(crossfadeWindow);
+		this.crossfadeWindowKey = crossfadeKey;
+
 		if (!this.videoSprite) {
 			const texture = this.createTextureFromSource(resolvedVideoSource);
 			this.videoSprite = new Sprite(texture);
 			this.videoTextureSource = texture.source as unknown as MutableVideoTextureSource;
 			this.videoContainer.addChildAt(this.videoSprite, 0);
 			this.videoTextureUsesStartupStaging = usesStartupStaging;
+		} else if (startingCrossfade && this.videoSprite.texture) {
+			const outgoing = this.videoSprite.texture;
+			const nextTexture = this.createTextureFromSource(resolvedVideoSource);
+			this.videoSprite.texture = nextTexture;
+			this.videoTextureSource = nextTexture.source as unknown as MutableVideoTextureSource;
+			this.videoTextureUsesStartupStaging = usesStartupStaging;
+			this.crossfadeTexture = outgoing;
+			if (this.crossfadeSprite) {
+				this.crossfadeSprite.texture = outgoing;
+			} else {
+				this.crossfadeSprite = new Sprite(outgoing);
+				this.crossfadeSprite.alpha = 1;
+				// Below the incoming sprite, which fades in over it.
+				this.videoContainer.addChildAt(this.crossfadeSprite, 0);
+			}
 		} else if (this.videoTextureUsesStartupStaging !== usesStartupStaging) {
 			this.videoTextureSource = this.replaceSpriteTexture(
 				this.videoSprite,
@@ -2214,13 +2287,22 @@ export class FrameRenderer {
 			throw new Error("Renderer layout cache is unavailable");
 		}
 
+		// The held frame shares the incoming picture's transform, and the incoming
+		// one fades in over it.
+		if (this.crossfadeSprite && this.videoSprite) {
+			this.crossfadeSprite.scale.copyFrom(this.videoSprite.scale);
+			this.crossfadeSprite.position.copyFrom(this.videoSprite.position);
+			this.crossfadeSprite.alpha = 1;
+			this.videoSprite.alpha = crossfadeMix;
+		} else if (this.videoSprite) {
+			this.videoSprite.alpha = 1;
+		}
+
 		if (this.backgroundForwardFrameSource || this.backgroundVideoElement) {
 			await this.syncBackgroundFrame(Math.max(0, backgroundTimelineTimestamp / 1_000_000));
 		}
 
-		const timeMs = this.config.timelineEffects
-			? backgroundTimelineTimestamp / 1000
-			: timestamp / 1000;
+		const timeMs = this.resolveFrameTimeMs(timestamp, backgroundTimelineTimestamp);
 		const cursorTimeMs = cursorTimestamp / 1000;
 
 		if (this.cursorOverlay) {
@@ -2551,6 +2633,14 @@ export class FrameRenderer {
 		// dropped here so a later render cannot touch a destroyed graphics.
 		this.transitionOverlay = null;
 		this.transitionWindows = [];
+		if (this.crossfadeSprite) {
+			this.videoContainer?.removeChild(this.crossfadeSprite);
+			this.crossfadeSprite.destroy({ texture: false, textureSource: false });
+			this.crossfadeSprite = null;
+		}
+		this.crossfadeTexture?.destroy(true);
+		this.crossfadeTexture = null;
+		this.crossfadeWindowKey = null;
 
 		if (this.videoEffectsContainer) {
 			this.videoEffectsContainer.filters = null;

@@ -1313,9 +1313,14 @@ export class FrameRenderer {
 		}
 
 		if (this.transitionWindows.length === 0) {
+			// A cross-dissolve needs the outgoing frame held in GPU memory, which this
+			// canvas pipeline does not do; it degrades to a fade through black of the
+			// same length instead of drawing nothing at all.
+			const effectiveSettings =
+				settings.kind === "crossfade" ? { ...settings, kind: "fade" as const } : settings;
 			this.transitionWindows = resolveClipTransitionWindows(
 				this.config.clipRegions ?? [],
-				settings,
+				effectiveSettings,
 			);
 		}
 

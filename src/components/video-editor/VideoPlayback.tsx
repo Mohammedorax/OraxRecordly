@@ -34,7 +34,9 @@ import { isBenignPlaybackInterruption } from "@/lib/playbackErrors";
 import {
 	type ClipTransitionSettings,
 	clipTransitionBlackAlpha,
+	clipTransitionMixProgress,
 	DEFAULT_CLIP_TRANSITION_SETTINGS,
+	findActiveTransitionWindow,
 	resolveClipTransitionWindows,
 } from "@/lib/transitions/clipTransitions";
 import {
@@ -544,6 +546,70 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			() => resolveClipTransitionWindows(clipRegions, clipTransitionSettings),
 			[clipRegions, clipTransitionSettings],
 		);
+		/** How early the outgoing frame is captured before the cut starts. */
+		const CROSSFADE_SNAPSHOT_LEAD_MS = 120;
+		/**
+		 * The outgoing clip's last frame, captured just before a cross-dissolve so
+		 * it can fade away over the incoming clip. A cut has no overlapping frames,
+		 * so holding the last one is what makes a dissolve possible without decoding
+		 * two sources at once.
+		 */
+		const [crossfadeSnapshot, setCrossfadeSnapshot] = useState<{
+			bitmap: ImageBitmap;
+			startMs: number;
+			endMs: number;
+		} | null>(null);
+		const crossfadeSnapshotRef = useRef<HTMLCanvasElement>(null);
+		// Paint the captured outgoing frame onto the canvas that dissolves away.
+		useEffect(() => {
+			const canvas = crossfadeSnapshotRef.current;
+			if (!crossfadeSnapshot || !canvas) {
+				return;
+			}
+
+			canvas.width = crossfadeSnapshot.bitmap.width;
+			canvas.height = crossfadeSnapshot.bitmap.height;
+			canvas.getContext("2d")?.drawImage(crossfadeSnapshot.bitmap, 0, 0);
+		}, [crossfadeSnapshot]);
+		// Take the snapshot just before a cut, while the video element still shows
+		// the outgoing clip, and release it once its dissolve window has passed.
+		useEffect(() => {
+			if (clipTransitionSettings.kind !== "crossfade" || clipTransitionWindows.length === 0) {
+				return;
+			}
+
+			const nowMs = timelineTime * 1000;
+			if (crossfadeSnapshot) {
+				if (nowMs > crossfadeSnapshot.endMs + 40) {
+					crossfadeSnapshot.bitmap.close();
+					setCrossfadeSnapshot(null);
+				}
+				return;
+			}
+
+			const video = videoRef.current;
+			if (!video || video.videoWidth <= 0) {
+				return;
+			}
+
+			const approaching = clipTransitionWindows.find(
+				(window) =>
+					nowMs >= window.startMs - CROSSFADE_SNAPSHOT_LEAD_MS && nowMs < window.startMs,
+			);
+			if (!approaching) {
+				return;
+			}
+
+			void createImageBitmap(video)
+				.then((bitmap) => {
+					setCrossfadeSnapshot({
+						bitmap,
+						startMs: approaching.startMs,
+						endMs: approaching.endMs,
+					});
+				})
+				.catch(() => undefined);
+		}, [clipTransitionSettings.kind, clipTransitionWindows, crossfadeSnapshot, timelineTime]);
 		const [annotationSceneTransform, setAnnotationSceneTransform] =
 			useState<SceneTransformState>({
 				scale: 1,
@@ -2429,10 +2495,21 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 		// Computed once per render: the render body already runs on every playhead
 		// frame, so the alpha is not evaluated twice for the same frame.
+		//
+		// The transitions live on the *timeline* clock (the clip regions' clock).
+		// `currentTime` is the source clock, which is right for the keystroke badge
+		// (recorded against the source) but would put the transition in the wrong
+		// place as soon as anything is trimmed or sped up.
+		const timelineTimeMs = timelineTime * 1000;
 		const clipTransitionCoverage = clipTransitionBlackAlpha(
-			currentTime * 1000,
+			timelineTimeMs,
 			clipTransitionWindows,
 		);
+		const activeTransitionWindow =
+			clipTransitionSettings.kind === "crossfade"
+				? findActiveTransitionWindow(timelineTimeMs, clipTransitionWindows)
+				: null;
+		const clipTransitionMix = clipTransitionMixProgress(timelineTimeMs, activeTransitionWindow);
 
 		return (
 			<div
@@ -2761,6 +2838,19 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								aria-hidden="true"
 								className="pointer-events-none absolute inset-0 z-40 bg-black"
 								style={{ opacity: clipTransitionCoverage }}
+							/>
+						) : null}
+						{/*
+						 * Cross-dissolve: the held last frame of the outgoing clip fades
+						 * away over the incoming one. The snapshot is taken just before the
+						 * cut, when the video element still shows it.
+						 */}
+						{crossfadeSnapshot && activeTransitionWindow ? (
+							<canvas
+								ref={crossfadeSnapshotRef}
+								aria-hidden="true"
+								className="pointer-events-none absolute inset-0 z-40 h-full w-full object-cover"
+								style={{ opacity: 1 - clipTransitionMix }}
 							/>
 						) : null}
 						<div

@@ -136,6 +136,9 @@ function getEditorWindowQuery(): Record<string, string> {
 		if (process.env.RECORDLY_SMOKE_EXPORT_FPS) {
 			query.smokeFps = process.env.RECORDLY_SMOKE_EXPORT_FPS;
 		}
+		if (process.env.RECORDLY_SMOKE_TRANSITION_KIND) {
+			query.smokeTransitionKind = process.env.RECORDLY_SMOKE_TRANSITION_KIND;
+		}
 		if (process.env.RECORDLY_SMOKE_EXPORT_FAIL_RENDERER === "1") {
 			query.smokeFailRenderer = "1";
 		}

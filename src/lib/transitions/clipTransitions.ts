@@ -2,16 +2,20 @@
  * Aesthetic transitions between clips that were cut apart during editing.
  *
  * The model is deliberately free of DOM, Pixi and Canvas imports: the editor
- * preview, the modern exporter and the legacy exporter all read it, so the fade
- * the user sees while editing is bit-for-bit the fade that lands in the file.
+ * preview and the exporters all read it, so the transition the user sees while
+ * editing is the transition that lands in the file.
  *
- * The fade runs *through black*: the outgoing picture darkens into black, then
- * the incoming one brightens out of it. That is a single-pass effect - one
- * decoder, one extra fill - which is why it can be exact in every renderer
- * without the double decode a cross-dissolve would need.
+ * Two kinds are offered:
+ *
+ * - `fade` runs *through black*: the outgoing picture darkens into black and the
+ *   incoming one brightens out of it. Single-pass, exact everywhere.
+ * - `crossfade` dissolves one picture into the next. The outgoing side is the
+ *   held last frame of the previous clip (a cut has no overlapping frames, and a
+ *   second decoder would cost a full decode pass), so the incoming clip plays
+ *   over it. The window therefore starts *at* the cut and runs forward.
  */
 
-export const CLIP_TRANSITION_KINDS = ["none", "fade"] as const;
+export const CLIP_TRANSITION_KINDS = ["none", "fade", "crossfade"] as const;
 export type ClipTransitionKind = (typeof CLIP_TRANSITION_KINDS)[number];
 
 export interface ClipTransitionSettings {
@@ -120,6 +124,18 @@ export function resolveClipTransitionWindows(
 			continue;
 		}
 
+		if (settings.kind === "crossfade") {
+			// A dissolve starts *at* the cut: the outgoing picture is held while the
+			// incoming clip plays over it, so nothing of the incoming clip has to be
+			// decoded before the boundary. It may not outlast the clip it sits in.
+			const length = Math.min(settings.durationMs, current.endMs - current.startMs);
+			if (length <= 0) {
+				continue;
+			}
+			windows.push({ boundaryMs, startMs: boundaryMs, endMs: boundaryMs + length });
+			continue;
+		}
+
 		// Half the fade may not eat more than the clip it sits in, and the whole
 		// fade stays inside both clips, so neighbouring fades cannot overlap.
 		const half = Math.min(
@@ -157,6 +173,37 @@ export function clipTransitionBlackAlpha(
 	}
 
 	return 0;
+}
+
+/** The window the playhead is inside, or null when no transition is running. */
+export function findActiveTransitionWindow(
+	timeMs: number,
+	windows: readonly ClipTransitionWindow[],
+): ClipTransitionWindow | null {
+	for (const window of windows) {
+		if (timeMs >= window.startMs && timeMs <= window.endMs) {
+			return window;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * How far a cross-dissolve has progressed: 0 shows only the held outgoing
+ * picture, 1 shows only the incoming clip. Outside a window the incoming clip is
+ * fully visible, which is what makes the dissolve end cleanly at the cut.
+ */
+export function clipTransitionMixProgress(
+	timeMs: number,
+	window: ClipTransitionWindow | null,
+): number {
+	if (!window) {
+		return 1;
+	}
+
+	const span = Math.max(1, window.endMs - window.startMs);
+	return Math.min(1, Math.max(0, (timeMs - window.startMs) / span));
 }
 
 /**

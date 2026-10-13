@@ -1,0 +1,140 @@
+import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { expect, test } from "@playwright/test";
+import { ensureSampleVideo, resolveFfmpegBinary } from "./helpers";
+import { runSmokeExport } from "./smokeExport";
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * A transition between two clips must actually reach the file.
+ *
+ * The smoke export only ever rendered a single clip, so nothing exercised the
+ * code that draws a transition. This builds a two-clip project and measures the
+ * brightness of the frame at the cut: a fade has to be black there, while a
+ * cross-dissolve has to still show a picture (the outgoing clip's held frame).
+ */
+
+/** Mean luma of one frame, 0 (black) to 255 (white). */
+async function frameLuma(filePath: string, seconds: number): Promise<number> {
+	const { stdout } = await execFileAsync(
+		resolveFfmpegBinary(),
+		[
+			"-hide_banner",
+			"-loglevel",
+			"error",
+			"-ss",
+			seconds.toFixed(3),
+			"-i",
+			filePath,
+			"-frames:v",
+			"1",
+			"-vf",
+			"format=gray",
+			"-f",
+			"rawvideo",
+			"-",
+		],
+		{ encoding: "buffer", maxBuffer: 32 * 1024 * 1024, timeout: 60_000 },
+	);
+
+	const bytes = stdout as unknown as Buffer;
+	if (bytes.length === 0) {
+		throw new Error(`No frame extracted at ${seconds}s from ${filePath}`);
+	}
+
+	let total = 0;
+	for (const value of bytes) total += value;
+	return total / bytes.length;
+}
+
+/** Two adjacent clips cut out of one recording, so the app has a boundary. */
+async function writeTwoClipProject(directory: string, videoPath: string): Promise<string> {
+	const projectPath = path.join(directory, "two-clips.recordly");
+	const project = {
+		version: 1,
+		videoPath,
+		editor: {
+			clipRegions: [
+				{ id: "clip-a", startMs: 0, endMs: 1_000, sourceStartMs: 0, speed: 1 },
+				{ id: "clip-b", startMs: 1_000, endMs: 2_000, sourceStartMs: 1_000, speed: 1 },
+			],
+			trimRegions: [],
+			zoomRegions: [],
+			speedRegions: [],
+			annotationRegions: [],
+			audioRegions: [],
+			autoCaptions: [],
+		},
+	};
+	await fs.writeFile(projectPath, JSON.stringify(project, null, 2), "utf8");
+	return projectPath;
+}
+
+async function exportWithTransition(kind: "none" | "fade" | "crossfade"): Promise<string> {
+	const workDirectory = await fs.realpath(
+		await fs.mkdtemp(path.join(os.tmpdir(), `recordly-transition-${kind}-`)),
+	);
+	const videoPath = await ensureSampleVideo(workDirectory);
+	const projectPath = await writeTwoClipProject(workDirectory, videoPath);
+	const outputPath = path.join(workDirectory, `${kind}.mp4`);
+
+	const run = await runSmokeExport({
+		env: {
+			RECORDLY_SMOKE_EXPORT_PROJECT: projectPath,
+			RECORDLY_SMOKE_TRANSITION_KIND: kind,
+		},
+	});
+
+	try {
+		expect(run.report.success, JSON.stringify(run.report)).toBe(true);
+		await fs.copyFile(run.outputPath, outputPath);
+	} finally {
+		await run.cleanup();
+	}
+
+	return outputPath;
+}
+
+test.describe("clip transitions in the exported file", () => {
+	test("a cross-dissolve shows a picture at the cut where a fade is black", async () => {
+		test.setTimeout(600_000);
+
+		const [fadeOutput, crossfadeOutput, noneOutput] = [
+			await exportWithTransition("fade"),
+			await exportWithTransition("crossfade"),
+			await exportWithTransition("none"),
+		];
+
+		// The cut sits at 1.0s; a 600 ms fade is at its darkest exactly there,
+		// while a dissolve is still showing the outgoing clip's held frame.
+		const fadeLuma = await frameLuma(fadeOutput, 1);
+		const crossfadeLuma = await frameLuma(crossfadeOutput, 1);
+		const noneLuma = await frameLuma(noneOutput, 1);
+
+		console.log(
+			`TRANSITION_LUMA fade=${fadeLuma.toFixed(1)} crossfade=${crossfadeLuma.toFixed(1)} none=${noneLuma.toFixed(1)}`,
+		);
+
+		expect(fadeLuma).toBeLessThan(20);
+		expect(crossfadeLuma).toBeGreaterThan(30);
+		expect(crossfadeLuma).toBeGreaterThan(fadeLuma + 20);
+		expect(noneLuma).toBeGreaterThan(30);
+
+		// Halfway through the dissolve both pictures are visible, so the frame is
+		// neither the pure outgoing frame nor the pure incoming one.
+		const midLuma = await frameLuma(crossfadeOutput, 1.3);
+		const afterLuma = await frameLuma(crossfadeOutput, 1.9);
+		expect(midLuma).toBeGreaterThan(10);
+		expect(afterLuma).toBeGreaterThan(10);
+
+		for (const file of [fadeOutput, crossfadeOutput, noneOutput]) {
+			await fs
+				.rm(path.dirname(file), { recursive: true, force: true })
+				.catch(() => undefined);
+		}
+	});
+});

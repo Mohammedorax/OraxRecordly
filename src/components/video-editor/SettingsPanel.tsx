@@ -29,6 +29,7 @@ import {
 	MIN_KEYCAST_HOLD_MS,
 } from "@/lib/keycast/keycastModel";
 import {
+	type ClipTransitionKind,
 	type ClipTransitionSettings,
 	DEFAULT_CLIP_TRANSITION_SETTINGS,
 	MAX_CLIP_TRANSITION_DURATION_MS,
@@ -3205,31 +3206,62 @@ export function SettingsPanel({
 												)}
 											</p>
 										</div>
-										<SettingsRow
-											title={tSettings(
-												"transitions.enabled",
-												"Fade between clips",
-											)}
-											description={tSettings(
-												"transitions.enabledHint",
-												"Applies automatically to every cut on the timeline.",
-											)}
-										>
-											<Switch
-												checked={clipTransitionSettings.kind === "fade"}
-												onCheckedChange={(checked) =>
-													onClipTransitionSettingsChange?.({
-														...clipTransitionSettings,
-														kind: checked ? "fade" : "none",
-													})
-												}
-											/>
-										</SettingsRow>
-										{clipTransitionSettings.kind === "fade" ? (
+										<div className="grid gap-1.5">
+											<div className="text-xs text-muted-foreground">
+												{tSettings("transitions.kind", "Style")}
+											</div>
+											<ChoiceGroup
+												type="single"
+												value={clipTransitionSettings.kind}
+												onValueChange={(value) => {
+													if (value) {
+														onClipTransitionSettingsChange?.({
+															...clipTransitionSettings,
+															kind: value as ClipTransitionKind,
+														});
+													}
+												}}
+												className="grid grid-cols-3 gap-2"
+												aria-label={tSettings("transitions.kind", "Style")}
+											>
+												{(
+													[
+														["none", "transitions.kindNone", "None"],
+														[
+															"fade",
+															"transitions.kindFade",
+															"Through black",
+														],
+														[
+															"crossfade",
+															"transitions.kindCrossfade",
+															"Cross-dissolve",
+														],
+													] as const
+												).map(([value, labelKey, fallback]) => (
+													<ChoiceItem
+														key={value}
+														value={value}
+														className="min-w-0 px-2 py-1.5 text-center text-xs"
+													>
+														{tSettings(labelKey, fallback)}
+													</ChoiceItem>
+												))}
+											</ChoiceGroup>
+										</div>
+										{clipTransitionSettings.kind === "crossfade" ? (
+											<p className="text-xs text-muted-foreground">
+												{tSettings(
+													"transitions.crossfadeHint",
+													"The outgoing clip holds on its last frame while the next one dissolves in.",
+												)}
+											</p>
+										) : null}
+										{clipTransitionSettings.kind !== "none" ? (
 											<SliderControl
 												label={tSettings(
 													"transitions.duration",
-													"Fade length",
+													"Transition length",
 												)}
 												value={clipTransitionSettings.durationMs}
 												min={MIN_CLIP_TRANSITION_DURATION_MS}

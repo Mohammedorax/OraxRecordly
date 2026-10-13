@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	clipTransitionBlackAlpha,
+	clipTransitionMixProgress,
 	DEFAULT_CLIP_TRANSITION_SETTINGS,
+	findActiveTransitionWindow,
 	MAX_CLIP_TRANSITION_DURATION_MS,
 	MIN_CLIP_TRANSITION_DURATION_MS,
 	normalizeClipTransitionSettings,
@@ -122,6 +124,53 @@ describe("the transition clock", () => {
 				timelineTimestampUs: 9_000_000,
 			}),
 		).toBe(2_500);
+	});
+});
+
+describe("cross-dissolve", () => {
+	const clips = [
+		{ startMs: 0, endMs: 2_000 },
+		{ startMs: 2_000, endMs: 4_000 },
+	];
+	const crossfade = normalizeClipTransitionSettings({ kind: "crossfade", durationMs: 600 });
+
+	it("starts at the cut and runs forward, because the outgoing side is held", () => {
+		expect(resolveClipTransitionWindows(clips, crossfade)).toEqual([
+			{ boundaryMs: 2_000, startMs: 2_000, endMs: 2_600 },
+		]);
+	});
+
+	it("never outlasts the clip it dissolves into", () => {
+		const windows = resolveClipTransitionWindows(
+			[
+				{ startMs: 0, endMs: 1_000 },
+				{ startMs: 1_000, endMs: 1_300 },
+			],
+			normalizeClipTransitionSettings({ kind: "crossfade", durationMs: 2_000 }),
+		);
+
+		expect(windows).toEqual([{ boundaryMs: 1_000, startMs: 1_000, endMs: 1_300 }]);
+	});
+
+	it("moves the incoming picture from invisible to fully visible", () => {
+		const window = resolveClipTransitionWindows(clips, crossfade)[0];
+
+		expect(findActiveTransitionWindow(1_999, [window])).toBeNull();
+		expect(findActiveTransitionWindow(2_000, [window])).toBe(window);
+		expect(clipTransitionMixProgress(2_000, window)).toBe(0);
+		expect(clipTransitionMixProgress(2_300, window)).toBeCloseTo(0.5, 4);
+		expect(clipTransitionMixProgress(2_600, window)).toBe(1);
+		// Outside a window the incoming clip is simply fully visible.
+		expect(clipTransitionMixProgress(5_000, null)).toBe(1);
+	});
+
+	it("keeps the fade window symmetric, unlike a dissolve", () => {
+		const fadeWindow = resolveClipTransitionWindows(
+			clips,
+			normalizeClipTransitionSettings({ kind: "fade", durationMs: 600 }),
+		)[0];
+
+		expect(fadeWindow).toEqual({ boundaryMs: 2_000, startMs: 1_700, endMs: 2_300 });
 	});
 });
 
