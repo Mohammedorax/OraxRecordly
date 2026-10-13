@@ -767,6 +767,8 @@ export function registerRecordingHandlers(
 					/** Region the capture was cropped to, when the user drew one. */
 					let cropBounds: { x: number; y: number; width: number; height: number } | null =
 						null;
+					/** Whether the requested display id was resolved again, for diagnostics. */
+					let displayIdMatched: boolean | null = null;
 					setWindowsOrphanedMicAudioPath(null);
 
 					const config: Record<string, unknown> = {
@@ -811,6 +813,10 @@ export function registerRecordingHandlers(
 							config.displayH = Math.round(captureTarget.bounds.height);
 						}
 
+						// Whether the id the renderer sent could be resolved again at all:
+						// when it could not, the bounds belong to the primary display and the
+						// diagnostics must not read as if the user's choice was honoured.
+						displayIdMatched = captureTarget.matchedRequestedDisplay ?? null;
 						monitorMatchStrategy = monitorSelection?.strategy ?? null;
 
 						// A region the user drew crops the monitor capture, so only that
@@ -883,6 +889,7 @@ export function registerRecordingHandlers(
 						displayBounds,
 						physicalBounds: physicalDisplayBounds,
 						cropBounds,
+						displayIdMatched,
 						monitorMatchStrategy,
 						windowHandle:
 							typeof config.windowHandle === "number" ? config.windowHandle : null,

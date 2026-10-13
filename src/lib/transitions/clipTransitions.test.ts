@@ -172,6 +172,40 @@ describe("cross-dissolve", () => {
 
 		expect(fadeWindow).toEqual({ boundaryMs: 2_000, startMs: 1_700, endMs: 2_300 });
 	});
+
+	it("leaves a clip too short to hold a fade without its fades overlapping", () => {
+		// Two cuts 1 ms apart: a fade on each side would overlap, so neither is drawn.
+		const windows = resolveClipTransitionWindows(
+			[
+				{ startMs: 0, endMs: 1_000 },
+				{ startMs: 1_000, endMs: 1_001 },
+				{ startMs: 1_001, endMs: 2_000 },
+			],
+			fade(600),
+		);
+
+		expect(windows).toEqual([]);
+	});
+
+	it("stops a dissolve at the next cut instead of swallowing the next clip", () => {
+		const windows = resolveClipTransitionWindows(
+			[
+				{ startMs: 0, endMs: 1_000 },
+				{ startMs: 1_000, endMs: 1_400 },
+				{ startMs: 1_400, endMs: 3_000 },
+			],
+			normalizeClipTransitionSettings({ kind: "crossfade", durationMs: 2_000 }),
+		);
+
+		expect(windows).toEqual([
+			{ boundaryMs: 1_000, startMs: 1_000, endMs: 1_400 },
+			{ boundaryMs: 1_400, startMs: 1_400, endMs: 3_000 },
+		]);
+		// No two windows share a millisecond, so the coverage never jumps between them.
+		for (let index = 1; index < windows.length; index += 1) {
+			expect(windows[index].startMs).toBeGreaterThanOrEqual(windows[index - 1].endMs);
+		}
+	});
 });
 
 describe("painting the fade", () => {
@@ -180,18 +214,26 @@ describe("painting the fade", () => {
 		const fills: Array<{ x: number; y: number; width: number; height: number }> = [];
 		let saves = 0;
 		let restores = 0;
+		let savedAlpha = 1;
+		let savedFillStyle = "";
 		const surface = {
 			save: () => {
 				saves += 1;
+				savedAlpha = surface.globalAlpha;
+				savedFillStyle = surface.fillStyle;
 			},
 			restore: () => {
 				restores += 1;
+				// A real context restores both properties; the mock has to as well,
+				// otherwise the test cannot notice a missing restore().
+				surface.globalAlpha = savedAlpha;
+				surface.fillStyle = savedFillStyle;
 			},
 			fillRect: (x: number, y: number, width: number, height: number) => {
 				fills.push({ x, y, width, height });
 			},
-			fillStyle: "" as string,
-			globalAlpha: 1,
+			fillStyle: "#123456" as string,
+			globalAlpha: 0.5,
 		};
 		return {
 			surface,
@@ -219,9 +261,10 @@ describe("painting the fade", () => {
 
 		expect(painted).toBe(true);
 		expect(harness.fills).toEqual([{ x: 0, y: 0, width: 1_920, height: 1_080 }]);
-		expect(harness.surface.globalAlpha).toBe(1);
-		expect(harness.surface.fillStyle).toBe("#000000");
-		// The alpha must not leak into whatever the renderer paints next.
+		// The surface is left exactly as it was found: neither property may leak
+		// into whatever the renderer paints next.
+		expect(harness.surface.globalAlpha).toBe(0.5);
+		expect(harness.surface.fillStyle).toBe("#123456");
 		expect(harness.counts()).toEqual({ saves: 1, restores: 1 });
 	});
 

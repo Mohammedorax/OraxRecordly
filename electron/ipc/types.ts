@@ -40,6 +40,8 @@ export type NativeCaptureDiagnostics = {
 	physicalBounds?: WindowBounds | null;
 	/** Region the capture was cropped to, when the user drew one. */
 	cropBounds?: WindowBounds | null;
+	/** False when the requested display id could not be resolved again. */
+	displayIdMatched?: boolean | null;
 	/** How the monitor for the chosen screen was resolved (diagnoses wrong-screen picks). */
 	monitorMatchStrategy?: string | null;
 	windowHandle?: number | null;

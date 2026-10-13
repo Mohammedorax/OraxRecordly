@@ -139,6 +139,7 @@ export function buildGifFrameRendererConfig(
 		cursorTelemetry: config.cursorTelemetry,
 		keycastEvents: config.keycastEvents,
 		keycastSettings: config.keycastSettings,
+		frameRate: config.frameRate,
 		clipRegions: config.clipRegions,
 		clipTransitionSettings: config.clipTransitionSettings,
 		showCursor: config.showCursor,

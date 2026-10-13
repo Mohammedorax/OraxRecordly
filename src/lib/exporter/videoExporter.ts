@@ -271,6 +271,7 @@ export class VideoExporter {
 				cursorTelemetry: this.config.cursorTelemetry,
 				keycastEvents: this.config.keycastEvents,
 				keycastSettings: this.config.keycastSettings,
+				frameRate: this.config.frameRate,
 				clipRegions: this.config.clipRegions,
 				clipTransitionSettings: this.config.clipTransitionSettings,
 				showCursor: this.config.showCursor,

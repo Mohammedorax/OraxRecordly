@@ -62,6 +62,8 @@ import {
 	type ClipTransitionClipLike,
 	type ClipTransitionSettings,
 	type ClipTransitionWindow,
+	clipTransitionMixProgress,
+	findActiveTransitionWindow,
 	paintClipTransitionCoverage,
 	resolveClipTransitionWindows,
 	resolveTransitionClockMs,
@@ -74,6 +76,8 @@ import { resolveMediaElementSource } from "./localMediaSource";
 import { paintRecordingLabel } from "./recordingLabel";
 
 interface FrameRenderConfig {
+	/** Output frame rate; used to capture a dissolve's outgoing frame one frame early. */
+	frameRate?: number;
 	timelineEffects?: boolean;
 	width: number;
 	height: number;
@@ -237,6 +241,9 @@ export class FrameRenderer {
 	private shadowCtx: CanvasRenderingContext2D | null = null;
 	private compositeCanvas: HTMLCanvasElement | null = null;
 	private transitionWindows: ClipTransitionWindow[] = [];
+	/** Held outgoing frame for a cross-dissolve in this canvas pipeline. */
+	private crossfadeHold: HTMLCanvasElement | null = null;
+	private crossfadeHoldKey: string | null = null;
 	private compositeCtx: CanvasRenderingContext2D | null = null;
 	private backgroundForwardFrameSource: ForwardFrameSource | null = null;
 	private backgroundForwardFrameSourceUrl: string | null = null;
@@ -1126,6 +1133,13 @@ export class FrameRenderer {
 			throw new Error("Renderer not initialized");
 		}
 
+		const frameTimeMs = this.resolveTransitionTimeMs(timestamp, backgroundTimelineTimestamp);
+		// Keep the outgoing frame for a cross-dissolve. The composite still holds the
+		// *previous* frame here, one frame before the dissolve window opens, and this
+		// is the last moment it can be captured - the next frame is already the
+		// incoming clip.
+		this.captureCrossfadeHold(frameTimeMs);
+
 		this.cameraContainer.visible = videoFrame !== null;
 		if (!videoFrame) {
 			this.updateAnimationState(backgroundTimelineTimestamp / 1000, cursorTimestamp / 1000);
@@ -1136,9 +1150,7 @@ export class FrameRenderer {
 			this.compositeWithShadows();
 			// A frame with no video (a decoder gap or empty timeline space) still
 			// belongs to the timeline, so the fade has to be painted for it too.
-			this.paintClipTransition(
-				this.resolveTransitionTimeMs(timestamp, backgroundTimelineTimestamp),
-			);
+			this.paintClipTransition(frameTimeMs);
 			return;
 		}
 
@@ -1349,15 +1361,26 @@ export class FrameRenderer {
 		}
 
 		if (this.transitionWindows.length === 0) {
-			// A cross-dissolve needs the outgoing frame held in GPU memory, which this
-			// canvas pipeline does not do; it degrades to a fade through black of the
-			// same length instead of drawing nothing at all.
-			const effectiveSettings =
-				settings.kind === "crossfade" ? { ...settings, kind: "fade" as const } : settings;
 			this.transitionWindows = resolveClipTransitionWindows(
 				this.config.clipRegions ?? [],
-				effectiveSettings,
+				settings,
 			);
+		}
+
+		// A cross-dissolve dissolves the incoming picture over the held outgoing one.
+		// When that frame could not be captured (a seek lands inside the window, or
+		// the very first rendered frame) the fade below is the safe fallback: it never
+		// leaves the frame empty.
+		if (settings.kind === "crossfade") {
+			const window = findActiveTransitionWindow(timeMs, this.transitionWindows);
+			if (window && this.crossfadeHold && this.crossfadeHoldKey === this.windowKey(window)) {
+				const ctx = this.compositeCtx;
+				ctx.save();
+				ctx.globalAlpha = 1 - clipTransitionMixProgress(timeMs, window);
+				ctx.drawImage(this.crossfadeHold, 0, 0, this.config.width, this.config.height);
+				ctx.restore();
+				return;
+			}
 		}
 
 		paintClipTransitionCoverage(this.compositeCtx, {
@@ -1366,6 +1389,66 @@ export class FrameRenderer {
 			width: this.config.width,
 			height: this.config.height,
 		});
+	}
+
+	/** Stable identity for a dissolve window, used to match it with its held frame. */
+	private windowKey(window: ClipTransitionWindow): string {
+		return `${window.boundaryMs}`;
+	}
+
+	/**
+	 * Copies the composited frame just before a dissolve window opens.
+	 *
+	 * The renderer composites into one canvas, so the outgoing picture is destroyed
+	 * by the next frame. Capturing it one frame early is what makes the same
+	 * dissolve the modern pipeline renders possible here too, without a second
+	 * decoder; it costs a single canvas copy per cut.
+	 */
+	private captureCrossfadeHold(timeMs: number): void {
+		const settings = this.config.clipTransitionSettings;
+		const ctx = this.compositeCtx;
+		if (!ctx || !settings || settings.kind !== "crossfade") {
+			return;
+		}
+
+		if (this.transitionWindows.length === 0) {
+			this.transitionWindows = resolveClipTransitionWindows(
+				this.config.clipRegions ?? [],
+				settings,
+			);
+		}
+
+		const frameMs = 1000 / Math.max(1, this.config.frameRate ?? 30);
+		const upcoming = this.transitionWindows.find(
+			(window) =>
+				this.crossfadeHoldKey !== this.windowKey(window) &&
+				timeMs <= window.startMs &&
+				timeMs >= window.startMs - frameMs * 1.5,
+		);
+		if (!upcoming) {
+			// Past every window: release the held frame so it cannot leak into a later
+			// cut that has its own.
+			if (
+				this.crossfadeHold &&
+				timeMs > Math.max(...this.transitionWindows.map((window) => window.endMs))
+			) {
+				this.crossfadeHold = null;
+				this.crossfadeHoldKey = null;
+			}
+			return;
+		}
+
+		const hold = document.createElement("canvas");
+		hold.width = this.config.width;
+		hold.height = this.config.height;
+		const holdCtx = hold.getContext("2d");
+		if (!holdCtx) {
+			return;
+		}
+
+		holdCtx.drawImage(ctx.canvas, 0, 0, hold.width, hold.height);
+		this.crossfadeHold = hold;
+		this.crossfadeHoldKey = this.windowKey(upcoming);
 	}
 
 	private updateLayout(): void {

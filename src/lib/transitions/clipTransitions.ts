@@ -31,6 +31,12 @@ export const MAX_CLIP_TRANSITION_DURATION_MS = 2_000;
 /** Gaps larger than this are empty timeline space, not a cut between clips. */
 export const CLIP_TRANSITION_ADJACENCY_TOLERANCE_MS = 40;
 
+/**
+ * Clips shorter than this get no fade. A fade covers half of each neighbour, so a
+ * shorter clip could not hold one without its two fades overlapping.
+ */
+export const CLIP_TRANSITION_MIN_CLIP_MS = 2;
+
 export const DEFAULT_CLIP_TRANSITION_SETTINGS: ClipTransitionSettings = {
 	// Opt-in-friendly default: the user asked for automatic transitions, so the
 	// fade is on, but a project can always turn it off or change its length.
@@ -127,8 +133,16 @@ export function resolveClipTransitionWindows(
 		if (settings.kind === "crossfade") {
 			// A dissolve starts *at* the cut: the outgoing picture is held while the
 			// incoming clip plays over it, so nothing of the incoming clip has to be
-			// decoded before the boundary. It may not outlast the clip it sits in.
-			const length = Math.min(settings.durationMs, current.endMs - current.startMs);
+			// decoded before the boundary. Neighbouring dissolves cannot overlap
+			// because each starts at its own cut, and the length is capped by the clip
+			// it belongs to and by the next cut.
+			const nextBoundaryMs =
+				index + 1 < ordered.length &&
+				Math.abs(ordered[index + 1].startMs - current.endMs) <=
+					CLIP_TRANSITION_ADJACENCY_TOLERANCE_MS
+					? ordered[index + 1].startMs
+					: current.endMs;
+			const length = Math.min(settings.durationMs, Math.max(0, nextBoundaryMs - boundaryMs));
 			if (length <= 0) {
 				continue;
 			}
@@ -136,13 +150,20 @@ export function resolveClipTransitionWindows(
 			continue;
 		}
 
-		// Half the fade may not eat more than the clip it sits in, and the whole
-		// fade stays inside both clips, so neighbouring fades cannot overlap.
-		const half = Math.min(
-			settings.durationMs / 2,
-			Math.max(1, (previous.endMs - previous.startMs) / 2),
-			Math.max(1, (current.endMs - current.startMs) / 2),
+		// Half the fade may not eat more than the clip it sits in, and a clip shorter
+		// than that is left without a fade: two fades that each cover half of a
+		// one-millisecond clip would overlap and the coverage would jump between them.
+		const clipLength = Math.min(
+			previous.endMs - previous.startMs,
+			current.endMs - current.startMs,
 		);
+		if (clipLength < CLIP_TRANSITION_MIN_CLIP_MS) {
+			continue;
+		}
+		const half = Math.min(settings.durationMs / 2, clipLength / 2);
+		if (half <= 0) {
+			continue;
+		}
 		windows.push({
 			boundaryMs,
 			startMs: boundaryMs - half,

@@ -177,16 +177,16 @@ test.describe("clip transitions in the exported file", () => {
 						.catch(() => undefined);
 				}
 			} else if (crossfadeRun.pipelineModel === "legacy") {
-				// A machine that had to be recovered onto the legacy pipeline cannot
-				// show the dissolve: the legacy renderer degrades it to a fade through
-				// black, which is documented. What still has to hold is that the file
-				// is a real picture rather than the silent black it used to be.
+				// A machine that had to be recovered onto the legacy pipeline still has
+				// to dissolve: the canvas renderer holds the outgoing frame too, so the
+				// two pipelines have to agree on what the transition looks like.
 				console.warn(
-					"[transition] This machine recovered onto the legacy pipeline, where a " +
-						"cross-dissolve degrades to a fade; only the non-black checks apply.",
+					"[transition] This machine recovered onto the legacy pipeline; the " +
+						"dissolve must behave the same there.",
 				);
 				expect(fadeLuma).toBeLessThan(20);
-				expect(fadeAfterCut).toBeGreaterThan(10);
+				expect(crossfadeAfterCut).toBeGreaterThan(40);
+				expect(crossfadeAfterCut).toBeGreaterThan(fadeAfterCut + 20);
 				expect(crossfadeLate).toBeGreaterThan(30);
 				for (const run of [fadeRun, crossfadeRun, noneRun]) {
 					if (typeof run.sampledLuma === "number") {
@@ -198,6 +198,29 @@ test.describe("clip transitions in the exported file", () => {
 				expect(crossfadeAfterCut).toBeGreaterThan(40);
 				expect(crossfadeAfterCut).toBeGreaterThan(fadeAfterCut + 20);
 				expect(crossfadeLate).toBeGreaterThan(30);
+
+				// The legacy canvas pipeline must dissolve the same way, not fall back
+				// to a fade, so the same project exported through it is measured too.
+				const legacyDissolve = await exportWithTransition("crossfade", "legacy");
+				try {
+					const legacyAfterCut = Math.max(
+						await frameLuma(legacyDissolve.outputPath, 1.05),
+						await frameLuma(legacyDissolve.outputPath, 1.1),
+					);
+					console.log(
+						`TRANSITION_LEGACY_DISSOLVE ranOn=${legacyDissolve.pipelineModel ?? "?"} ` +
+							`afterCut=${legacyAfterCut.toFixed(1)}`,
+					);
+					expect(legacyAfterCut).toBeGreaterThan(40);
+					expect(legacyAfterCut).toBeGreaterThan(fadeAfterCut + 20);
+				} finally {
+					await fs
+						.rm(path.dirname(legacyDissolve.outputPath), {
+							recursive: true,
+							force: true,
+						})
+						.catch(() => undefined);
+				}
 			}
 		} finally {
 			for (const file of [fadeRun, crossfadeRun, noneRun]) {

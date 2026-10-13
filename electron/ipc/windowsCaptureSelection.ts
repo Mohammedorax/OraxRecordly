@@ -52,6 +52,8 @@ export type ResolvedWindowsCaptureTarget =
 			kind: "display";
 			displayId: number;
 			bounds: WindowsCaptureDisplayBounds;
+			/** False when the requested display id could not be resolved again. */
+			matchedRequestedDisplay?: boolean;
 	  }
 	| {
 			kind: "invalid-window";
