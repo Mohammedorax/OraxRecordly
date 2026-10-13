@@ -3,7 +3,6 @@ import {
 	ArrowClockwiseIcon,
 	BoundingBox,
 	CameraIcon,
-	CaretDown,
 	Crop,
 	MonitorIcon,
 } from "@/components/ui/icons";
@@ -292,21 +291,19 @@ export function ScreenshotButton({
 		void runCapture(mode);
 	};
 
-	const canRepeatLastMode = lastMode !== null && (lastMode !== "source" || sourceAvailable);
-
-	/** Primary click: repeat the last mode, or open the chooser before the first capture. */
+	/**
+	 * One control, several modes.
+	 *
+	 * This used to be a camera button plus a separate caret button, which read as
+	 * two screenshot buttons side by side in the recording bar. There is one button
+	 * now and the modes live inside it, with the one you used last marked.
+	 */
 	const handlePrimaryClick = () => {
 		if (capturingRef.current) {
 			return;
 		}
 
-		if (!canRepeatLastMode || !lastMode) {
-			requestOpen(POPOVER_ID);
-			return;
-		}
-
-		requestClose(POPOVER_ID);
-		void runCapture(lastMode);
+		requestOpen(POPOVER_ID);
 	};
 
 	// Roving focus for the option list: the popover's dialog only handles Escape,
@@ -338,22 +335,6 @@ export function ScreenshotButton({
 
 	return (
 		<div className={`${styles.electronNoDrag} flex items-center`}>
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon"
-				iconSize={iconSize}
-				className={className}
-				disabled={disabled || capturing}
-				aria-label={label}
-				aria-haspopup={canRepeatLastMode ? undefined : "menu"}
-				aria-expanded={canRepeatLastMode ? undefined : open}
-				title={showTitle ? label : undefined}
-				onClick={handlePrimaryClick}
-			>
-				{captureIcon}
-			</Button>
-
 			<HudPopover
 				open={open}
 				onOpenChange={(nextOpen) => {
@@ -368,15 +349,16 @@ export function ScreenshotButton({
 						type="button"
 						variant="ghost"
 						size="icon"
-						iconSize="sm"
-						className={`-ms-1 size-6 min-w-6 ${styles.electronNoDrag}`}
+						iconSize={iconSize}
+						className={className}
 						disabled={disabled || capturing}
-						aria-label={t("screenshot.moreModes", "Choose a capture mode")}
+						aria-label={label}
 						aria-haspopup="menu"
 						aria-expanded={open}
-						title={t("screenshot.moreModes", "Choose a capture mode")}
+						title={showTitle ? label : undefined}
+						onClick={handlePrimaryClick}
 					>
-						<CaretDown aria-hidden className="size-3" />
+						{captureIcon}
 					</Button>
 				}
 				align="center"
@@ -396,7 +378,14 @@ export function ScreenshotButton({
 						>
 							<span className="shrink-0 text-foreground">{option.icon}</span>
 							<span className="flex min-w-0 flex-col items-start gap-0.5 text-start">
-								<span className="truncate text-sm">{option.label}</span>
+								<span className="flex items-center gap-2 text-sm">
+									<span className="truncate">{option.label}</span>
+									{lastMode === option.mode && (
+										<span className="shrink-0 rounded-full bg-foreground/10 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+											{t("screenshot.lastUsed", "Last used")}
+										</span>
+									)}
+								</span>
 								<span className="truncate text-xs text-muted-foreground">
 									{option.description}
 								</span>

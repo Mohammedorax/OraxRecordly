@@ -77,6 +77,7 @@
 	},
 	"screenshot": {
 		"capture": "التقاط لقطة شاشة",
+		"lastUsed": "المستخدمة أخيراً",
 		"chooserTitle": "التقاط لقطة شاشة",
 		"fullScreen": "شاشة كاملة",
 		"fullScreenDescription": "التقاط الشاشة بالكامل",

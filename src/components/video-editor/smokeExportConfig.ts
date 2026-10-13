@@ -27,6 +27,8 @@ export type SmokeExportConfig = {
 	fps?: ExportMp4FrameRate;
 	/** Transition style to force for the E2E transition test. */
 	transitionKind?: ClipTransitionKind;
+	/** Forces the burned-in clip label on or off for the end-to-end export. */
+	label?: boolean;
 	/** Fault injection for the E2E fallback test; requires `enabled`. */
 	forceModernRendererFailure: boolean;
 };
@@ -125,6 +127,13 @@ export function getSmokeExportConfig(search: string): SmokeExportConfig {
 			enabled && isClipTransitionKind(params.get("smokeTransitionKind"))
 				? (params.get("smokeTransitionKind") as ClipTransitionKind)
 				: undefined,
+		label: enabled
+			? params.get("smokeLabel") === "1"
+				? true
+				: params.get("smokeLabel") === "0"
+					? false
+					: undefined
+			: undefined,
 		// Fault injection for the end-to-end fallback test: pretends the machine
 		// has no usable renderer so the automatic downgrade is exercised. Only
 		// ever honored together with `smokeExport=1`.

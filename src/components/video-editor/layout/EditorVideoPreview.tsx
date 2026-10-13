@@ -1,11 +1,22 @@
 import type { ComponentProps, Dispatch, RefObject, SetStateAction } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 import type { useVideoEditorAudio } from "../audio/useVideoEditorAudio";
+import { createTimeUpdateThrottle } from "../preview/timeUpdateThrottle";
 import type { useAppearanceState } from "../state/useAppearanceState";
 import type { useTimelineState } from "../state/useTimelineState";
 import type { CursorTelemetryPoint, ZoomRegion } from "../types";
 import VideoPlayback, { type VideoPlaybackRef } from "../VideoPlayback";
+
+/**
+ * How often the playhead position reaches React while playing.
+ *
+ * The preview draws every frame regardless; this only bounds how often editor
+ * state changes, which used to be once per animation frame and re-rendered the
+ * whole editor with it. 30 Hz is smooth for a playhead and halves the work.
+ */
+const PLAYHEAD_UPDATE_INTERVAL_MS = 33;
 
 type PlaybackProps = ComponentProps<typeof VideoPlayback>;
 type Handlers = Pick<
@@ -67,6 +78,30 @@ export function EditorVideoPreview({
 	setError,
 	handlers,
 }: Props) {
+	const setCurrentTimeRef = useRef(setCurrentTime);
+	setCurrentTimeRef.current = setCurrentTime;
+
+	// One throttle for the life of the preview; the setter is read through a ref so
+	// a re-render never rebuilds it.
+	const throttle = useMemo(
+		() =>
+			createTimeUpdateThrottle({
+				minIntervalMs: PLAYHEAD_UPDATE_INTERVAL_MS,
+				onUpdate: (time) => setCurrentTimeRef.current(time),
+			}),
+		[],
+	);
+
+	// A pause, a seek or an unmount must land on the exact time, not on the last
+	// throttled sample.
+	useEffect(() => {
+		if (!isPlaying) {
+			throttle.flush();
+		}
+	}, [isPlaying, throttle]);
+
+	useEffect(() => () => throttle.dispose(), [throttle]);
+
 	return (
 		<VideoPlayback
 			clipRegions={timeline.clipRegions}
@@ -76,7 +111,7 @@ export function EditorVideoPreview({
 			videoPath={videoPath || ""}
 			onDurationChange={setDuration}
 			onPreviewReadyChange={setIsPreviewReady}
-			onTimeUpdate={setCurrentTime}
+			onTimeUpdate={throttle.push}
 			currentTime={currentTime}
 			onPlayStateChange={setIsPlaying}
 			onError={setError}

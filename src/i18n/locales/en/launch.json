@@ -77,6 +77,7 @@
 	},
 	"screenshot": {
 		"capture": "Take screenshot",
+		"lastUsed": "Last used",
 		"chooserTitle": "Capture screenshot",
 		"fullScreen": "Full screen",
 		"fullScreenDescription": "Capture the entire display",

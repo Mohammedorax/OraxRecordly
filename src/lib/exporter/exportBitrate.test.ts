@@ -2,6 +2,29 @@ import { describe, expect, it } from "vitest";
 import { getMp4ExportBitrate, getSourceQualityBitrate } from "./exportBitrate";
 
 describe("export bitrate policy", () => {
+	it("makes the quality tiers actually differ", () => {
+		const bitrate = (quality: "medium" | "good" | "high") =>
+			getMp4ExportBitrate({
+				width: 1920,
+				height: 1080,
+				frameRate: 30,
+				quality,
+				encodingMode: "quality",
+			});
+
+		const medium = bitrate("medium");
+		const good = bitrate("good");
+		const high = bitrate("high");
+
+		// Previously all three produced the same number, so the choice was inert.
+		expect(medium).toBeLessThan(good);
+		expect(good).toBeLessThan(high);
+		// `high` stays the reference the delivery numbers were tuned for.
+		expect(high).toBe(8_000_000);
+		expect(good).toBe(6_800_000);
+		expect(medium).toBe(5_600_000);
+	});
+
 	it("uses the web-delivery source-quality caps", () => {
 		expect(getSourceQualityBitrate(1280, 720)).toBe(8_000_000);
 		expect(getSourceQualityBitrate(1920, 1080)).toBe(12_000_000);

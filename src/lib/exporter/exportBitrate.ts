@@ -46,22 +46,51 @@ export function getSourceQualityBitrate(width: number, height: number): number {
 	return interpolateBitrate(totalPixels, FULL_HD_PIXELS, UHD_PIXELS, 12_000_000, 45_000_000);
 }
 
+/**
+ * How much the delivery bitrate scales with the chosen quality.
+ *
+ * `medium`, `good` and `high` used to produce the *same* bitrate, so choosing a
+ * quality in the export dialog changed nothing about the file. The tiers are real
+ * now: `high` is the reference the numbers below were tuned for, `good` and
+ * `medium` trade size and encoding time for quality, and `source` stays the
+ * capture-quality target that ignores the tier entirely.
+ */
+function getQualityBitrateMultiplier(quality: ExportQuality): number {
+	switch (quality) {
+		case "medium":
+			return 0.7;
+		case "good":
+			return 0.85;
+		case "high":
+		case "source":
+			return 1;
+		default:
+			return 1;
+	}
+}
+
 function getBaseMp4ExportBitrate(width: number, height: number, quality: ExportQuality): number {
 	if (quality === "source") {
 		return getSourceQualityBitrate(width, height);
 	}
 
 	const totalPixels = width * height;
-	if (totalPixels <= HD_PIXELS) {
-		return 5_000_000;
-	}
-	if (totalPixels <= FULL_HD_PIXELS) {
-		return 8_000_000;
-	}
-	if (totalPixels >= UHD_PIXELS) {
-		return 35_000_000;
-	}
-	return interpolateBitrate(totalPixels, FULL_HD_PIXELS, UHD_PIXELS, 8_000_000, 35_000_000);
+	const reference =
+		totalPixels <= HD_PIXELS
+			? 5_000_000
+			: totalPixels <= FULL_HD_PIXELS
+				? 8_000_000
+				: totalPixels >= UHD_PIXELS
+					? 35_000_000
+					: interpolateBitrate(
+							totalPixels,
+							FULL_HD_PIXELS,
+							UHD_PIXELS,
+							8_000_000,
+							35_000_000,
+						);
+
+	return Math.round(reference * getQualityBitrateMultiplier(quality));
 }
 
 function getFrameRateBitrateMultiplier(frameRate: ExportMp4FrameRate): number {

@@ -114,8 +114,12 @@ export function useExportRunner(input: ExportRunnerInput) {
 			}
 
 			// Clip name + recording date/time burned into frames, when enabled.
+			const recordingLabelEnabled =
+				smokeExportConfig.enabled && smokeExportConfig.label !== undefined
+					? smokeExportConfig.label
+					: settings.showRecordingLabel;
 			const recordingLabelText =
-				settings.showRecordingLabel && videoPath
+				recordingLabelEnabled && videoPath
 					? buildRecordingLabelText({
 							pathOrName: videoPath,
 							nameOverride: getRawLibraryNameOverride(videoPath),
