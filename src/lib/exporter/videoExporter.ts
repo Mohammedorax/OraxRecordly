@@ -18,6 +18,10 @@ import type {
 import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import type { ClipTransitionSettings } from "@/lib/transitions/clipTransitions";
+
+/** How many rendered frames the black-export diagnostic samples. */
+const MAX_LUMA_SAMPLES = 8;
+
 import { AudioProcessor, isAacAudioEncodingSupported } from "./audioEncoder";
 import { requiresClipTimelineRendering } from "./clipTimeline";
 import { buildEditedTrackSourceSegments, classifyEditedTrackStrategy } from "./editedTrackStrategy";
@@ -179,6 +183,9 @@ export class VideoExporter {
 	private finalizationTimeMs = 0;
 	private finalizationStageMs: ExportFinalizationStageMetrics = {};
 	private processedFrameCount = 0;
+	/** Mean luma of a few rendered frames, for the black-export diagnostic. */
+	private sampledFrameLumaTotal = 0;
+	private sampledFrameLumaCount = 0;
 
 	constructor(config: VideoExporterConfig) {
 		this.config = config;
@@ -342,6 +349,15 @@ export class VideoExporter {
 					}
 					frameIndex++;
 					this.processedFrameCount = frameIndex;
+					// Sampled for diagnostics only, exactly like the modern pipeline:
+					// a machine whose renderer draws nothing must not fail silently.
+					if (this.sampledFrameLumaCount < MAX_LUMA_SAMPLES) {
+						const luma = this.renderer?.sampleCompositeLuma() ?? null;
+						if (luma !== null) {
+							this.sampledFrameLumaTotal += luma;
+							this.sampledFrameLumaCount += 1;
+						}
+					}
 					this.reportProgress(frameIndex, totalFrames);
 				},
 				this.config.clipRegions,
@@ -1279,6 +1295,12 @@ export class VideoExporter {
 			totalElapsedMs,
 			finalizationMs: this.finalizationTimeMs || undefined,
 			frameCount: this.processedFrameCount || undefined,
+			/** 0 means the export was black; absent means it could not be sampled. */
+			sampledLuma:
+				this.sampledFrameLumaCount > 0
+					? Math.round((this.sampledFrameLumaTotal / this.sampledFrameLumaCount) * 10) /
+						10
+					: undefined,
 			effectiveDurationSec: this.effectiveDurationSec || undefined,
 			finalizationStageMs: hasFinalizationStageMetrics ? this.finalizationStageMs : undefined,
 		};

@@ -1305,6 +1305,42 @@ export class FrameRenderer {
 		});
 	}
 
+	/**
+	 * Mean luma (0-255) of the composited frame, for export diagnostics.
+	 *
+	 * The same measurement the modern renderer reports, so a machine whose GPU
+	 * path draws nothing can be told apart from a healthy one on either pipeline.
+	 */
+	sampleCompositeLuma(): number | null {
+		const ctx = this.compositeCtx;
+		if (!ctx) {
+			return null;
+		}
+
+		try {
+			const probe = document.createElement("canvas");
+			probe.width = 32;
+			probe.height = 18;
+			const probeCtx = probe.getContext("2d");
+			if (!probeCtx) {
+				return null;
+			}
+
+			probeCtx.drawImage(ctx.canvas, 0, 0, probe.width, probe.height);
+			const { data } = probeCtx.getImageData(0, 0, probe.width, probe.height);
+			let total = 0;
+			let count = 0;
+			for (let index = 0; index + 2 < data.length; index += 4) {
+				total += data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+				count += 1;
+			}
+
+			return count > 0 ? total / count : null;
+		} catch {
+			return null;
+		}
+	}
+
 	/** Black coverage for the automatic fade at a clip boundary, if any. */
 	private paintClipTransition(timeMs: number): void {
 		const settings = this.config.clipTransitionSettings;

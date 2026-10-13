@@ -5,9 +5,11 @@ import { formatBytesForMessage } from "@/lib/diskSpace";
 import { checkCaptureDiskSpace } from "@/lib/diskSpaceGuard";
 import { getMp4ExportBitrate } from "@/lib/exporter/exportBitrate";
 import {
+	BLACK_FRAME_LUMA_THRESHOLD,
 	describePipelineFallbackMessage,
 	shouldFallBackToLegacyPipeline,
 	shouldRemountPreviewAfterExport,
+	shouldRetryExportForBlackFrames,
 } from "@/lib/exporter/exportFallback";
 import { DEFAULT_MP4_CODEC } from "@/lib/exporter/mp4Support";
 import type { ExportPipelineModel, ExportSettings } from "@/lib/exporter/types";
@@ -284,6 +286,26 @@ export function useExportRunner(input: ExportRunnerInput) {
 								);
 							}
 							showExportSuccessToast(saveResult.path);
+							// The retry above only helps when the legacy renderer can draw.
+							// When even that produced black frames the file has no picture,
+							// and saying so beats a silent success message.
+							if (
+								typeof result.metrics?.sampledLuma === "number" &&
+								result.metrics.sampledLuma <= BLACK_FRAME_LUMA_THRESHOLD
+							) {
+								toast.warning(
+									t(
+										"export.blackFramesTitle",
+										"The exported video came out black",
+									),
+									{
+										description: t(
+											"export.blackFramesHint",
+											"This machine could not render any frame, so the file has no picture. Try exporting again after updating your graphics driver, or from a machine with working hardware acceleration.",
+										),
+									},
+								);
+							}
 							setExportedFilePath(saveResult.path);
 							recordExportHistory({
 								path: saveResult.path,
@@ -475,7 +497,43 @@ export function useExportRunner(input: ExportRunnerInput) {
 							const exporter = await createMp4Exporter(activePipelineModel);
 							if (exportWasCancelled()) return null;
 							exporterRef.current = exporter;
-							return await exporter.export();
+							const result = await exporter.export();
+							if (exportWasCancelled()) return null;
+
+							// A renderer that ran but produced only black frames yields a
+							// playable file nobody can use. Retry once on the legacy pipeline,
+							// exactly like an initialisation failure, and fall through to the
+							// warning below when that is black too.
+							if (
+								shouldRetryExportForBlackFrames({
+									pipelineModel: activePipelineModel,
+									alreadyFellBack: fellBackToLegacy,
+									sampledLuma: result.metrics?.sampledLuma,
+								})
+							) {
+								fellBackToLegacy = true;
+								activePipelineModel = "legacy";
+								exportedPipelineModel = "legacy";
+								exporterRef.current = null;
+								console.warn(
+									"[VideoExporter] The renderer produced black frames; retrying this export on the legacy pipeline.",
+								);
+								const blackCopy = describePipelineFallbackMessage({
+									title: t(
+										"export.gpuFallbackTitle",
+										"Exporting without GPU acceleration",
+									),
+									hint: t(
+										"export.gpuFallbackHint",
+										"Hardware rendering is unavailable on this machine, so frames are rendered on the processor. The export still finishes, just more slowly.",
+									),
+								});
+								toast.info(blackCopy.title, { description: blackCopy.hint });
+								setExportProgress(null);
+								return runMp4Export();
+							}
+
+							return result;
 						} catch (error) {
 							const errorMessage =
 								error instanceof Error ? error.message : String(error);
@@ -676,6 +734,26 @@ export function useExportRunner(input: ExportRunnerInput) {
 								);
 							}
 							showExportSuccessToast(saveResult.path);
+							// The retry above only helps when the legacy renderer can draw.
+							// When even that produced black frames the file has no picture,
+							// and saying so beats a silent success message.
+							if (
+								typeof result.metrics?.sampledLuma === "number" &&
+								result.metrics.sampledLuma <= BLACK_FRAME_LUMA_THRESHOLD
+							) {
+								toast.warning(
+									t(
+										"export.blackFramesTitle",
+										"The exported video came out black",
+									),
+									{
+										description: t(
+											"export.blackFramesHint",
+											"This machine could not render any frame, so the file has no picture. Try exporting again after updating your graphics driver, or from a machine with working hardware acceleration.",
+										),
+									},
+								);
+							}
 							setExportedFilePath(saveResult.path);
 							recordExportHistory({
 								path: saveResult.path,

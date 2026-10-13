@@ -4,6 +4,7 @@ import {
 	isRendererUnavailableExportError,
 	shouldFallBackToLegacyPipeline,
 	shouldRemountPreviewAfterExport,
+	shouldRetryExportForBlackFrames,
 } from "./exportFallback";
 
 /** The exact message a GPU-less machine produced. */
@@ -88,5 +89,51 @@ describe("export pipeline fallback", () => {
 				previewPipelineModel: "modern",
 			}),
 		).toBe(true);
+	});
+
+	describe("black-frame retry", () => {
+		it("retries a successful modern export whose frames were black", () => {
+			expect(
+				shouldRetryExportForBlackFrames({
+					pipelineModel: "modern",
+					alreadyFellBack: false,
+					sampledLuma: 0,
+				}),
+			).toBe(true);
+		});
+
+		it("leaves a healthy export alone", () => {
+			expect(
+				shouldRetryExportForBlackFrames({
+					pipelineModel: "modern",
+					alreadyFellBack: false,
+					sampledLuma: 101.2,
+				}),
+			).toBe(false);
+		});
+
+		it("never retries twice, on the legacy pipeline, or without a measurement", () => {
+			expect(
+				shouldRetryExportForBlackFrames({
+					pipelineModel: "modern",
+					alreadyFellBack: true,
+					sampledLuma: 0,
+				}),
+			).toBe(false);
+			expect(
+				shouldRetryExportForBlackFrames({
+					pipelineModel: "legacy",
+					alreadyFellBack: false,
+					sampledLuma: 0,
+				}),
+			).toBe(false);
+			expect(
+				shouldRetryExportForBlackFrames({
+					pipelineModel: "modern",
+					alreadyFellBack: false,
+					sampledLuma: undefined,
+				}),
+			).toBe(false);
+		});
 	});
 });

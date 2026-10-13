@@ -70,3 +70,37 @@ export function shouldRemountPreviewAfterExport(options: {
 }): boolean {
 	return options.activePipelineModel !== options.previewPipelineModel;
 }
+
+/**
+ * Luma at or below this counts as "the renderer produced nothing".
+ *
+ * The modern pipeline can finish successfully while every frame it hands over is
+ * black, which happens on machines whose GPU path does not actually render
+ * (software adapters, virtual machines, a disabled driver). The file is
+ * playable, so nothing else in the pipeline notices; the sampler is what makes
+ * it visible.
+ */
+export const BLACK_FRAME_LUMA_THRESHOLD = 0.5;
+
+/**
+ * Whether a *successful* export should be retried once on the legacy pipeline
+ * because the frames it rendered are black.
+ *
+ * Only the modern pipeline is retried: it is the one that can silently render
+ * nothing, and the legacy renderer is the alternative the app already keeps for
+ * machines without a usable GPU path. A second black result is reported to the
+ * user rather than retried again.
+ */
+export function shouldRetryExportForBlackFrames(options: {
+	pipelineModel: ExportPipelineModel;
+	alreadyFellBack: boolean;
+	sampledLuma?: number | null;
+}): boolean {
+	return (
+		options.pipelineModel === "modern" &&
+		!options.alreadyFellBack &&
+		typeof options.sampledLuma === "number" &&
+		Number.isFinite(options.sampledLuma) &&
+		options.sampledLuma <= BLACK_FRAME_LUMA_THRESHOLD
+	);
+}

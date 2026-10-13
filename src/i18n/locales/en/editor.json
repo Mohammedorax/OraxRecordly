@@ -251,6 +251,8 @@
 		"saving": "Opening save dialog..."
 	},
 	"export": {
+		"blackFramesTitle": "The exported video came out black",
+		"blackFramesHint": "This machine could not render any frame, so the file has no picture. Try exporting again after updating your graphics driver, or from a machine with working hardware acceleration.",
 		"notEnoughSpace": "Only {{size}} free on this disk. Free some space and export again.",
 		"processingAudioEdits": "Processing audio with speed/overlay edits",
 		"canceled": "Export canceled",

@@ -74,7 +74,10 @@ async function writeTwoClipProject(directory: string, videoPath: string): Promis
 	return projectPath;
 }
 
-async function exportWithTransition(kind: "none" | "fade" | "crossfade"): Promise<string> {
+async function exportWithTransition(
+	kind: "none" | "fade" | "crossfade",
+	pipeline?: "modern" | "legacy",
+): Promise<string> {
 	const workDirectory = await fs.realpath(
 		await fs.mkdtemp(path.join(os.tmpdir(), `recordly-transition-${kind}-`)),
 	);
@@ -86,6 +89,7 @@ async function exportWithTransition(kind: "none" | "fade" | "crossfade"): Promis
 		env: {
 			RECORDLY_SMOKE_EXPORT_PROJECT: projectPath,
 			RECORDLY_SMOKE_TRANSITION_KIND: kind,
+			...(pipeline ? { RECORDLY_SMOKE_EXPORT_PIPELINE: pipeline } : {}),
 		},
 	});
 
@@ -94,7 +98,8 @@ async function exportWithTransition(kind: "none" | "fade" | "crossfade"): Promis
 		// The renderer's own measurement of what it produced: this separates "the
 		// frame was already black before encoding" from "the file came out black".
 		console.log(
-			`TRANSITION_RENDER kind=${kind} sampledLuma=${run.report.metrics?.sampledLuma ?? "unavailable"} ` +
+			`TRANSITION_RENDER kind=${kind}${pipeline ? ` pipeline=${pipeline}` : ""} ` +
+				`sampledLuma=${run.report.metrics?.sampledLuma ?? "unavailable"} ` +
 				`renderBackend=${run.report.metrics?.renderBackend ?? "?"} ` +
 				`encodeBackend=${run.report.metrics?.encodeBackend ?? "?"}`,
 		);
@@ -146,6 +151,22 @@ test.describe("clip transitions in the exported file", () => {
 					"[transition] This machine renders exported frames black, so the brightness " +
 						"comparison is skipped here; the export itself succeeded.",
 				);
+				// The recovery path is a retry on the legacy pipeline, so the legacy
+				// renderer's own brightness decides whether that recovery can work here.
+				const legacyOutput = await exportWithTransition("none", "legacy");
+				try {
+					const legacyLuma = await frameLuma(legacyOutput, 0.5);
+					console.log(
+						`TRANSITION_LEGACY_LUMA baseline=${legacyLuma.toFixed(1)} ` +
+							(legacyLuma < 30
+								? "(the legacy pipeline is black here too)"
+								: "(the legacy pipeline can draw, so the retry recovers the export)"),
+					);
+				} finally {
+					await fs
+						.rm(path.dirname(legacyOutput), { recursive: true, force: true })
+						.catch(() => undefined);
+				}
 			} else {
 				expect(fadeLuma).toBeLessThan(20);
 				expect(crossfadeAfterCut).toBeGreaterThan(40);
