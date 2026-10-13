@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	buildRecordingLabelText,
 	getRecordingDisplayName,
 	getRecordingStartTimeMs,
+	resolveLabelSourcePath,
 } from "./recordingLabelUtils";
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 describe("recording label metadata", () => {
 	it("recovers the capture start time from a recording file name", () => {
@@ -36,5 +41,53 @@ describe("recording label metadata", () => {
 		expect(buildRecordingLabelText({ pathOrName: "imported.mp4", locale: "en-US" })).toBe(
 			"imported",
 		);
+	});
+});
+
+describe("a preview URL is never burned in as the clip name", () => {
+	const epochMs = 1_791_840_991_639;
+	const filePath = `C:\\Users\\moham\\Videos\\OraxRecordly\\Cache\\recording-${epochMs}.mp4`;
+	const legacyUrl = `http://127.0.0.1:54321/video?path=${encodeURIComponent(filePath)}`;
+
+	it("resolves the file path behind a media URL", () => {
+		vi.stubGlobal("window", {});
+		expect(resolveLabelSourcePath(legacyUrl)).toBe(filePath);
+		expect(getRecordingDisplayName(legacyUrl)).toBe(`recording-${epochMs}`);
+		expect(getRecordingStartTimeMs(legacyUrl)).toBe(epochMs);
+	});
+
+	it("resolves the opaque handle form through the preload bridge", () => {
+		vi.stubGlobal("window", {
+			electronAPI: { resolveMediaTokenSync: () => filePath },
+		});
+		expect(getRecordingDisplayName("http://127.0.0.1:54321/video?i=abc")).toBe(
+			`recording-${epochMs}`,
+		);
+	});
+
+	it("reads a file URL as a path", () => {
+		vi.stubGlobal("window", {});
+		expect(resolveLabelSourcePath("file:///C:/Users/moham/My%20Clip.mp4")).toBe(
+			"C:/Users/moham/My Clip.mp4",
+		);
+	});
+
+	it("labels the clip with its name and date, not the address", () => {
+		vi.stubGlobal("window", {});
+		const label = buildRecordingLabelText({ pathOrName: legacyUrl, locale: "en-US" });
+
+		expect(label.startsWith(`recording-${epochMs} · `)).toBe(true);
+		for (const forbidden of ["video?", "path=", "%5C", "http:", "://"]) {
+			expect(label).not.toContain(forbidden);
+		}
+	});
+
+	it("draws no label at all when the value cannot be resolved into a name", () => {
+		vi.stubGlobal("window", {});
+		// A handle the bridge cannot resolve, and a query fragment that is not a path.
+		expect(buildRecordingLabelText({ pathOrName: "http://127.0.0.1:1/video?i=stale" })).toBe(
+			"",
+		);
+		expect(getRecordingDisplayName("video?path=C%3A%5Csecret.mp4")).toBe("");
 	});
 });
