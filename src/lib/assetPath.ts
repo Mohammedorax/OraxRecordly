@@ -81,7 +81,13 @@ export async function getAssetPath(relativePath: string): Promise<string> {
 		return `/${encodedRelativePath}`;
 	}
 
-	throw new Error(`Failed to resolve asset base path for ${relativePath}`);
+	// A packaged or unpackaged Electron window serves its assets next to the
+	// renderer document, so a root-relative path is the correct last resort - and
+	// it is what the old code returned for every http window. Throwing here turned
+	// a resolvable asset into a failed export (or a black one) whenever the base
+	// path could not be resolved in time, which is worse than an image that simply
+	// does not appear.
+	return `/${encodedRelativePath}`;
 }
 
 const BASE64_CHUNK_SIZE = 0x8000;
