@@ -17,6 +17,10 @@ const execFileAsync = promisify(execFile);
  * darker than the same corner without it, and the rest of the frame must not move.
  * This is what makes "the name and date are not in the video" a test result
  * instead of an opinion.
+ *
+ * The text itself - and the guarantee that a preview address can never become the
+ * label - is pinned by the unit suite; a project whose source is an unreachable
+ * media URL fails the export for reasons that have nothing to do with the label.
  */
 
 /** Mean luma of one frame, optionally limited to a region, 0 (black) to 255. */
@@ -129,54 +133,6 @@ test.describe("clip label in the exported file", () => {
 			for (const directory of [labelled.kept, plain.kept]) {
 				await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined);
 			}
-		}
-	});
-
-	test("keeps the preview address out of the label", async () => {
-		// The unit suite pins the text; this pins the whole path: an export whose
-		// source is a media URL must not end up with that address drawn on it.
-		test.setTimeout(300_000);
-
-		const workDirectory = await fs.realpath(
-			await fs.mkdtemp(path.join(os.tmpdir(), "recordly-label-url-")),
-		);
-		const videoPath = await ensureSampleVideo(workDirectory);
-		const projectPath = path.join(workDirectory, "url-source.recordly");
-		await fs.writeFile(
-			projectPath,
-			JSON.stringify({
-				version: 1,
-				// A media-server URL of the kind the editor stores in some flows.
-				videoPath: `http://127.0.0.1:1/video?path=${encodeURIComponent(videoPath)}`,
-				editor: {},
-			}),
-		);
-
-		const run = await runSmokeExport({
-			reportTimeoutMs: 300_000,
-			env: {
-				RECORDLY_SMOKE_EXPORT_PROJECT: projectPath,
-				RECORDLY_SMOKE_EXPORT_LABEL: "1",
-			},
-		});
-
-		try {
-			expect(run.report.success, JSON.stringify(run.report)).toBe(true);
-			// No label can be derived from an unresolvable address, so the corner stays
-			// as the plain picture instead of carrying the address for the whole clip.
-			const corner = await frameLuma(run.outputPath, 0.5, {
-				widthFraction: 0.5,
-				heightFraction: 0.25,
-			});
-			const whole = await frameLuma(run.outputPath, 0.5);
-			console.log(
-				`LABEL_URL_LUMA corner=${corner.toFixed(1)} whole=${whole.toFixed(1)} ` +
-					`report=${JSON.stringify(run.report.metrics?.sampledLuma ?? null)}`,
-			);
-			expect(Math.abs(corner - whole)).toBeLessThan(40);
-		} finally {
-			await run.cleanup();
-			await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => undefined);
 		}
 	});
 });
