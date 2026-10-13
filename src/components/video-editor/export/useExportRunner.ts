@@ -5,6 +5,7 @@ import { getMp4ExportBitrate } from "@/lib/exporter/exportBitrate";
 import {
 	describePipelineFallbackMessage,
 	shouldFallBackToLegacyPipeline,
+	shouldRemountPreviewAfterExport,
 } from "@/lib/exporter/exportFallback";
 import { DEFAULT_MP4_CODEC } from "@/lib/exporter/mp4Support";
 import type { ExportPipelineModel, ExportSettings } from "@/lib/exporter/types";
@@ -153,6 +154,9 @@ export function useExportRunner(input: ExportRunnerInput) {
 			let keepExportDialogOpen = false;
 			const wasPlaying = isPlaying;
 			const restoreTime = video.currentTime;
+			// Which renderer pipeline actually produced the file. The preview only has
+			// to be rebuilt when this ended up different from the preview's own one.
+			let exportedPipelineModel: ExportPipelineModel = exportPipelineModel;
 
 			try {
 				if (wasPlaying) {
@@ -468,6 +472,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 
 							fellBackToLegacy = true;
 							activePipelineModel = "legacy";
+							exportedPipelineModel = "legacy";
 							exporterRef.current = null;
 							console.warn(
 								"[VideoExporter] Hardware rendering is unavailable; retrying this export on the legacy pipeline.",
@@ -638,6 +643,12 @@ export function useExportRunner(input: ExportRunnerInput) {
 									outputPath: saveResult.path,
 									progressSamples: smokeProgressSamples,
 									metrics: result.metrics,
+									// Exported before the fix: the preview was rebuilt after every
+									// export. The end-to-end spec asserts this stays true.
+									previewKept: !shouldRemountPreviewAfterExport({
+										activePipelineModel,
+										previewPipelineModel: exportPipelineModel,
+									}),
 								});
 							}
 							if (smokeExportStartedAt !== null) {
@@ -781,7 +792,22 @@ export function useExportRunner(input: ExportRunnerInput) {
 					setIsExporting(false);
 					exporterRef.current = null;
 					setShowExportDropdown(keepExportDialogOpen);
-					remountPreview();
+					// Rebuilding the preview costs a WebGL context, shader recompiles,
+					// a video reload and a skeleton flash. Exporting never rebinds the
+					// source, so it is only rebuilt when the export actually ran on the
+					// other renderer pipeline.
+					if (
+						shouldRemountPreviewAfterExport({
+							activePipelineModel: exportedPipelineModel,
+							previewPipelineModel: exportPipelineModel,
+						})
+					) {
+						remountPreview();
+					} else {
+						// Asserted by the end-to-end export spec: a plain export must not
+						// rebuild the preview.
+						console.log("[perf] export finished without rebuilding the editor preview");
+					}
 				}
 			}
 		},

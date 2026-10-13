@@ -45,6 +45,11 @@ test.describe("Electron end-to-end export", () => {
 			const durationSeconds = Number(probe.format.duration);
 			expect(durationSeconds).toBeGreaterThan(1);
 			expect(durationSeconds).toBeLessThan(4);
+
+			// A successful export must leave the open editor alone: rebuilding the
+			// preview costs a WebGL context, shader recompiles and a video reload,
+			// which the user feels as a freeze right after exporting.
+			expect(run.report.previewKept).toBe(true);
 		} finally {
 			await run.cleanup();
 		}

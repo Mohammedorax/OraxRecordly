@@ -54,3 +54,19 @@ export function describePipelineFallbackMessage(
 			"Hardware rendering is unavailable on this machine, so the video is rendered on the processor. It still works, just more slowly.",
 	};
 }
+
+/**
+ * Whether the editor preview has to be rebuilt once an export finishes.
+ *
+ * Rebuilding the preview is expensive: a new WebGL context, shader recompiles,
+ * a video reload and a flash of the loading skeleton. Exporting never rebinds
+ * the preview's source, so the rebuild is only warranted when the export ran on
+ * a *different* renderer than the one the preview is currently using - which
+ * happens exactly when the modern pipeline failed and the legacy one took over.
+ */
+export function shouldRemountPreviewAfterExport(options: {
+	activePipelineModel: ExportPipelineModel;
+	previewPipelineModel: ExportPipelineModel;
+}): boolean {
+	return options.activePipelineModel !== options.previewPipelineModel;
+}

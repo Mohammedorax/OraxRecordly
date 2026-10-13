@@ -31,6 +31,8 @@ export type SmokeExportReport = {
 	format?: string;
 	pipelineModel?: string;
 	backendPreference?: string;
+	/** True when a successful export left the open editor preview mounted. */
+	previewKept?: boolean;
 	metrics?: {
 		frameCount?: number;
 		renderBackend?: string;

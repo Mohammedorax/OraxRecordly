@@ -3,6 +3,7 @@ import {
 	describePipelineFallbackMessage,
 	isRendererUnavailableExportError,
 	shouldFallBackToLegacyPipeline,
+	shouldRemountPreviewAfterExport,
 } from "./exportFallback";
 
 /** The exact message a GPU-less machine produced. */
@@ -71,5 +72,21 @@ describe("export pipeline fallback", () => {
 			hint: "تفصيل",
 		});
 		expect(localized).toEqual({ title: "عنوان", hint: "تفصيل" });
+	});
+
+	it("keeps the preview mounted after a normal export", () => {
+		expect(
+			shouldRemountPreviewAfterExport({
+				activePipelineModel: "modern",
+				previewPipelineModel: "modern",
+			}),
+		).toBe(false);
+
+		expect(
+			shouldRemountPreviewAfterExport({
+				activePipelineModel: "legacy",
+				previewPipelineModel: "modern",
+			}),
+		).toBe(true);
 	});
 });
