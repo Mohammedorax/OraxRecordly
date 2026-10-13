@@ -77,7 +77,11 @@ async function writeTwoClipProject(directory: string, videoPath: string): Promis
 async function exportWithTransition(
 	kind: "none" | "fade" | "crossfade",
 	pipeline?: "modern" | "legacy",
-): Promise<string> {
+): Promise<{
+	outputPath: string;
+	pipelineModel: string | undefined;
+	sampledLuma: number | undefined;
+}> {
 	const workDirectory = await fs.realpath(
 		await fs.mkdtemp(path.join(os.tmpdir(), `recordly-transition-${kind}-`)),
 	);
@@ -86,6 +90,8 @@ async function exportWithTransition(
 	const outputPath = path.join(workDirectory, `${kind}.mp4`);
 
 	const run = await runSmokeExport({
+		// A black-frame recovery re-renders the whole export once.
+		reportTimeoutMs: 300_000,
 		env: {
 			RECORDLY_SMOKE_EXPORT_PROJECT: projectPath,
 			RECORDLY_SMOKE_TRANSITION_KIND: kind,
@@ -99,23 +105,27 @@ async function exportWithTransition(
 		// frame was already black before encoding" from "the file came out black".
 		console.log(
 			`TRANSITION_RENDER kind=${kind}${pipeline ? ` pipeline=${pipeline}` : ""} ` +
+				`ranOn=${run.report.pipelineModel ?? "?"} ` +
 				`sampledLuma=${run.report.metrics?.sampledLuma ?? "unavailable"} ` +
 				`renderBackend=${run.report.metrics?.renderBackend ?? "?"} ` +
 				`encodeBackend=${run.report.metrics?.encodeBackend ?? "?"}`,
 		);
 		await fs.copyFile(run.outputPath, outputPath);
+		return {
+			outputPath,
+			pipelineModel: run.report.pipelineModel,
+			sampledLuma: run.report.metrics?.sampledLuma,
+		};
 	} finally {
 		await run.cleanup();
 	}
-
-	return outputPath;
 }
 
 test.describe("clip transitions in the exported file", () => {
 	test("a cross-dissolve shows a picture at the cut where a fade is black", async () => {
 		test.setTimeout(600_000);
 
-		const [fadeOutput, crossfadeOutput, noneOutput] = [
+		const [fadeRun, crossfadeRun, noneRun] = [
 			await exportWithTransition("fade"),
 			await exportWithTransition("crossfade"),
 			await exportWithTransition("none"),
@@ -123,22 +133,21 @@ test.describe("clip transitions in the exported file", () => {
 
 		try {
 			// Baseline from the middle of the first clip. A runner whose renderer
-			// cannot upload video textures (a GPU-less CI machine falling back to
-			// software rasterisation) produces black frames everywhere, and then no
-			// brightness assertion can say anything about transitions.
-			const baseline = await frameLuma(noneOutput, 0.5);
+			// cannot draw produces black frames everywhere, and then no brightness
+			// assertion can say anything about transitions.
+			const baseline = await frameLuma(noneRun.outputPath, 0.5);
 			// The cut sits at 1.0s. A 600 ms fade is fully black exactly there, while
 			// a dissolve is still showing the outgoing clip's held frame just after it.
-			const fadeLuma = await frameLuma(fadeOutput, 1);
+			const fadeLuma = await frameLuma(fadeRun.outputPath, 1);
 			const crossfadeAfterCut = Math.max(
-				await frameLuma(crossfadeOutput, 1.05),
-				await frameLuma(crossfadeOutput, 1.1),
+				await frameLuma(crossfadeRun.outputPath, 1.05),
+				await frameLuma(crossfadeRun.outputPath, 1.1),
 			);
 			const fadeAfterCut = Math.max(
-				await frameLuma(fadeOutput, 1.05),
-				await frameLuma(fadeOutput, 1.1),
+				await frameLuma(fadeRun.outputPath, 1.05),
+				await frameLuma(fadeRun.outputPath, 1.1),
 			);
-			const crossfadeLate = await frameLuma(crossfadeOutput, 1.9);
+			const crossfadeLate = await frameLuma(crossfadeRun.outputPath, 1.9);
 
 			console.log(
 				`TRANSITION_LUMA baseline=${baseline.toFixed(1)} fade=${fadeLuma.toFixed(1)} ` +
@@ -153,9 +162,9 @@ test.describe("clip transitions in the exported file", () => {
 				);
 				// The recovery path is a retry on the legacy pipeline, so the legacy
 				// renderer's own brightness decides whether that recovery can work here.
-				const legacyOutput = await exportWithTransition("none", "legacy");
+				const legacyRun = await exportWithTransition("none", "legacy");
 				try {
-					const legacyLuma = await frameLuma(legacyOutput, 0.5);
+					const legacyLuma = await frameLuma(legacyRun.outputPath, 0.5);
 					console.log(
 						`TRANSITION_LEGACY_LUMA baseline=${legacyLuma.toFixed(1)} ` +
 							(legacyLuma < 30
@@ -164,8 +173,25 @@ test.describe("clip transitions in the exported file", () => {
 					);
 				} finally {
 					await fs
-						.rm(path.dirname(legacyOutput), { recursive: true, force: true })
+						.rm(path.dirname(legacyRun.outputPath), { recursive: true, force: true })
 						.catch(() => undefined);
+				}
+			} else if (crossfadeRun.pipelineModel === "legacy") {
+				// A machine that had to be recovered onto the legacy pipeline cannot
+				// show the dissolve: the legacy renderer degrades it to a fade through
+				// black, which is documented. What still has to hold is that the file
+				// is a real picture rather than the silent black it used to be.
+				console.warn(
+					"[transition] This machine recovered onto the legacy pipeline, where a " +
+						"cross-dissolve degrades to a fade; only the non-black checks apply.",
+				);
+				expect(fadeLuma).toBeLessThan(20);
+				expect(fadeAfterCut).toBeGreaterThan(10);
+				expect(crossfadeLate).toBeGreaterThan(30);
+				for (const run of [fadeRun, crossfadeRun, noneRun]) {
+					if (typeof run.sampledLuma === "number") {
+						expect(run.sampledLuma).toBeGreaterThan(0);
+					}
 				}
 			} else {
 				expect(fadeLuma).toBeLessThan(20);
@@ -174,9 +200,9 @@ test.describe("clip transitions in the exported file", () => {
 				expect(crossfadeLate).toBeGreaterThan(30);
 			}
 		} finally {
-			for (const file of [fadeOutput, crossfadeOutput, noneOutput]) {
+			for (const file of [fadeRun, crossfadeRun, noneRun]) {
 				await fs
-					.rm(path.dirname(file), { recursive: true, force: true })
+					.rm(path.dirname(file.outputPath), { recursive: true, force: true })
 					.catch(() => undefined);
 			}
 		}

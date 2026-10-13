@@ -19,7 +19,9 @@ import { runSmokeExport } from "./smokeExport";
  */
 test.describe("Electron end-to-end export", () => {
 	test("boots the app, renders, and writes a playable MP4", async () => {
-		const run = await runSmokeExport();
+		// A black-frame recovery re-renders the whole export once, so the report can
+		// take twice as long to arrive on a machine that needs it.
+		const run = await runSmokeExport({ reportTimeoutMs: 300_000 });
 
 		try {
 			expect(run.report.success, JSON.stringify(run.report)).toBe(true);
@@ -27,10 +29,19 @@ test.describe("Electron end-to-end export", () => {
 			// A copy of the input would satisfy the file checks below; these prove an
 			// encoder actually ran and produced the frames.
 			expect(run.report.format).toBe("mp4");
-			expect(run.report.pipelineModel).toBe("modern");
+			// The modern pipeline is the default, but a machine whose renderer draws
+			// nothing is recovered automatically onto the legacy one, so either is a
+			// correct outcome for a successful export.
+			expect(["modern", "legacy"]).toContain(run.report.pipelineModel);
 			expect(run.report.metrics?.frameCount ?? 0).toBeGreaterThan(0);
 			expect(run.report.metrics?.encodeBackend ?? "").not.toBe("");
 			expect(run.report.metrics?.effectiveDurationSec ?? 0).toBeGreaterThan(1);
+			// The one thing that makes the file worth saving: it has a picture. A
+			// renderer that produces black frames (software GPU paths) used to be
+			// reported as a plain success.
+			if (typeof run.report.metrics?.sampledLuma === "number") {
+				expect(run.report.metrics.sampledLuma).toBeGreaterThan(0);
+			}
 
 			const stats = await fs.stat(run.outputPath);
 			expect(stats.size).toBeGreaterThan(10_000);
