@@ -29,6 +29,7 @@ import { stopWindowBoundsCapture } from "./ipc/cursor/bounds";
 import { stopInteractionCapture } from "./ipc/cursor/interaction";
 import { stopNativeCursorMonitor } from "./ipc/cursor/monitor";
 import { stopCursorCapture } from "./ipc/cursor/telemetry";
+import { decideRendererCrashRecovery, type RendererCrashRecord } from "./rendererCrashRecovery";
 import { getPackagedRendererBaseUrl } from "./rendererServer";
 
 const electronWindowsDir = path.dirname(fileURLToPath(import.meta.url));
@@ -1143,6 +1144,8 @@ function loadPackagedEditorWindow(win: BrowserWindow) {
 export function createEditorWindow(): BrowserWindow {
 	const perfStart = Date.now();
 	console.log("[PERF:MAIN] createEditorWindow: STARTED");
+	/** Crash timestamps for this window, used to refuse a reload loop. */
+	let crashHistory: RendererCrashRecord[] = [];
 	const isMac = process.platform === "darwin";
 	const { workArea, workAreaSize } = getScreen().getPrimaryDisplay();
 	const initialWidth = isMac ? Math.round(workAreaSize.width * 0.85) : workArea.width;
@@ -1234,6 +1237,39 @@ export function createEditorWindow(): BrowserWindow {
 
 	win.webContents.on("render-process-gone", (_event, details) => {
 		console.error("[editor-window] render-process-gone", details);
+		const decision = decideRendererCrashRecovery({
+			history: crashHistory,
+			now: Date.now(),
+			reason: details.reason,
+		});
+		crashHistory = decision.history;
+
+		if (!decision.reload || win.isDestroyed()) {
+			console.error(
+				"[editor-window] not reloading after the crash; the window is left as-is so the app stays usable.",
+			);
+			return;
+		}
+
+		// The main process still knows the active project, so the reloaded editor
+		// hydrates straight back into it instead of dropping the user on the
+		// dashboard with their unsaved work one crash away.
+		console.warn("[editor-window] reloading after the renderer crashed");
+		setTimeout(() => {
+			if (!win.isDestroyed()) {
+				win.webContents.reload();
+			}
+		}, 250);
+	});
+
+	// A renderer that stops answering is reported once; a long export can block the
+	// thread legitimately, so this is diagnostic only and never reloads the window
+	// (that would destroy the export the user is waiting for).
+	win.on("unresponsive", () => {
+		console.warn("[editor-window] the renderer stopped responding");
+	});
+	win.on("responsive", () => {
+		console.log("[editor-window] the renderer responded again");
 	});
 
 	win.on("show", () => {

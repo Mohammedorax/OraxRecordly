@@ -33,6 +33,7 @@ import { getRecordingsDir } from "./ipc/utils";
 import { ensureMediaServer } from "./mediaServer";
 import { hardenWebContentsNavigation, shouldHardenWebContentsType } from "./navigationPolicy";
 import { shouldGrantDisplayCapture, shouldGrantMediaPermission } from "./permissionPolicy";
+import { decideRendererCrashRecovery, type RendererCrashRecord } from "./rendererCrashRecovery";
 import { ensurePackagedRendererServer, getPackagedRendererBaseUrl } from "./rendererServer";
 import {
 	registerScreenshotGlobalShortcut,
@@ -445,6 +446,33 @@ function createWindow() {
 			mainWindow = null;
 		}
 	});
+
+	// The HUD renderer owns the recording controls, so its death must not leave a
+	// half-written take behind: the capture helper is stopped (which finalizes what
+	// reached the disk) and the window is reloaded, bounded so a crash loop cannot
+	// spin. The capture itself lives in this process, so nothing else is lost.
+	let hudCrashHistory: RendererCrashRecord[] = [];
+	createdHudWindow.webContents.on("render-process-gone", (_event, details) => {
+		console.error("[hud-window] render-process-gone", details);
+
+		if (isRecordingActive) {
+			console.warn("[hud-window] stopping the active recording after the renderer died");
+			isRecordingActive = false;
+			killWindowsCaptureProcess();
+			destroyRecordingTrayIfUnused();
+		}
+
+		const decision = decideRendererCrashRecovery({
+			history: hudCrashHistory,
+			now: Date.now(),
+			reason: details.reason,
+		});
+		hudCrashHistory = decision.history;
+		if (decision.reload && !createdHudWindow.isDestroyed()) {
+			createdHudWindow.webContents.reload();
+		}
+	});
+
 	isCreatingMainWindow = false;
 }
 

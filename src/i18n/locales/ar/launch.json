@@ -1,5 +1,6 @@
 {
 	"recording": {
+		"notEnoughSpace": "المساحةُ الحرةُ على هذا القرص {{size}} فقط. أفرغ مساحةً ثم ابدأ التسجيل.",
 		"home": "الرئيسية",
 		"disableSystemAudio": "تعطيل صوت النظام",
 		"enableSystemAudio": "تفعيل صوت النظام",

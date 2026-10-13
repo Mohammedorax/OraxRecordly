@@ -251,6 +251,7 @@
 		"saving": "Opening save dialog..."
 	},
 	"export": {
+		"notEnoughSpace": "Only {{size}} free on this disk. Free some space and export again.",
 		"processingAudioEdits": "Processing audio with speed/overlay edits",
 		"canceled": "Export canceled",
 		"encodingNotSupported": "Video encoding not supported on this system. Tried codec {{codec}} at {{frameRate}} FPS up to {{width}}x{{height}}.",

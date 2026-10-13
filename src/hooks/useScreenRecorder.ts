@@ -2,6 +2,8 @@ import { fixWebmDuration } from "@fix-webm-duration/fix";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
+import { formatBytesForMessage } from "@/lib/diskSpace";
+import { checkCaptureDiskSpace } from "@/lib/diskSpaceGuard";
 import { getEffectiveRecordingDurationMs } from "@/lib/mediaTiming";
 import {
 	getVideoExtensionForMimeType,
@@ -1485,6 +1487,21 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		try {
 			const preparedStart = await prepareRecordingStart();
 			if (!preparedStart || startWasCancelled()) {
+				cleanupCapturedMedia();
+				return;
+			}
+
+			// A full disk used to be discovered when the recording stopped, after the
+			// whole take had been written to a file that could not grow. Refusing up
+			// front loses nothing.
+			const diskSpace = await checkCaptureDiskSpace();
+			if (diskSpace.verdict === "insufficient" && diskSpace.availableBytes !== null) {
+				const message = t(
+					"recording.notEnoughSpace",
+					"Only {{size}} free on this disk. Free some space and record again.",
+					{ size: formatBytesForMessage(diskSpace.availableBytes) },
+				);
+				await notifyRecordingFinalizationFailure(message);
 				cleanupCapturedMedia();
 				return;
 			}

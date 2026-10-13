@@ -1277,6 +1277,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			error?: string;
 		}>;
 	},
+	/** Free space on the volume a capture or export will write to. */
+	getAvailableDiskSpace: (targetPath?: string) => {
+		return ipcRenderer.invoke("get-available-disk-space", targetPath) as Promise<{
+			success: boolean;
+			path?: string;
+			availableBytes?: number;
+			error?: string;
+		}>;
+	},
 	warmNativeExport: (options?: { encodingMode?: string }) => {
 		return ipcRenderer.invoke("warm-native-export", options) as Promise<{
 			success: boolean;

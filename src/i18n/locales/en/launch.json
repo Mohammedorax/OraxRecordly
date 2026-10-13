@@ -1,5 +1,6 @@
 {
 	"recording": {
+		"notEnoughSpace": "Only {{size}} free on this disk. Free some space and record again.",
 		"home": "Home",
 		"disableSystemAudio": "Disable system audio",
 		"enableSystemAudio": "Enable system audio",

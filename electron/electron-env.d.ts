@@ -607,6 +607,13 @@ interface Window {
 		}>;
 		discardExportedTemp: (tempPath: string) => Promise<{ success: boolean; error?: string }>;
 		getExportDirectory: () => Promise<{ success: boolean; path?: string; error?: string }>;
+		/** Free space on the volume a capture or export will write to. */
+		getAvailableDiskSpace: (targetPath?: string) => Promise<{
+			success: boolean;
+			path?: string;
+			availableBytes?: number;
+			error?: string;
+		}>;
 		warmNativeExport: (options?: {
 			encodingMode?: string;
 		}) => Promise<{ success: boolean; error?: string }>;

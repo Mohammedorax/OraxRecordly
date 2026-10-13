@@ -1,6 +1,8 @@
 import { useCallback, useRef } from "react";
 import { toast } from "@/components/ui/toast";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
+import { formatBytesForMessage } from "@/lib/diskSpace";
+import { checkCaptureDiskSpace } from "@/lib/diskSpaceGuard";
 import { getMp4ExportBitrate } from "@/lib/exporter/exportBitrate";
 import {
 	describePipelineFallbackMessage,
@@ -92,6 +94,20 @@ export function useExportRunner(input: ExportRunnerInput) {
 			const video = videoPlaybackRef.current?.video;
 			if (!video) {
 				toast.error(t("export.videoNotReady", "Video not ready"));
+				return;
+			}
+
+			// Refuse before rendering a single frame when the disk cannot hold the
+			// result: failing after minutes of encoding is the worst way to learn.
+			const diskSpace = await checkCaptureDiskSpace();
+			if (diskSpace.verdict === "insufficient" && diskSpace.availableBytes !== null) {
+				const message = t(
+					"export.notEnoughSpace",
+					"Only {{size}} free on this disk. Free some space and export again.",
+					{ size: formatBytesForMessage(diskSpace.availableBytes) },
+				);
+				setExportError(message);
+				showExportErrorToast(message);
 				return;
 			}
 

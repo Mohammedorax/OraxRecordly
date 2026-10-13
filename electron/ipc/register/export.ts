@@ -984,6 +984,31 @@ export function registerExportHandlers() {
 		}
 	});
 
+	/**
+	 * Free space on the volume a capture or export is about to write to.
+	 *
+	 * Recording and exporting both fail only after the disk fills, which costs a
+	 * take or a rendered export. The renderer asks first and refuses early instead.
+	 */
+	ipcMain.handle("get-available-disk-space", async (_event, targetPath?: string) => {
+		try {
+			const directory =
+				typeof targetPath === "string" && targetPath.length > 0
+					? targetPath
+					: await getRecordingsDir();
+			const stats = await fs.statfs(directory);
+			return {
+				success: true,
+				path: directory,
+				availableBytes: stats.bavail * stats.bsize,
+			};
+		} catch (error) {
+			// An unsupported or unreadable volume must not stop the user: the write
+			// itself still reports a real failure.
+			return { success: false, error: String(error) };
+		}
+	});
+
 	// Resolving the native encoder runs `ffmpeg -encoders` plus probe encodes.
 	// Warming it while the export menu is open keeps that cost off the export.
 	ipcMain.handle(
