@@ -127,6 +127,11 @@ export interface ExportMetrics {
 	nativeWriteMs?: number;
 	finalizationMs?: number;
 	frameCount?: number;
+	/**
+	 * Mean luma (0-255) of a few rendered frames. `0` means the export came out
+	 * black; absent means it could not be sampled.
+	 */
+	sampledLuma?: number;
 	renderBackend?: ExportRenderBackend;
 	encodeBackend?: ExportEncodeBackend;
 	encoderName?: string;

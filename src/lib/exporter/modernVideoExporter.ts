@@ -36,6 +36,10 @@ import { computeZoomTransform } from "@/components/video-editor/videoPlayback/zo
 import type { KeycastKeystroke, KeycastSettings } from "@/lib/keycast/keycastModel";
 import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import type { ClipTransitionSettings } from "@/lib/transitions/clipTransitions";
+
+/** How many rendered frames the black-export diagnostic samples. */
+const MAX_LUMA_SAMPLES = 8;
+
 import {
 	DEFAULT_WALLPAPER_PATH,
 	DEFAULT_WALLPAPER_RELATIVE_PATH,
@@ -351,6 +355,9 @@ export class ModernVideoExporter {
 	private finalizationTimeMs = 0;
 	private finalizationStageMs: ExportFinalizationStageMetrics = {};
 	private processedFrameCount = 0;
+	/** Mean luma of a few rendered frames, for the black-export diagnostic. */
+	private sampledFrameLumaTotal = 0;
+	private sampledFrameLumaCount = 0;
 	private encodeCapacityWaiters = new Set<() => void>();
 	private activeFinalizationProgressWatchdog: FinalizationProgressWatchdog | null = null;
 	private lastFinalizationRenderProgress = INITIAL_FINALIZATION_PROGRESS_STATE.lastRenderProgress;
@@ -714,6 +721,17 @@ export class ModernVideoExporter {
 							timestamp,
 						);
 						this.renderFrameTimeMs += this.getNowMs() - renderStartedAt;
+
+						// Sampled for diagnostics only: a machine whose renderer cannot
+						// upload video textures produces a black export without failing,
+						// and this is what makes that visible instead of silent.
+						if (this.sampledFrameLumaCount < MAX_LUMA_SAMPLES) {
+							const luma = this.renderer?.sampleCompositeLuma() ?? null;
+							if (luma !== null) {
+								this.sampledFrameLumaTotal += luma;
+								this.sampledFrameLumaCount += 1;
+							}
+						}
 
 						if (this.cancelled) {
 							return;
@@ -3412,6 +3430,12 @@ export class ModernVideoExporter {
 			nativeWriteMs: this.nativeWriteTimeMs,
 			finalizationMs: this.finalizationTimeMs,
 			frameCount: this.processedFrameCount,
+			/** 0 means the export was black; absent means it could not be sampled. */
+			sampledLuma:
+				this.sampledFrameLumaCount > 0
+					? Math.round((this.sampledFrameLumaTotal / this.sampledFrameLumaCount) * 10) /
+						10
+					: undefined,
 			renderBackend: this.renderBackend ?? undefined,
 			encodeBackend: this.encodeBackend ?? undefined,
 			encoderName: this.encoderName ?? undefined,

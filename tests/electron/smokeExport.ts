@@ -39,6 +39,8 @@ export type SmokeExportReport = {
 		encodeBackend?: string;
 		encoderName?: string;
 		effectiveDurationSec?: number;
+		/** Mean luma of the rendered frames; 0 means the export was black. */
+		sampledLuma?: number;
 	};
 };
 

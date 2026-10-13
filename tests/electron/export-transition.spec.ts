@@ -91,6 +91,13 @@ async function exportWithTransition(kind: "none" | "fade" | "crossfade"): Promis
 
 	try {
 		expect(run.report.success, JSON.stringify(run.report)).toBe(true);
+		// The renderer's own measurement of what it produced: this separates "the
+		// frame was already black before encoding" from "the file came out black".
+		console.log(
+			`TRANSITION_RENDER kind=${kind} sampledLuma=${run.report.metrics?.sampledLuma ?? "unavailable"} ` +
+				`renderBackend=${run.report.metrics?.renderBackend ?? "?"} ` +
+				`encodeBackend=${run.report.metrics?.encodeBackend ?? "?"}`,
+		);
 		await fs.copyFile(run.outputPath, outputPath);
 	} finally {
 		await run.cleanup();

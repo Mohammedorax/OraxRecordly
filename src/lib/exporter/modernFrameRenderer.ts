@@ -1481,6 +1481,40 @@ export class FrameRenderer {
 			: clipTransitionBlackAlpha(timelineTimestampUs / 1000, this.transitionWindows);
 	}
 
+	/**
+	 * Mean luma (0-255) of the composited frame, for export diagnostics.
+	 *
+	 * A renderer whose GPU path is unavailable can produce an entirely black export
+	 * while reporting success; sampling a few pixels turns that into a number.
+	 * Returns null when the pixels cannot be read at all.
+	 */
+	sampleCompositeLuma(): number | null {
+		const app = this.app;
+		if (!app) {
+			return null;
+		}
+
+		try {
+			const { pixels } = app.renderer.extract.pixels(app.stage);
+			if (!pixels || pixels.length === 0) {
+				return null;
+			}
+
+			// Every 16th pixel is plenty for a mean and costs a fraction of the frame.
+			let total = 0;
+			let count = 0;
+			for (let index = 0; index + 2 < pixels.length; index += 64) {
+				total +=
+					pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+				count += 1;
+			}
+
+			return count > 0 ? total / count : null;
+		} catch {
+			return null;
+		}
+	}
+
 	/** The clock the clip regions are expressed in: the project timeline. */
 	private resolveFrameTimeMs(sourceTimestampUs: number, timelineTimestampUs: number): number {
 		return resolveTransitionClockMs({
