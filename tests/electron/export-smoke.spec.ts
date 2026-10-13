@@ -64,8 +64,10 @@ test.describe("Electron end-to-end export", () => {
 
 			// A successful export must leave the open editor alone: rebuilding the
 			// preview costs a WebGL context, shader recompiles and a video reload,
-			// which the user feels as a freeze right after exporting.
-			expect(run.report.previewKept).toBe(true);
+			// which the user feels as a freeze right after exporting. The one case
+			// that does rebuild it is a recovery onto the other renderer, where the
+			// preview no longer matches the pipeline that produced the file.
+			expect(run.report.previewKept).toBe(run.report.pipelineModel === "modern");
 		} finally {
 			await run.cleanup();
 		}
