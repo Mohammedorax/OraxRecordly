@@ -142,6 +142,12 @@ type UseScreenRecorderReturn = {
 	setSystemAudioEnabled: (enabled: boolean) => void;
 	countdownDelay: number;
 	setCountdownDelay: (delay: number) => void;
+	/** Region drawn for this recording, or null for the whole screen. */
+	captureRegion: { x: number; y: number; width: number; height: number } | null;
+	selectCaptureRegion: (
+		displayId?: string,
+	) => Promise<{ x: number; y: number; width: number; height: number } | null>;
+	clearCaptureRegion: () => void;
 };
 
 function getErrorMessage(error: unknown, fallback = "An unexpected error occurred") {
@@ -383,6 +389,30 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [microphoneDeviceId, setMicrophoneDeviceId] = useState<string | undefined>(undefined);
 	const [systemAudioEnabled, setSystemAudioEnabled] = useState(false);
 	const [countdownDelay, setCountdownDelayState] = useState(3);
+	/**
+	 * A region the user drew for this recording, in desktop coordinates. Kept in a
+	 * ref as well because the recorder reads it from a callback that must not be
+	 * re-created on every render.
+	 */
+	const [captureRegion, setCaptureRegion] = useState<{
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	} | null>(null);
+	const captureRegionRef = useRef(captureRegion);
+	captureRegionRef.current = captureRegion;
+	/** Opens the region overlay and remembers the rectangle it returns. */
+	const selectCaptureRegion = useCallback(async (displayId?: string) => {
+		const result = await window.electronAPI?.selectRecordingRegion?.(displayId);
+		if (!result?.success || !result.region) {
+			return null;
+		}
+
+		setCaptureRegion(result.region);
+		return result.region;
+	}, []);
+	const clearCaptureRegion = useCallback(() => setCaptureRegion(null), []);
 	const mediaRecorder = useRef<MediaRecorder | null>(null);
 	const stream = useRef<MediaStream | null>(null);
 	const screenStream = useRef<MediaStream | null>(null);
@@ -1535,6 +1565,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						capturesMicrophone: microphoneEnabled,
 						microphoneDeviceId,
 						microphoneLabel: micLabel,
+						// A drawn region crops the capture, so only that part is
+						// recorded however the user moves between windows afterwards.
+						captureRegion: captureRegionRef.current ?? undefined,
 					},
 				);
 				if (nativeResult.success && startWasCancelled()) {
@@ -2252,5 +2285,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		setSystemAudioEnabled: persistSystemAudioEnabled,
 		countdownDelay,
 		setCountdownDelay,
+		captureRegion,
+		selectCaptureRegion,
+		clearCaptureRegion,
 	};
 }

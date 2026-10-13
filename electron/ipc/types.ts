@@ -13,6 +13,12 @@ export type NativeMacRecordingOptions = {
 	capturesMicrophone?: boolean;
 	microphoneDeviceId?: string;
 	microphoneLabel?: string;
+	/**
+	 * A region the user drew for this recording, in desktop coordinates. When it is
+	 * present the monitor capture is cropped to it, so only that part is recorded
+	 * whatever the user does with other windows afterwards.
+	 */
+	captureRegion?: WindowBounds;
 };
 
 export type WindowBounds = {
@@ -32,6 +38,8 @@ export type NativeCaptureDiagnostics = {
 	displayBounds?: WindowBounds | null;
 	/** Physical monitor rectangle the helper was pointed at, when resolved. */
 	physicalBounds?: WindowBounds | null;
+	/** Region the capture was cropped to, when the user drew one. */
+	cropBounds?: WindowBounds | null;
 	/** How the monitor for the chosen screen was resolved (diagnoses wrong-screen picks). */
 	monitorMatchStrategy?: string | null;
 	windowHandle?: number | null;

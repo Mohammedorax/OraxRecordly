@@ -562,6 +562,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			canceled?: boolean;
 		}>;
 	},
+	/**
+	 * Draws the region a screen recording should cover. Captures nothing: it only
+	 * reports the rectangle, in desktop coordinates.
+	 */
+	selectRecordingRegion: (displayId?: string) => {
+		return ipcRenderer.invoke("select-recording-region", displayId) as Promise<{
+			success: boolean;
+			displayId?: string;
+			region?: { x: number; y: number; width: number; height: number };
+			canceled?: boolean;
+			error?: string;
+		}>;
+	},
 	/** Opens the image editor window for an existing image file. */
 	openImageEditor: (path: string) => {
 		return ipcRenderer.invoke("open-image-editor", path) as Promise<{
@@ -793,6 +806,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			capturesMicrophone?: boolean;
 			microphoneDeviceId?: string;
 			microphoneLabel?: string;
+			/** Region the recording should be cropped to, in desktop coordinates. */
+			captureRegion?: { x: number; y: number; width: number; height: number };
 		},
 	) => {
 		return ipcRenderer.invoke("start-native-screen-recording", source, options);

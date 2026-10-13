@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import {
 	ArrowClockwiseIcon,
 	CaretUpIcon,
+	Crop,
 	DotsThreeVerticalIcon,
 	House,
 	MicrophoneIcon,
@@ -65,6 +66,9 @@ function LaunchWindowContent() {
 		countdownDelay,
 		setCountdownDelay,
 		preparePermissions,
+		captureRegion,
+		selectCaptureRegion,
+		clearCaptureRegion,
 	} = useScreenRecorder();
 
 	const { elapsed, formatTime } = useRecordingTimer(recording, paused);
@@ -202,6 +206,35 @@ function LaunchWindowContent() {
 					<Separator orientation="vertical" className="mx-[5px] h-6 self-center" />
 				</>
 			)}
+
+			{/* Recording a drawn region: the capture is cropped to it, so only that part
+			    is recorded whatever the user does with other windows. */}
+			{platform !== "linux" && !recording ? (
+				<Button
+					variant="ghost"
+					size="icon"
+					iconSize="lg"
+					title={
+						captureRegion
+							? t("recording.clearRegion", "Clear the selected region")
+							: t("recording.selectRegion", "Record a region")
+					}
+					className={captureRegion ? "text-accent" : ""}
+					onClick={() => {
+						if (captureRegion) {
+							clearCaptureRegion();
+							return;
+						}
+						void selectCaptureRegion();
+					}}
+				>
+					{captureRegion ? (
+						<Crop weight="fill" className="size-5" size={18} />
+					) : (
+						<Crop className="size-5" size={18} />
+					)}
+				</Button>
+			) : null}
 
 			<MicPopover
 				disabled={recording}

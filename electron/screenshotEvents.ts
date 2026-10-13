@@ -8,6 +8,8 @@
 /** Invoke channels (renderer -> main, Promise). */
 export const SCREENSHOT_CAPTURE_FULL_SCREEN_CHANNEL = "capture-screenshot-full-screen";
 export const SCREENSHOT_CAPTURE_REGION_CHANNEL = "capture-screenshot-region";
+/** Draws a region for screen recording; returns the rectangle, captures nothing. */
+export const RECORDING_SELECT_REGION_CHANNEL = "select-recording-region";
 export const SCREENSHOT_CAPTURE_SELECTED_SOURCE_CHANNEL = "capture-screenshot";
 export const SCREENSHOT_OPEN_IMAGE_EDITOR_CHANNEL = "open-image-editor";
 export const SCREENSHOT_READ_IMAGE_FILE_CHANNEL = "read-image-file";

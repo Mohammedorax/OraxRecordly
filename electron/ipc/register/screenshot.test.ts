@@ -91,6 +91,7 @@ import {
 	readImageFileAsDataUrl,
 	resolveJpegQuality,
 	resolveScreenshotDisplay,
+	selectRecordingRegion,
 	toPhysicalCropRect,
 	writeImageFile,
 } from "./screenshot";
@@ -531,6 +532,43 @@ describe("screenshot file name template and folder wiring", () => {
 		expect(path.basename(second.path as string)).toBe("shot (2).png");
 		await expect(fs.readFile(first.path as string)).resolves.toEqual(PNG_BYTES);
 		await expect(fs.readFile(second.path as string)).resolves.toEqual(PNG_BYTES);
+	});
+});
+
+describe("selectRecordingRegion", () => {
+	it("reports the drawn rectangle in monitor-relative physical pixels", async () => {
+		// The overlay works in client (DIP) coordinates of the display, while the
+		// capture maps a monitor-relative physical rectangle into capture pixels.
+		mocks.displays = [makeDisplay(1, 1280, 720, 2)];
+		mocks.selectRegionOnDisplay.mockResolvedValue({ x: 100, y: 50, width: 300, height: 200 });
+
+		const result = await selectRecordingRegion();
+
+		expect(result).toEqual({
+			success: true,
+			displayId: "1",
+			// 2x scaling: DIP * 2.
+			region: { x: 200, y: 100, width: 600, height: 400 },
+		});
+	});
+
+	it("stays monitor-relative on a secondary screen", async () => {
+		mocks.displays = [makeDisplay(1, 1280, 720, 2), makeDisplay(2, 1920, 1080, 1, 1280, 0)];
+		mocks.selectRegionOnDisplay.mockResolvedValue({ x: 10, y: 20, width: 400, height: 300 });
+
+		const result = await selectRecordingRegion("2");
+
+		expect(result).toEqual({
+			success: true,
+			displayId: "2",
+			region: { x: 10, y: 20, width: 400, height: 300 },
+		});
+	});
+
+	it("reports a cancellation without a region", async () => {
+		mocks.selectRegionOnDisplay.mockResolvedValue(null);
+
+		expect(await selectRecordingRegion()).toEqual({ success: false, canceled: true });
 	});
 });
 

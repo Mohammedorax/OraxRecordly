@@ -176,6 +176,40 @@ bool WgcSession::initialize(HMONITOR monitor, int fps) {
     return initializeWithItem(fps);
 }
 
+bool WgcSession::initializeRegion(HMONITOR monitor, RECT cropRect, int fps) {
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    if (!GetMonitorInfoW(monitor, &monitorInfo)) {
+        std::cerr << "ERROR: Failed to read the monitor bounds for a region capture" << std::endl;
+        return false;
+    }
+
+    if (!initialize(monitor, fps)) return false;
+
+    // The monitor bounds have to be known before the region can be mapped, and
+    // initialize() only fills captureWidth_/framePool*_ from the capture item.
+    monitorBounds_ = monitorInfo.rcMonitor;
+    hasFixedCrop_ = true;
+    windowHandle_ = nullptr;
+
+    // The renderer sends the region relative to the monitor's top-left in physical
+    // pixels (a desktop-space rectangle would drift by the display scale factor),
+    // so it is moved into desktop coordinates before the shared mapping runs.
+    RECT desktopRect{
+        monitorInfo.rcMonitor.left + cropRect.left,
+        monitorInfo.rcMonitor.top + cropRect.top,
+        monitorInfo.rcMonitor.left + cropRect.right,
+        monitorInfo.rcMonitor.top + cropRect.bottom,
+    };
+
+    if (!applyFixedCropRect(desktopRect, true)) {
+        std::cerr << "ERROR: The selected capture region is empty" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 bool WgcSession::initialize(HWND hwnd, int fps) {
     fps_ = fps;
     frameIntervalHns_ = 10000000LL / fps_;
@@ -205,13 +239,7 @@ bool WgcSession::initializeWindowCrop(HWND hwnd) {
     return updateWindowCropRect(true);
 }
 
-bool WgcSession::updateWindowCropRect(bool initializeSize) {
-    RECT windowBounds{};
-    if (FAILED(DwmGetWindowAttribute(windowHandle_, DWMWA_EXTENDED_FRAME_BOUNDS, &windowBounds, sizeof(windowBounds))) &&
-        !GetWindowRect(windowHandle_, &windowBounds)) return false;
-    RECT clipped{};
-    if (!IntersectRect(&clipped, &windowBounds, &monitorBounds_)) return false;
-
+bool WgcSession::mapDesktopRectToTexture(RECT desktopRect, RECT& mapped) const {
     const LONG monitorWidth = monitorBounds_.right - monitorBounds_.left;
     const LONG monitorHeight = monitorBounds_.bottom - monitorBounds_.top;
     if (monitorWidth <= 0 || monitorHeight <= 0 || framePoolWidth_ < 2 || framePoolHeight_ < 2) return false;
@@ -236,10 +264,24 @@ bool WgcSession::updateWindowCropRect(bool initializeSize) {
             static_cast<LONG>(framePoolHeight_));
     };
 
-    LONG left = mapX(clipped.left);
-    LONG top = mapY(clipped.top);
-    LONG right = mapX(clipped.right);
-    LONG bottom = mapY(clipped.bottom);
+    mapped = {mapX(desktopRect.left), mapY(desktopRect.top), mapX(desktopRect.right), mapY(desktopRect.bottom)};
+    return mapped.right > mapped.left && mapped.bottom > mapped.top;
+}
+
+bool WgcSession::updateWindowCropRect(bool initializeSize) {
+    RECT windowBounds{};
+    if (FAILED(DwmGetWindowAttribute(windowHandle_, DWMWA_EXTENDED_FRAME_BOUNDS, &windowBounds, sizeof(windowBounds))) &&
+        !GetWindowRect(windowHandle_, &windowBounds)) return false;
+    RECT clipped{};
+    if (!IntersectRect(&clipped, &windowBounds, &monitorBounds_)) return false;
+
+    RECT mapped{};
+    if (!mapDesktopRectToTexture(clipped, mapped)) return false;
+
+    LONG left = mapped.left;
+    LONG top = mapped.top;
+    LONG right = mapped.right;
+    LONG bottom = mapped.bottom;
     const LONG mappedWidth = (right - left) & ~1L;
     const LONG mappedHeight = (bottom - top) & ~1L;
     if (mappedWidth < 2 || mappedHeight < 2) return false;
@@ -282,6 +324,50 @@ bool WgcSession::updateWindowCropRect(bool initializeSize) {
 
 void WgcSession::setFrameCallback(FrameCallback callback) {
     frameCallback_ = std::move(callback);
+}
+
+bool WgcSession::applyFixedCropRect(RECT cropDesktopRect, bool initializeSize) {
+    RECT mapped{};
+    if (!mapDesktopRectToTexture(cropDesktopRect, mapped)) return false;
+
+    LONG left = mapped.left;
+    LONG top = mapped.top;
+    LONG right = mapped.right;
+    LONG bottom = mapped.bottom;
+    const LONG mappedWidth = (right - left) & ~1L;
+    const LONG mappedHeight = (bottom - top) & ~1L;
+    if (mappedWidth < 2 || mappedHeight < 2) return false;
+
+    if (initializeSize) {
+        captureWidth_ = static_cast<int>(mappedWidth);
+        captureHeight_ = static_cast<int>(mappedHeight);
+
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = static_cast<UINT>(captureWidth_);
+        desc.Height = static_cast<UINT>(captureHeight_);
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+        ComPtr<ID3D11Texture2D> resizedTexture;
+        if (FAILED(d3dDevice_->CreateTexture2D(&desc, nullptr, &resizedTexture))) return false;
+        ComPtr<ID3D11RenderTargetView> renderTargetView;
+        if (FAILED(d3dDevice_->CreateRenderTargetView(resizedTexture.Get(), nullptr, &renderTargetView))) return false;
+        cropTexture_ = resizedTexture;
+        cropRenderTargetView_ = renderTargetView;
+    }
+
+    if (!cropTexture_ || !cropRenderTargetView_) return false;
+
+    const LONG copyWidth = (std::min)(mappedWidth, static_cast<LONG>(captureWidth_));
+    const LONG copyHeight = (std::min)(mappedHeight, static_cast<LONG>(captureHeight_));
+    left = std::clamp(left, 0L, static_cast<LONG>(framePoolWidth_) - copyWidth);
+    top = std::clamp(top, 0L, static_cast<LONG>(framePoolHeight_) - copyHeight);
+    cropRect_ = {left, top, left + copyWidth, top + copyHeight};
+    return true;
 }
 
 bool WgcSession::startCapture() {
@@ -356,7 +442,11 @@ void WgcSession::onFrameArrived(
     HRESULT hr = access->GetInterface(IID_PPV_ARGS(&texture));
 
     if (SUCCEEDED(hr) && texture && frameCallback_) {
-        if (windowHandle_ && cropTexture_ && updateWindowCropRect()) {
+        // A fixed region keeps its rectangle for the whole recording; a window crop
+        // is re-derived on every frame because the window can move or resize.
+        const bool useCrop = cropTexture_ &&
+            (hasFixedCrop_ || (windowHandle_ && updateWindowCropRect()));
+        if (useCrop) {
             constexpr float clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
             d3dContext_->ClearRenderTargetView(cropRenderTargetView_.Get(), clearColor);
             D3D11_BOX sourceBox{

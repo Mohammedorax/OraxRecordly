@@ -278,6 +278,8 @@ interface Window {
 				capturesMicrophone?: boolean;
 				microphoneDeviceId?: string;
 				microphoneLabel?: string;
+				/** Region the recording should be cropped to, in desktop coordinates. */
+				captureRegion?: { x: number; y: number; width: number; height: number };
 			},
 		) => Promise<{
 			success: boolean;
@@ -913,6 +915,17 @@ interface Window {
 		captureScreenshotRegion: (options?: {
 			displayId?: string;
 		}) => Promise<RendererScreenshotResult>;
+		/**
+		 * Draws the region a screen recording should cover. Captures nothing: it
+		 * only reports the rectangle, in desktop coordinates.
+		 */
+		selectRecordingRegion: (displayId?: string) => Promise<{
+			success: boolean;
+			displayId?: string;
+			region?: { x: number; y: number; width: number; height: number };
+			canceled?: boolean;
+			error?: string;
+		}>;
 		/** Opens the image editor window for an existing image file. */
 		openImageEditor: (path: string) => Promise<{ success: boolean; error?: string }>;
 		/** Reads an image file as a data URL for the image editor canvas. */

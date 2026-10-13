@@ -4,6 +4,7 @@ import type { BrowserWindow, DesktopCapturerSource, Display, NativeImage } from 
 import { clipboard, desktopCapturer, dialog, ipcMain, nativeImage } from "electron";
 import { buildScreenshotFileName } from "../../../src/utils/screenshotFileName";
 import {
+	RECORDING_SELECT_REGION_CHANNEL,
 	SCREENSHOT_CAPTURE_FULL_SCREEN_CHANNEL,
 	SCREENSHOT_CAPTURE_REGION_CHANNEL,
 	SCREENSHOT_CAPTURE_SELECTED_SOURCE_CHANNEL,
@@ -25,7 +26,7 @@ import {
 	updateScreenshotPreferences,
 } from "../settings/screenshotPreferencesStore";
 import { selectedSource, setCountdownInProgress, setCountdownRemaining } from "../state";
-import type { SelectedSource } from "../types";
+import type { SelectedSource, WindowBounds } from "../types";
 import { getScreen } from "../utils";
 import { resolveWindowsCaptureDisplay } from "../windowsCaptureSelection";
 
@@ -549,6 +550,47 @@ async function rememberLastCaptureMode(mode: ScreenshotCaptureMode): Promise<voi
 }
 
 /**
+ * Ask the user to draw the region a screen recording should cover.
+ *
+ * The overlay and the mapping are the ones the screenshot flow already uses, so
+ * the rectangle the user sees is the rectangle the recorder crops to. The result
+ * is in desktop coordinates, which is the space the native capture helper maps
+ * into capture pixels.
+ */
+export async function selectRecordingRegion(
+	displayId?: string,
+): Promise<
+	| { success: true; displayId: string; region: WindowBounds }
+	| { success: false; canceled?: boolean; error?: string }
+> {
+	try {
+		const { display } = getDisplayOrPrimary(displayId);
+		const selection = await selectRegionOnDisplay(display);
+		if (!selection) {
+			return { success: false, canceled: true };
+		}
+
+		return {
+			success: true,
+			displayId: String(display.id),
+			// The overlay reports client (DIP) coordinates of that display, while the
+			// capture maps a monitor-relative rectangle into capture pixels - the same
+			// convention the screenshot crop uses. Scaling by the display factor keeps
+			// the region correct on a scaled screen, where a desktop-space rectangle
+			// would drift by the scale factor.
+			region: {
+				x: Math.round(selection.x * display.scaleFactor),
+				y: Math.round(selection.y * display.scaleFactor),
+				width: Math.round(selection.width * display.scaleFactor),
+				height: Math.round(selection.height * display.scaleFactor),
+			},
+		};
+	} catch (error) {
+		return { success: false, error: String(error) };
+	}
+}
+
+/**
  * Region capture: show the selection overlay over the target display, then
  * capture that display in full and crop to the drawn rectangle in physical
  * pixels. Cancelling resolves `{ success: false, canceled: true }` without
@@ -890,6 +932,11 @@ export function registerScreenshotHandlers() {
 	ipcMain.handle(
 		SCREENSHOT_CAPTURE_REGION_CHANNEL,
 		(_event, options?: ScreenshotCaptureOptions) => captureScreenshotRegion(options),
+	);
+	// The recording region uses the same overlay as a region screenshot, but only
+	// reports the rectangle so the recorder can crop to it.
+	ipcMain.handle(RECORDING_SELECT_REGION_CHANNEL, (_event, displayId?: string) =>
+		selectRecordingRegion(displayId),
 	);
 	ipcMain.handle(SCREENSHOT_OPEN_IMAGE_EDITOR_CHANNEL, (_event, filePath: string) =>
 		openImageEditor(filePath),

@@ -48,6 +48,15 @@ struct CaptureConfig {
     int displayW = 0;
     int displayH = 0;
     bool hasDisplayBounds = false;
+    /**
+     * Optional fixed capture region in desktop coordinates. Only sent when the
+     * user drew one, so a machine without it keeps the previous behaviour.
+     */
+    int cropX = 0;
+    int cropY = 0;
+    int cropW = 0;
+    int cropH = 0;
+    bool hasCropRegion = false;
     bool captureSystemAudio = false;
     bool captureMic = false;
 };
@@ -153,6 +162,18 @@ static bool parseSimpleJson(const std::string& json, CaptureConfig& config) {
         config.displayW = dw;
         config.displayH = dh;
         config.hasDisplayBounds = true;
+    }
+
+    int cx = findInt("cropX");
+    int cy = findInt("cropY");
+    int cw = findInt("cropW");
+    int ch = findInt("cropH");
+    if (cw > 0 && ch > 0) {
+        config.cropX = cx;
+        config.cropY = cy;
+        config.cropW = cw;
+        config.cropH = ch;
+        config.hasCropRegion = true;
     }
 
     return true;
@@ -326,8 +347,19 @@ int main(int argc, char* argv[]) {
             std::cerr << "ERROR: Could not find monitor for displayId " << config.displayId << std::endl;
             return 1;
         }
-        if (!session.initialize(monitor, config.fps)) {
-            std::cerr << "ERROR: Failed to initialize WGC capture session" << std::endl;
+        // A user-drawn region crops the monitor capture to that rectangle; without
+        // one the whole monitor is recorded exactly as before.
+        const bool regionInitialized = config.hasCropRegion
+            ? session.initializeRegion(
+                  monitor,
+                  RECT{config.cropX, config.cropY, config.cropX + config.cropW, config.cropY + config.cropH},
+                  config.fps)
+            : session.initialize(monitor, config.fps);
+        if (!regionInitialized) {
+            std::cerr << (config.hasCropRegion
+                              ? "ERROR: Failed to initialize a region capture session"
+                              : "ERROR: Failed to initialize WGC capture session")
+                      << std::endl;
             return 1;
         }
     }

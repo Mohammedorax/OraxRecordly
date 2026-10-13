@@ -764,6 +764,9 @@ export function registerRecordingHandlers(
 						width: number;
 						height: number;
 					} | null = null;
+					/** Region the capture was cropped to, when the user drew one. */
+					let cropBounds: { x: number; y: number; width: number; height: number } | null =
+						null;
 					setWindowsOrphanedMicAudioPath(null);
 
 					const config: Record<string, unknown> = {
@@ -809,6 +812,28 @@ export function registerRecordingHandlers(
 						}
 
 						monitorMatchStrategy = monitorSelection?.strategy ?? null;
+
+						// A region the user drew crops the monitor capture, so only that
+						// part is recorded no matter which window is in front afterwards.
+						// It is optional: without one the whole monitor is captured.
+						const requestedRegion = options?.captureRegion;
+						if (
+							requestedRegion &&
+							Number.isFinite(requestedRegion.x) &&
+							Number.isFinite(requestedRegion.y) &&
+							requestedRegion.width > 1 &&
+							requestedRegion.height > 1
+						) {
+							const cropX = Math.round(requestedRegion.x);
+							const cropY = Math.round(requestedRegion.y);
+							const cropW = Math.round(requestedRegion.width);
+							const cropH = Math.round(requestedRegion.height);
+							config.cropX = cropX;
+							config.cropY = cropY;
+							config.cropW = cropW;
+							config.cropH = cropH;
+							cropBounds = { x: cropX, y: cropY, width: cropW, height: cropH };
+						}
 					}
 
 					if (options?.capturesSystemAudio) {
@@ -857,6 +882,7 @@ export function registerRecordingHandlers(
 						displayId: typeof config.displayId === "number" ? config.displayId : null,
 						displayBounds,
 						physicalBounds: physicalDisplayBounds,
+						cropBounds,
 						monitorMatchStrategy,
 						windowHandle:
 							typeof config.windowHandle === "number" ? config.windowHandle : null,

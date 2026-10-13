@@ -25,6 +25,15 @@ public:
 
     bool initialize(HMONITOR monitor, int fps);
     bool initialize(HWND hwnd, int fps);
+    /**
+     * Capture a fixed rectangle of a monitor.
+     *
+     * `cropRect` is in **monitor-relative physical pixels** (the same space the
+     * region selector reports after applying the display scale), and is converted
+     * to desktop coordinates internally before being mapped into capture-surface
+     * pixels exactly like the window crop.
+     */
+    bool initializeRegion(HMONITOR monitor, RECT cropRect, int fps);
     void setFrameCallback(FrameCallback callback);
     bool startCapture();
     void stopCapture();
@@ -59,6 +68,8 @@ private:
     HWND windowHandle_ = nullptr;
     RECT monitorBounds_{};
     RECT cropRect_{};
+    /** True when the crop is a user-chosen region rather than a tracked window. */
+    bool hasFixedCrop_ = false;
 
     bool createD3DDevice();
     winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice createWinRTDevice();
@@ -66,6 +77,14 @@ private:
     bool initializeWithItem(int fps);
     bool initializeWindowCrop(HWND hwnd);
     bool updateWindowCropRect(bool initializeSize = false);
+    /**
+     * Maps a desktop rectangle into capture-surface pixels, using the same
+     * normalized mapping the window crop uses. Returns false when the monitor is
+     * degenerate or the mapped rectangle collapses.
+     */
+    bool mapDesktopRectToTexture(RECT desktopRect, RECT& mapped) const;
+    /** Applies (and, on first use, allocates) the fixed crop region. */
+    bool applyFixedCropRect(RECT cropDesktopRect, bool initializeSize);
     bool recreateFramePoolIfNeeded(
         winrt::Windows::Graphics::SizeInt32 const& contentSize);
     void onFrameArrived(
