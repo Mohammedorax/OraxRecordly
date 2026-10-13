@@ -52,15 +52,35 @@ test("recording HUD uses uniform controls and a readable timer", async ({ page }
 			height: (button as HTMLElement).offsetHeight,
 		})),
 	);
-	// The screenshot split control's caret ("Choose a capture mode") is its own
-	// documented 24x24 target (size-6 min-w-6 in ScreenshotButton.tsx); every
-	// other control in the group is a uniform 36x36 action button.
-	const caret = sizes.filter((button) => button.label === "Choose a capture mode");
-	expect(caret).toEqual([{ label: "Choose a capture mode", width: 24, height: 24 }]);
-	const actions = sizes.filter((button) => button.label !== "Choose a capture mode");
+	// One capture control, not two: the screenshot button and its mode list live in
+	// a single 36x36 target, and the caret that used to sit beside it is gone.
+	expect(sizes.filter((button) => button.label === "Choose a capture mode")).toEqual([]);
+	const capture = sizes.filter((button) => button.label === "Take screenshot");
+	expect(capture).toEqual([{ label: "Take screenshot", width: 36, height: 36 }]);
+	const actions = sizes.filter((button) => button.label !== "Take screenshot");
 	expect(actions.length).toBeGreaterThan(0);
 	for (const action of actions) {
 		expect(action).toMatchObject({ width: 36, height: 36 });
 	}
 	await page.screenshot({ path: "test-results/hud-recording.png" });
+});
+
+test("the idle HUD offers one capture control with every mode inside it", async ({ page }) => {
+	await installDesktopBridge(page);
+	await page.goto("/?windowType=hud-overlay");
+	await expect(page.locator(".separator--vertical").first()).toBeVisible();
+
+	// Two buttons used to sit side by side (a camera and a caret); the modes are in
+	// one menu now, and the separate record-a-region button is an entry in it.
+	const capture = page.getByRole("button", { name: "Take screenshot", exact: true });
+	await expect(capture).toHaveCount(1);
+	await expect(
+		page.getByRole("button", { name: "Choose a capture mode", exact: true }),
+	).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Record a region", exact: true })).toHaveCount(0);
+
+	await capture.click();
+	// The chooser and the record-a-region entry live in the same popover.
+	await expect(page.getByText("Capture screenshot").first()).toBeVisible();
+	await expect(page.getByText(/Record a region/)).toBeVisible();
 });

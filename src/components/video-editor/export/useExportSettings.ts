@@ -21,9 +21,10 @@ export function useExportSettings(
 	clips: ClipRegion[],
 ) {
 	const [includeCaptionSidecar, setIncludeCaptionSidecar] = useState(false);
-	// On by default: the label is the requested "clip name + recording date/time"
-	// badge, and the export dialog can switch it off per export.
-	const [showRecordingLabel, setShowRecordingLabel] = useState(true);
+	// Off by default: burning the clip name and date into the frames is a deliberate
+	// choice, not something to discover in an exported video. The export dialog
+	// turns it on for the exports that want it.
+	const [showRecordingLabel, setShowRecordingLabel] = useState(false);
 	// Off by default: exports are written straight to the visible exports folder.
 	const [alwaysAskExportLocation, setAlwaysAskExportLocation] = useState(false);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(preferences.exportQuality);

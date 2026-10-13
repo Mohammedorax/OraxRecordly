@@ -1,5 +1,7 @@
 {
 	"recording": {
+		"changeRegion": "Change the recording area",
+		"selectRegionHint": "Draw an area: only that part is recorded, however you move between windows.",
 		"selectRegion": "Record a region",
 		"clearRegion": "Clear the selected region",
 		"notEnoughSpace": "Only {{size}} free on this disk. Free some space and record again.",

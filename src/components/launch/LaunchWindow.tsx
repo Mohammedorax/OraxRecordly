@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import {
 	ArrowClockwiseIcon,
 	CaretUpIcon,
-	Crop,
 	DotsThreeVerticalIcon,
 	House,
 	MicrophoneIcon,
@@ -207,35 +206,6 @@ function LaunchWindowContent() {
 				</>
 			)}
 
-			{/* Recording a drawn region: the capture is cropped to it, so only that part
-			    is recorded whatever the user does with other windows. */}
-			{platform !== "linux" && !recording ? (
-				<Button
-					variant="ghost"
-					size="icon"
-					iconSize="lg"
-					title={
-						captureRegion
-							? t("recording.clearRegion", "Clear the selected region")
-							: t("recording.selectRegion", "Record a region")
-					}
-					className={captureRegion ? "text-accent" : ""}
-					onClick={() => {
-						if (captureRegion) {
-							clearCaptureRegion();
-							return;
-						}
-						void selectCaptureRegion();
-					}}
-				>
-					{captureRegion ? (
-						<Crop weight="fill" className="size-5" size={18} />
-					) : (
-						<Crop className="size-5" size={18} />
-					)}
-				</Button>
-			) : null}
-
 			<MicPopover
 				disabled={recording}
 				systemAudioEnabled={systemAudioEnabled}
@@ -298,8 +268,23 @@ function LaunchWindowContent() {
 			 * Screenshots no longer require a recording source: full screen and a
 			 * selected area work on their own, so only the source capture mode is
 			 * tied to `hasSelectedSource`.
+			 *
+			 * Recording a drawn region lives in this same menu: it used to be a
+			 * second button that opened the very same area selector, so the bar showed
+			 * two controls for one idea.
 			 */}
-			<ScreenshotButton sourceAvailable={hasSelectedSource || platform === "linux"} />
+			<ScreenshotButton
+				sourceAvailable={hasSelectedSource || platform === "linux"}
+				onRecordRegion={
+					platform === "linux"
+						? undefined
+						: () => {
+								void selectCaptureRegion();
+							}
+				}
+				onClearCaptureRegion={clearCaptureRegion}
+				hasCaptureRegion={captureRegion !== null}
+			/>
 
 			<Button
 				type="button"

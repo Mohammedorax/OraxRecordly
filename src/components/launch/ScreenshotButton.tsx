@@ -5,6 +5,7 @@ import {
 	CameraIcon,
 	Crop,
 	MonitorIcon,
+	XIcon,
 } from "@/components/ui/icons";
 import { toast } from "@/components/ui/toast";
 import { useScopedT } from "@/contexts/I18nContext";
@@ -80,15 +81,24 @@ interface ScreenshotButtonProps {
 	iconSize?: "default" | "sm" | "lg" | "xl";
 	/** Callers that wrap the button in their own tooltip opt out of the native title. */
 	showTitle?: boolean;
+	/**
+	 * Draws an area and records only that area. It lives in this menu rather than
+	 * next to it: a separate button opened the very same region selector, so the
+	 * HUD showed two controls that did almost the same thing.
+	 */
+	onRecordRegion?: () => void;
+	/** Clears a previously drawn recording region. */
+	onClearCaptureRegion?: () => void;
+	/** True while a recording region is set, so the menu can offer to clear it. */
+	hasCaptureRegion?: boolean;
 }
 
 /**
  * Capture-control button shared by the idle and recording HUD states.
  *
- * The button itself repeats the last successful capture mode, so the common
- * "same snip again" flow is a single click. The attached caret opens the full
- * chooser (full screen / selected area / selected source); before the first
- * successful capture the button opens that chooser directly. It owns its
+ * One button owns every capture mode: full screen, selected area, the selected
+ * source, and recording a drawn region. It opens the chooser directly, and the
+ * mode a capture ran with is marked so repeating it is obvious. It keeps its
  * in-flight state locally so capturing never re-renders (or resets) the
  * surrounding HUD while a recording is running.
  */
@@ -99,6 +109,9 @@ export function ScreenshotButton({
 	iconClassName = "size-5",
 	iconSize = "lg",
 	showTitle = true,
+	onRecordRegion,
+	onClearCaptureRegion,
+	hasCaptureRegion = false,
 }: ScreenshotButtonProps) {
 	const t = useScopedT("launch");
 	const { isOpen, requestOpen, requestClose } = useLaunchPopoverCoordinator();
@@ -392,6 +405,59 @@ export function ScreenshotButton({
 							</span>
 						</Button>
 					))}
+
+					{onRecordRegion && (
+						<>
+							<div className="my-1 h-px bg-separator" />
+							<Button
+								type="button"
+								variant="ghost"
+								className="h-auto w-full justify-start gap-3 py-2"
+								onClick={() => {
+									requestClose(POPOVER_ID);
+									onRecordRegion();
+								}}
+							>
+								<span className="shrink-0 text-foreground">
+									<Crop aria-hidden className="size-4" />
+								</span>
+								<span className="flex min-w-0 flex-col items-start gap-0.5 text-start">
+									<span className="truncate text-sm">
+										{hasCaptureRegion
+											? t(
+													"recording.changeRegion",
+													"Choose the recording area again",
+												)
+											: t("recording.selectRegion", "Record a region")}
+									</span>
+									<span className="truncate text-xs text-muted-foreground">
+										{t(
+											"recording.selectRegionHint",
+											"Draw an area: only that part is recorded, however you move between windows.",
+										)}
+									</span>
+								</span>
+							</Button>
+							{hasCaptureRegion && onClearCaptureRegion && (
+								<Button
+									type="button"
+									variant="ghost"
+									className="h-auto w-full justify-start gap-3 py-2"
+									onClick={() => {
+										requestClose(POPOVER_ID);
+										onClearCaptureRegion();
+									}}
+								>
+									<span className="shrink-0 text-foreground">
+										<XIcon aria-hidden className="size-4" />
+									</span>
+									<span className="truncate text-sm">
+										{t("recording.clearRegion", "Clear the selected region")}
+									</span>
+								</Button>
+							)}
+						</>
+					)}
 				</div>
 			</HudPopover>
 		</div>
