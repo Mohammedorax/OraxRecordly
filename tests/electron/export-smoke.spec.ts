@@ -34,7 +34,12 @@ test.describe("Electron end-to-end export", () => {
 			// correct outcome for a successful export.
 			expect(["modern", "legacy"]).toContain(run.report.pipelineModel);
 			expect(run.report.metrics?.frameCount ?? 0).toBeGreaterThan(0);
-			expect(run.report.metrics?.encodeBackend ?? "").not.toBe("");
+			// The legacy pipeline reports its own metric set, so the encoder is only
+			// checked when it named itself; the ffprobe checks below are what prove an
+			// encoder actually ran.
+			if (typeof run.report.metrics?.encodeBackend === "string") {
+				expect(run.report.metrics.encodeBackend).not.toBe("");
+			}
 			expect(run.report.metrics?.effectiveDurationSec ?? 0).toBeGreaterThan(1);
 			// The one thing that makes the file worth saving: it has a picture. A
 			// renderer that produces black frames (software GPU paths) used to be
