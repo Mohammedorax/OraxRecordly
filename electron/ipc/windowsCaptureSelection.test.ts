@@ -14,7 +14,7 @@ describe("selectWindowsMonitorHandle", () => {
 		bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
 	};
 
-	it("prefers the exact physical position when displays run at 100% scaling", () => {
+	it("validates the whole pairing by scale when displays run at 100% scaling", () => {
 		const selection = selectWindowsMonitorHandle(
 			secondaryDisplay,
 			[primaryDisplay, secondaryDisplay],
@@ -27,14 +27,48 @@ describe("selectWindowsMonitorHandle", () => {
 		expect(selection).toEqual({
 			handle: 22,
 			bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
-			strategy: "exact-bounds",
+			strategy: "scale-match",
 		});
+	});
+
+	it("picks the right monitor when one scaled display starts where another physically runs", () => {
+		// 4K at 200% on the left, then two 1080p panels at 100%. The third display's
+		// DIP origin (3840) is the *physical* origin of the second monitor, which is
+		// exactly the trap a top-left-only comparison falls into.
+		const displays = [
+			{ id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 2 },
+			{ id: 2, bounds: { x: 1920, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
+			{ id: 3, bounds: { x: 3840, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
+		];
+		const monitors = [
+			{ handle: 11, x: 0, y: 0, width: 3840, height: 2160 },
+			{ handle: 22, x: 3840, y: 0, width: 1920, height: 1080 },
+			{ handle: 33, x: 5760, y: 0, width: 1920, height: 1080 },
+		];
+
+		const third = selectWindowsMonitorHandle(displays[2], displays, monitors);
+		expect(third).toEqual({
+			handle: 33,
+			bounds: { x: 5760, y: 0, width: 1920, height: 1080 },
+			strategy: "scale-match",
+		});
+
+		// And the first display is not confused with the second monitor either.
+		expect(selectWindowsMonitorHandle(displays[0], displays, monitors)?.handle).toBe(11);
 	});
 
 	it("pairs a scaled display with its physical monitor instead of the primary", () => {
 		// 150% scaling on the primary: DIP 1280x720 maps to physical 1920x1080.
-		const scaledPrimary = { id: 101, bounds: { x: 0, y: 0, width: 1280, height: 720 } };
-		const externalDisplay = { id: 202, bounds: { x: 1280, y: 0, width: 1920, height: 1080 } };
+		const scaledPrimary = {
+			id: 101,
+			bounds: { x: 0, y: 0, width: 1280, height: 720 },
+			scaleFactor: 1.5,
+		};
+		const externalDisplay = {
+			id: 202,
+			bounds: { x: 1280, y: 0, width: 1920, height: 1080 },
+			scaleFactor: 1,
+		};
 
 		const selection = selectWindowsMonitorHandle(
 			externalDisplay,
@@ -48,7 +82,7 @@ describe("selectWindowsMonitorHandle", () => {
 		expect(selection).toEqual({
 			handle: 22,
 			bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
-			strategy: "ordered-display",
+			strategy: "scale-match",
 		});
 	});
 
@@ -115,6 +149,7 @@ describe("resolveWindowsCaptureDisplay", () => {
 		expect(resolved).toEqual({
 			displayId: secondaryDisplay.id,
 			bounds: secondaryDisplay.bounds,
+			matchedRequestedDisplay: true,
 		});
 	});
 
@@ -128,6 +163,7 @@ describe("resolveWindowsCaptureDisplay", () => {
 		expect(resolved).toEqual({
 			displayId: primaryDisplay.id,
 			bounds: primaryDisplay.bounds,
+			matchedRequestedDisplay: false,
 		});
 	});
 
@@ -141,6 +177,7 @@ describe("resolveWindowsCaptureDisplay", () => {
 		expect(resolved).toEqual({
 			displayId: 303,
 			bounds: primaryDisplay.bounds,
+			matchedRequestedDisplay: false,
 		});
 	});
 });
@@ -202,6 +239,7 @@ describe("resolveWindowsCaptureTarget", () => {
 			kind: "display",
 			displayId: secondaryDisplay.id,
 			bounds: secondaryDisplay.bounds,
+			matchedRequestedDisplay: true,
 		});
 	});
 });

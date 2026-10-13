@@ -73,6 +73,7 @@ import {
 	type ClipTransitionWindow,
 	clipTransitionBlackAlpha,
 	DEFAULT_CLIP_TRANSITION_SETTINGS,
+	paintClipTransitionCoverage,
 	resolveClipTransitionWindows,
 } from "@/lib/transitions/clipTransitions";
 import { isVideoWallpaperSource } from "@/lib/wallpapers";
@@ -516,7 +517,7 @@ export class FrameRenderer {
 			if (this.transitionWindows.length > 0) {
 				const overlay = new Graphics();
 				overlay.rect(0, 0, this.config.width, this.config.height);
-				overlay.fill(0x000000);
+				overlay.fill({ color: 0x000000 });
 				overlay.alpha = 0;
 				this.app!.stage.addChild(overlay);
 				this.transitionOverlay = overlay;
@@ -1440,7 +1441,31 @@ export class FrameRenderer {
 		);
 
 		this.drawCaptionOverlay(context);
+		// Last, so a fade darkens the annotations and captions with the picture,
+		// exactly like the preview's overlay sits above them.
+		paintClipTransitionCoverage(context, {
+			timeMs,
+			windows: this.transitionWindows,
+			width: canvas.width,
+			height: canvas.height,
+		});
 		this.outputCanvasOverride = canvas;
+	}
+
+	/**
+	 * Moves the black fade overlay to the coverage of the given timeline moment.
+	 * One place computes it, so a frame with no decoded video cannot keep a stale
+	 * alpha from the frame before it.
+	 */
+	private applyTransitionCoverage(timelineTimestampUs: number): void {
+		if (!this.transitionOverlay) {
+			return;
+		}
+
+		this.transitionOverlay.alpha = clipTransitionBlackAlpha(
+			timelineTimestampUs / 1000,
+			this.transitionWindows,
+		);
 	}
 
 	private async setupAnnotationLayer(): Promise<void> {
@@ -2137,6 +2162,11 @@ export class FrameRenderer {
 		}
 
 		this.cameraContainer.visible = videoFrame !== null;
+		// The fade belongs to the project timeline and applies to every frame,
+		// including the ones with no decoded video, so it is set once here before
+		// either render path can return.
+		this.applyTransitionCoverage(backgroundTimelineTimestamp);
+
 		if (!videoFrame) {
 			this.updateAnimationState(backgroundTimelineTimestamp / 1000, cursorTimestamp / 1000);
 			if (this.backgroundForwardFrameSource || this.backgroundVideoElement) {
@@ -2237,9 +2267,7 @@ export class FrameRenderer {
 	}
 
 	private async renderOutput(timeMs: number): Promise<void> {
-		if (this.transitionOverlay) {
-			this.transitionOverlay.alpha = clipTransitionBlackAlpha(timeMs, this.transitionWindows);
-		}
+		this.applyTransitionCoverage(timeMs * 1000);
 		if (this.hasActiveBlurAnnotations(timeMs)) {
 			const annotationContainerVisible = this.annotationContainer?.visible ?? true;
 			const captionContainerVisible = this.captionContainer?.visible ?? true;
@@ -2249,6 +2277,13 @@ export class FrameRenderer {
 			}
 			if (this.captionContainer) {
 				this.captionContainer.visible = false;
+			}
+
+			// Annotations and captions for a blurred frame are painted on the 2D
+			// composite *after* the Pixi render, so the fade must not be burned into
+			// that render: it is painted on the composite instead, on top of them.
+			if (this.transitionOverlay) {
+				this.transitionOverlay.alpha = 0;
 			}
 
 			this.app!.render();

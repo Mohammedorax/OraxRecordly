@@ -86,7 +86,18 @@ test("editor stays responsive while editing", async () => {
 			requestAnimationFrame(tick);
 		});
 
-		const measureStart = await page.evaluate(() => performance.now());
+		const measureStart = await page.evaluate(() => {
+			const state = (
+				window as unknown as { __perf?: { longTasks: number[]; frames: number } }
+			).__perf;
+			// The window starts here: frames and long tasks counted during the warm-up
+			// must not be attributed to the edits being measured.
+			if (state) {
+				state.longTasks.length = 0;
+				state.frames = 0;
+			}
+			return performance.now();
+		});
 		// Add zooms and split the clip through the editor's own toolbar buttons.
 		for (let step = 0; step < EDIT_STEPS; step += 1) {
 			const addZoom = page.locator('button[title*="zoom" i], button[title*="تكبير"]').first();

@@ -62,8 +62,9 @@ import {
 	type ClipTransitionClipLike,
 	type ClipTransitionSettings,
 	type ClipTransitionWindow,
-	clipTransitionBlackAlpha,
+	paintClipTransitionCoverage,
 	resolveClipTransitionWindows,
+	resolveTransitionClockMs,
 } from "@/lib/transitions/clipTransitions";
 import { isVideoWallpaperSource } from "@/lib/wallpapers";
 import { renderAnnotations } from "./annotationRenderer";
@@ -1133,6 +1134,11 @@ export class FrameRenderer {
 			}
 			this.app.renderer.render(this.app.stage);
 			this.compositeWithShadows();
+			// A frame with no video (a decoder gap or empty timeline space) still
+			// belongs to the timeline, so the fade has to be painted for it too.
+			this.paintClipTransition(
+				this.resolveTransitionTimeMs(timestamp, backgroundTimelineTimestamp),
+			);
 			return;
 		}
 
@@ -1168,7 +1174,6 @@ export class FrameRenderer {
 			? backgroundTimelineTimestamp / 1000
 			: timestamp / 1000;
 		const cursorTimeMs = cursorTimestamp / 1000;
-
 		if (this.cursorOverlay) {
 			this.cursorOverlay.update(
 				this.config.cursorTelemetry ?? [],
@@ -1282,8 +1287,22 @@ export class FrameRenderer {
 		}
 
 		// A fade between two cut clips covers the whole frame, so it is the last
-		// layer: one black rectangle whose alpha the frame loop moves.
-		this.paintClipTransition(cursorTimeMs);
+		// layer: one black rectangle whose alpha the frame loop moves. It is driven
+		// by the PROJECT timeline clock (the clip regions' clock), never by the
+		// source clock, which drifts as soon as anything is trimmed or sped up.
+		this.paintClipTransition(timeMs);
+	}
+
+	/** The clock the clip regions are expressed in: the project timeline. */
+	private resolveTransitionTimeMs(
+		timestamp: number,
+		backgroundTimelineTimestamp: number,
+	): number {
+		return resolveTransitionClockMs({
+			timelineEffects: Boolean(this.config.timelineEffects),
+			sourceTimestampUs: timestamp,
+			timelineTimestampUs: backgroundTimelineTimestamp,
+		});
 	}
 
 	/** Black coverage for the automatic fade at a clip boundary, if any. */
@@ -1299,21 +1318,13 @@ export class FrameRenderer {
 				settings,
 			);
 		}
-		if (this.transitionWindows.length === 0) {
-			return;
-		}
 
-		const alpha = clipTransitionBlackAlpha(timeMs, this.transitionWindows);
-		if (alpha <= 0) {
-			return;
-		}
-
-		const ctx = this.compositeCtx;
-		ctx.save();
-		ctx.globalAlpha = Math.min(1, alpha);
-		ctx.fillStyle = "#000000";
-		ctx.fillRect(0, 0, this.config.width, this.config.height);
-		ctx.restore();
+		paintClipTransitionCoverage(this.compositeCtx, {
+			timeMs,
+			windows: this.transitionWindows,
+			width: this.config.width,
+			height: this.config.height,
+		});
 	}
 
 	private updateLayout(): void {

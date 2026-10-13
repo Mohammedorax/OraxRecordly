@@ -99,7 +99,12 @@ export function resolveClipTransitionWindows(
 	}
 
 	const ordered = [...clips]
-		.filter((clip) => clip.endMs > clip.startMs)
+		.filter(
+			(clip) =>
+				Number.isFinite(clip.startMs) &&
+				Number.isFinite(clip.endMs) &&
+				clip.endMs > clip.startMs,
+		)
 		.sort((left, right) => left.startMs - right.startMs);
 	const windows: ClipTransitionWindow[] = [];
 
@@ -152,4 +157,60 @@ export function clipTransitionBlackAlpha(
 	}
 
 	return 0;
+}
+
+/**
+ * The clock the fade must be sampled on.
+ *
+ * Clip regions are expressed in **edited-timeline** milliseconds. The source
+ * clock drifts from it the moment anything is trimmed, cut or sped up, so using
+ * it puts the fade at the wrong moment - or removes it entirely. The legacy
+ * exporter and the modern one both resolve the clock through this function, and
+ * the unit test pins it, because getting it wrong is invisible until an export
+ * has already been watched.
+ */
+export function resolveTransitionClockMs(options: {
+	/** True when the renderer works on the edited timeline rather than the source. */
+	timelineEffects: boolean;
+	sourceTimestampUs: number;
+	timelineTimestampUs: number;
+}): number {
+	return options.timelineEffects
+		? options.timelineTimestampUs / 1000
+		: options.sourceTimestampUs / 1000;
+}
+
+/** The 2D surface the coverage is painted onto; a canvas context satisfies it. */ export interface ClipTransitionPaintSurface {
+	save(): void;
+	restore(): void;
+	fillRect(x: number, y: number, width: number, height: number): void;
+	fillStyle: string | CanvasGradient | CanvasPattern;
+	globalAlpha: number;
+}
+
+/**
+ * Paints the fade's black coverage onto a 2D surface, returning whether anything
+ * was drawn. It lives in the model rather than in one renderer so the legacy
+ * exporter and its tests exercise exactly the same code path.
+ */
+export function paintClipTransitionCoverage(
+	surface: ClipTransitionPaintSurface,
+	options: {
+		timeMs: number;
+		windows: readonly ClipTransitionWindow[];
+		width: number;
+		height: number;
+	},
+): boolean {
+	const alpha = clipTransitionBlackAlpha(options.timeMs, options.windows);
+	if (alpha <= 0) {
+		return false;
+	}
+
+	surface.save();
+	surface.globalAlpha = Math.min(1, alpha);
+	surface.fillStyle = "#000000";
+	surface.fillRect(0, 0, options.width, options.height);
+	surface.restore();
+	return true;
 }

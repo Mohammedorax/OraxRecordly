@@ -249,6 +249,8 @@ let sourceSelectorWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayContextMenu: Menu | null = null;
 let selectedSourceName = "";
+/** True between `set-recording-state(true)` and `(false)`; guards the quit path. */
+let isRecordingActive = false;
 let editorHasUnsavedChanges = false;
 let isForceClosing = false;
 let isAppQuitting = false;
@@ -797,6 +799,14 @@ function createTray() {
 			return;
 		}
 
+		if (isRecordingActive) {
+			revealAfterStartMinimized();
+			if (!showHudOverlayFromTray()) {
+				focusOrCreateMainWindow();
+			}
+			return;
+		}
+
 		revealAfterStartMinimized();
 		focusOrCreateMainWindow();
 	});
@@ -1191,6 +1201,18 @@ app.on("before-quit", () => {
 });
 
 app.on("window-all-closed", () => {
+	// An in-flight recording must survive its window: quitting here would run
+	// `before-quit`, kill the capture helper and lose the take. The window is
+	// brought back instead, so the user still has a way to stop it.
+	if (isRecordingActive && !IS_SMOKE_EXPORT) {
+		console.warn("[recording] Ignoring window-all-closed while a recording is active.");
+		revealAfterStartMinimized();
+		if (!showHudOverlayFromTray()) {
+			focusOrCreateMainWindow();
+		}
+		return;
+	}
+
 	if (IS_SMOKE_EXPORT || process.platform !== "darwin") {
 		app.quit();
 	}
@@ -1317,6 +1339,7 @@ app.whenReady().then(async () => {
 		(recording: boolean, sourceName: string) => {
 			selectedSourceName = sourceName;
 			setHudOverlayRecordingActive(recording);
+			isRecordingActive = recording;
 			if (shouldUseTray() || (recording && shouldShowRecordingTray())) {
 				if (!tray) createTray();
 				updateTrayMenu(recording);

@@ -2427,6 +2427,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			return 16 / 9;
 		})();
 
+		// Computed once per render: the render body already runs on every playhead
+		// frame, so the alpha is not evaluated twice for the same frame.
+		const clipTransitionCoverage = clipTransitionBlackAlpha(
+			currentTime * 1000,
+			clipTransitionWindows,
+		);
+
 		return (
 			<div
 				ref={previewFrameRef}
@@ -2749,16 +2756,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						 * same coverage from the same model, so the previewed fade is the
 						 * fade that lands in the file.
 						 */}
-						{clipTransitionBlackAlpha(currentTime * 1000, clipTransitionWindows) > 0 ? (
+						{clipTransitionCoverage > 0 ? (
 							<div
 								aria-hidden="true"
 								className="pointer-events-none absolute inset-0 z-40 bg-black"
-								style={{
-									opacity: clipTransitionBlackAlpha(
-										currentTime * 1000,
-										clipTransitionWindows,
-									),
-								}}
+								style={{ opacity: clipTransitionCoverage }}
 							/>
 						) : null}
 						<div

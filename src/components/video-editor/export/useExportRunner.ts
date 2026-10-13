@@ -154,8 +154,10 @@ export function useExportRunner(input: ExportRunnerInput) {
 			let keepExportDialogOpen = false;
 			const wasPlaying = isPlaying;
 			const restoreTime = video.currentTime;
-			// Which renderer pipeline actually produced the file. The preview only has
-			// to be rebuilt when this ended up different from the preview's own one.
+			// The pipeline the preview is currently using. It is replaced by the
+			// routed model as soon as the export routing is resolved, and by
+			// "legacy" when the automatic downgrade kicks in - so the remount
+			// decision and the smoke report always read the same value.
 			let exportedPipelineModel: ExportPipelineModel = exportPipelineModel;
 
 			try {
@@ -348,6 +350,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 						experimentalNvidiaCudaExport,
 						nvidiaCudaExportAvailable,
 					});
+					exportedPipelineModel = pipelineModel;
 					const supportedSourceDimensions = await ensureSupportedMp4SourceDimensions(
 						selectedMp4FrameRate,
 						{
@@ -646,7 +649,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 									// Exported before the fix: the preview was rebuilt after every
 									// export. The end-to-end spec asserts this stays true.
 									previewKept: !shouldRemountPreviewAfterExport({
-										activePipelineModel,
+										activePipelineModel: exportedPipelineModel,
 										previewPipelineModel: exportPipelineModel,
 									}),
 								});

@@ -1217,6 +1217,9 @@ export function createEditorWindow(): BrowserWindow {
 		// Fallback for Linux/Wayland where `ready-to-show` may not fire reliably.
 		if (!win.isDestroyed() && !win.isVisible()) {
 			console.log("[editor-window] forcing show after did-finish-load");
+			if (!isMac && !win.isMaximized()) {
+				win.maximize();
+			}
 			win.show();
 		}
 	});
