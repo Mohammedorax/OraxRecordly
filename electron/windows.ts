@@ -1201,6 +1201,13 @@ export function createEditorWindow(): BrowserWindow {
 
 	win.once("ready-to-show", () => {
 		console.log(`[PERF:MAIN] Editor Window: ready-to-show in ${Date.now() - perfStart}ms`);
+		// The editor is where the user spends their time, and on Windows it opened
+		// at the work-area size without ever asking to be maximized - on a large or
+		// scaled display that reads as a small window. macOS keeps its own
+		// convention and is left alone.
+		if (!isMac && !win.isMaximized()) {
+			win.maximize();
+		}
 		win.show();
 	});
 

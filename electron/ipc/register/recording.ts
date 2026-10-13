@@ -157,7 +157,10 @@ import {
 	parseJsonWithByteOrderMark,
 	parseWindowId,
 } from "../utils";
-import { resolveWindowsCaptureTarget } from "../windowsCaptureSelection";
+import {
+	resolveWindowsCaptureTarget,
+	selectWindowsMonitorHandle,
+} from "../windowsCaptureSelection";
 import { bringSelectedWindowForward } from "./sources";
 
 const execFileAsync = promisify(execFile);
@@ -752,6 +755,15 @@ export function registerRecordingHandlers(
 					);
 					const displayBounds =
 						captureTarget.kind === "display" ? captureTarget.bounds : null;
+					// Which strategy matched the chosen screen to a monitor handle; kept
+					// for diagnostics so a wrong-screen recording is visible after the fact.
+					let monitorMatchStrategy: string | null = null;
+					let physicalDisplayBounds: {
+						x: number;
+						y: number;
+						width: number;
+						height: number;
+					} | null = null;
 					setWindowsOrphanedMicAudioPath(null);
 
 					const config: Record<string, unknown> = {
@@ -770,26 +782,33 @@ export function registerRecordingHandlers(
 					if (captureTarget.kind === "window") {
 						config.windowHandle = captureTarget.windowHandle;
 					} else {
-						// Windows Graphics Capture (WGC) requires a raw HMONITOR handle.
-						// We attempt to resolve the handle by matching the physical coordinates of the target display.
-						const monitors = getMonitorHandles();
-						const matchedMonitor = monitors.find(
-							(monitor) =>
-								monitor.x === Math.round(captureTarget.bounds.x) &&
-								monitor.y === Math.round(captureTarget.bounds.y),
+						// Windows Graphics Capture (WGC) needs a raw HMONITOR handle, and the
+						// helper works in physical pixels while Electron reports DIP. The
+						// resolver validates every strategy it tries; when it cannot decide,
+						// the Electron id and DIP bounds are forwarded as before and the
+						// helper still attempts its own coordinate match.
+						const monitorSelection = selectWindowsMonitorHandle(
+							{ id: captureTarget.displayId, bounds: captureTarget.bounds },
+							getScreen().getAllDisplays(),
+							getMonitorHandles(),
 						);
 
-						if (matchedMonitor) {
-							config.displayId = matchedMonitor.handle;
+						if (monitorSelection) {
+							config.displayId = monitorSelection.handle;
+							config.displayX = monitorSelection.bounds.x;
+							config.displayY = monitorSelection.bounds.y;
+							config.displayW = monitorSelection.bounds.width;
+							config.displayH = monitorSelection.bounds.height;
+							physicalDisplayBounds = monitorSelection.bounds;
 						} else {
-							// Fallback to coordinate-based matching if handle resolution fails
 							config.displayId = captureTarget.displayId;
+							config.displayX = Math.round(captureTarget.bounds.x);
+							config.displayY = Math.round(captureTarget.bounds.y);
+							config.displayW = Math.round(captureTarget.bounds.width);
+							config.displayH = Math.round(captureTarget.bounds.height);
 						}
 
-						config.displayX = Math.round(captureTarget.bounds.x);
-						config.displayY = Math.round(captureTarget.bounds.y);
-						config.displayW = Math.round(captureTarget.bounds.width);
-						config.displayH = Math.round(captureTarget.bounds.height);
+						monitorMatchStrategy = monitorSelection?.strategy ?? null;
 					}
 
 					if (options?.capturesSystemAudio) {
@@ -837,6 +856,8 @@ export function registerRecordingHandlers(
 						sourceType: source?.sourceType ?? "unknown",
 						displayId: typeof config.displayId === "number" ? config.displayId : null,
 						displayBounds,
+						physicalBounds: physicalDisplayBounds,
+						monitorMatchStrategy,
 						windowHandle:
 							typeof config.windowHandle === "number" ? config.windowHandle : null,
 						helperPath: exePath,

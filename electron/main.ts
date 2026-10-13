@@ -822,12 +822,49 @@ function shouldUseTray() {
 }
 
 /**
+ * Whether the notification area should hold an entry **while recording**.
+ *
+ * On Windows the app has no permanent tray entry, so a recording used to make
+ * the window disappear with nothing left to click. During a recording the app
+ * now moves into the hidden-icons area instead: the desktop stays clean, the
+ * live state is visible in the tray, and stopping is one click away. The entry
+ * is removed again as soon as the recording ends.
+ */
+function shouldShowRecordingTray() {
+	return process.platform === "linux" || process.platform === "win32";
+}
+
+/** Removes the recording-only Windows tray entry once it is no longer needed. */
+function destroyRecordingTrayIfUnused() {
+	if (process.platform !== "win32" || !tray) {
+		return;
+	}
+
+	tray.destroy();
+	tray = null;
+	trayContextMenu = null;
+}
+
+/** Steps the main window out of the way for the duration of a recording. */
+function hideMainWindowForRecording() {
+	const window = mainWindow;
+	if (!window || window.isDestroyed() || !window.isVisible()) {
+		return;
+	}
+
+	// Hidden, never destroyed: the renderer keeps running and the window is
+	// restored untouched when the recording ends.
+	window.hide();
+}
+
+/**
  * "Start minimized" is only safe where the app keeps an affordance the user can
- * use to bring the UI back. On Windows and macOS Recordly deliberately has no
- * tray icon (see {@link shouldUseTray}), which leaves a minimized launch with no
- * way back: the process runs, no window is visible, and nothing on screen hints
- * that Recordly is alive. That dead end is worse than ignoring the preference,
- * so where there is no tray the launch stays visible.
+ * use to bring the UI back. On Windows and macOS Recordly has no permanent tray
+ * entry (see {@link shouldUseTray}; Windows only gains one while recording),
+ * which leaves a minimized launch with no way back: the process runs, no window
+ * is visible, and nothing on screen hints that Recordly is alive. That dead end
+ * is worse than ignoring the preference, so where there is no tray the launch
+ * stays visible.
  */
 function canStartMinimizedWithoutStrandingTheUser(startMinimizedRequested: boolean) {
 	if (!startMinimizedRequested || shouldUseTray()) {
@@ -1280,14 +1317,18 @@ app.whenReady().then(async () => {
 		(recording: boolean, sourceName: string) => {
 			selectedSourceName = sourceName;
 			setHudOverlayRecordingActive(recording);
-			if (shouldUseTray()) {
+			if (shouldUseTray() || (recording && shouldShowRecordingTray())) {
 				if (!tray) createTray();
 				updateTrayMenu(recording);
 			}
 			if (recording) {
 				reassertHudOverlayMouseState();
+				if (process.platform === "win32") {
+					hideMainWindowForRecording();
+				}
 			}
 			if (!recording) {
+				destroyRecordingTrayIfUnused();
 				restoreWindowSafely(mainWindow);
 			}
 		},

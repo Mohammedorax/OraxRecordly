@@ -4,7 +4,69 @@ import {
 	convertPhysicalBoundsToDip,
 	resolveWindowsCaptureDisplay,
 	resolveWindowsCaptureTarget,
+	selectWindowsMonitorHandle,
 } from "./windowsCaptureSelection";
+
+describe("selectWindowsMonitorHandle", () => {
+	const primaryDisplay = { id: 101, bounds: { x: 0, y: 0, width: 1920, height: 1080 } };
+	const secondaryDisplay = {
+		id: 202,
+		bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
+	};
+
+	it("prefers the exact physical position when displays run at 100% scaling", () => {
+		const selection = selectWindowsMonitorHandle(
+			secondaryDisplay,
+			[primaryDisplay, secondaryDisplay],
+			[
+				{ handle: 11, x: 0, y: 0, width: 1920, height: 1080 },
+				{ handle: 22, x: 1920, y: 0, width: 2560, height: 1440 },
+			],
+		);
+
+		expect(selection).toEqual({
+			handle: 22,
+			bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
+			strategy: "exact-bounds",
+		});
+	});
+
+	it("pairs a scaled display with its physical monitor instead of the primary", () => {
+		// 150% scaling on the primary: DIP 1280x720 maps to physical 1920x1080.
+		const scaledPrimary = { id: 101, bounds: { x: 0, y: 0, width: 1280, height: 720 } };
+		const externalDisplay = { id: 202, bounds: { x: 1280, y: 0, width: 1920, height: 1080 } };
+
+		const selection = selectWindowsMonitorHandle(
+			externalDisplay,
+			[scaledPrimary, externalDisplay],
+			[
+				{ handle: 11, x: 0, y: 0, width: 1920, height: 1080 },
+				{ handle: 22, x: 1920, y: 0, width: 1920, height: 1080 },
+			],
+		);
+
+		expect(selection).toEqual({
+			handle: 22,
+			bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
+			strategy: "ordered-display",
+		});
+	});
+
+	it("rejects a pairing whose aspect ratio cannot be the same panel", () => {
+		const ultrawide = { id: 303, bounds: { x: 1920, y: 0, width: 3440, height: 1440 } };
+		const selection = selectWindowsMonitorHandle(
+			ultrawide,
+			[ultrawide],
+			[{ handle: 11, x: 0, y: 0, width: 1920, height: 1080 }],
+		);
+
+		expect(selection).toBeNull();
+	});
+
+	it("returns null when no monitor is enumerated, keeping the helper's fallback", () => {
+		expect(selectWindowsMonitorHandle(primaryDisplay, [primaryDisplay], [])).toBeNull();
+	});
+});
 
 describe("convertPhysicalBoundsToDip", () => {
 	it("converts both physical edges so mixed-DPI window sizes stay aligned", () => {

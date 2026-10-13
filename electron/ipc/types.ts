@@ -30,6 +30,10 @@ export type NativeCaptureDiagnostics = {
 	sourceType?: SelectedSource["sourceType"] | "unknown";
 	displayId?: number | null;
 	displayBounds?: WindowBounds | null;
+	/** Physical monitor rectangle the helper was pointed at, when resolved. */
+	physicalBounds?: WindowBounds | null;
+	/** How the monitor for the chosen screen was resolved (diagnoses wrong-screen picks). */
+	monitorMatchStrategy?: string | null;
 	windowHandle?: number | null;
 	helperPath?: string | null;
 	outputPath?: string | null;
