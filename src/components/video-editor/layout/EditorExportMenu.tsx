@@ -87,6 +87,7 @@ export function EditorExportMenu(props: Props) {
 		setShowExportDropdown,
 		exportedFilePath,
 		hasPendingExportSave,
+		lastExportReport,
 	} = exportSession;
 	const { gifOutputDimensions, mp4OutputDimensions } = exportDimensions;
 	const {
@@ -150,6 +151,34 @@ export function EditorExportMenu(props: Props) {
 			cancelled = true;
 		};
 	}, [showExportDropdown, exportEncodingMode]);
+
+	/**
+	 * Copies the last export's summary. Performance questions ("why was this slow?")
+	 * are answered by numbers from the machine that ran it, and the report lists
+	 * where the seconds went and which encoder was picked.
+	 */
+	const copyExportReport = async () => {
+		if (!lastExportReport) {
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(lastExportReport);
+			toast.success(t("editor.exportStatus.reportCopied", "Export report copied"), {
+				description: t(
+					"editor.exportStatus.reportCopiedHint",
+					"Paste it in a message: it lists where the export spent its time and which encoder ran.",
+				),
+			});
+		} catch {
+			toast.error(
+				t(
+					"editor.exportStatus.errorCopyFailed",
+					"Couldn't copy. Select the error text and copy it manually.",
+				),
+			);
+		}
+	};
 
 	return (
 		<>
@@ -303,6 +332,16 @@ export function EditorExportMenu(props: Props) {
 								>
 									{t("editor.exportStatus.copyError", "Copy error")}
 								</Button>
+								{lastExportReport ? (
+									<Button
+										type="button"
+										variant="outline"
+										className="h-8 text-xs"
+										onClick={() => void copyExportReport()}
+									>
+										{t("editor.exportStatus.copyReport", "Copy export report")}
+									</Button>
+								) : null}
 								{hasPendingExportSave ? (
 									<Button
 										type="button"
@@ -351,6 +390,16 @@ export function EditorExportMenu(props: Props) {
 								>
 									{t("editor.actions.showInFolder", "Show In Folder")}
 								</Button>
+								{lastExportReport ? (
+									<Button
+										type="button"
+										variant="outline"
+										className="h-8 text-xs"
+										onClick={() => void copyExportReport()}
+									>
+										{t("editor.exportStatus.copyReport", "Copy export report")}
+									</Button>
+								) : null}
 								<Button
 									type="button"
 									variant="outline"

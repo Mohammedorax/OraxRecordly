@@ -11,6 +11,7 @@ import {
 	shouldRemountPreviewAfterExport,
 	shouldRetryExportForBlackFrames,
 } from "@/lib/exporter/exportFallback";
+import { formatExportReport } from "@/lib/exporter/exportReport";
 import { DEFAULT_MP4_CODEC } from "@/lib/exporter/mp4Support";
 import type { ExportPipelineModel, ExportSettings } from "@/lib/exporter/types";
 import { buildRecordingLabelText } from "@/utils/recordingLabelUtils";
@@ -80,6 +81,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 				setExportError,
 				setShowExportDropdown,
 				setExportedFilePath,
+				setLastExportReport,
 				setHasPendingExportSave,
 				exporterRef,
 				pendingExportSaveRef,
@@ -158,6 +160,28 @@ export function useExportRunner(input: ExportRunnerInput) {
 			exportRunIdRef.current = exportRunId;
 			cancelledExportRunIdRef.current = null;
 			const exportWasCancelled = () => exportRunIdRef.current !== exportRunId;
+
+			/**
+			 * Stores a plain-text export summary for the "copy report" action.
+			 *
+			 * The version is read from the packaged app, so a report is never matched
+			 * against the wrong build; when it cannot be read the report is still useful
+			 * without it.
+			 */
+			const rememberExportReport = (
+				input: Omit<Parameters<typeof formatExportReport>[0], "appVersion">,
+			) => {
+				void Promise.resolve(window.electronAPI?.getAppVersion?.())
+					.catch(() => undefined)
+					.then((appVersion) => {
+						setLastExportReport(
+							formatExportReport({
+								...input,
+								appVersion: typeof appVersion === "string" ? appVersion : undefined,
+							}),
+						);
+					});
+			};
 			const exportWasExplicitlyCancelled = () =>
 				cancelledExportRunIdRef.current === exportRunId;
 			const discardCancelledTemp = async (pending: PendingExportSave) => {
@@ -503,6 +527,19 @@ export function useExportRunner(input: ExportRunnerInput) {
 							exporterRef.current = exporter;
 							const result = await exporter.export();
 							if (exportWasCancelled()) return null;
+
+							// Keep a plain-text summary of this run so the user can paste real
+							// numbers (where the seconds went, which encoder ran) instead of
+							// describing what felt slow. The version is read from the packaged
+							// app so a report is never matched against the wrong build.
+							rememberExportReport({
+								format: "mp4",
+								pipelineModel: activePipelineModel,
+								frameRate: mp4FrameRate,
+								durationSec: result.metrics?.effectiveDurationSec,
+								metrics: result.metrics,
+								retriedForBlackFrames: fellBackToLegacy,
+							});
 
 							// A renderer that ran but produced only black frames yields a
 							// playable file nobody can use. Retry once on the legacy pipeline,

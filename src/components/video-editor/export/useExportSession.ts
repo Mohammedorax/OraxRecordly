@@ -11,6 +11,12 @@ export function useExportSession() {
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDropdown, setShowExportDropdown] = useState(false);
 	const [exportedFilePath, setExportedFilePath] = useState<string>();
+	/**
+	 * A plain-text summary of the last export (where the time went, which encoder
+	 * ran). Kept so the user can paste it into a message instead of describing what
+	 * felt slow.
+	 */
+	const [lastExportReport, setLastExportReport] = useState<string | null>(null);
 	const [hasPendingExportSave, setHasPendingExportSave] = useState(false);
 	const exporterRef = useRef<CancelableExporter | null>(null);
 	const exportRunIdRef = useRef(0);
@@ -41,6 +47,8 @@ export function useExportSession() {
 		setShowExportDropdown,
 		exportedFilePath,
 		setExportedFilePath,
+		lastExportReport,
+		setLastExportReport,
 		hasPendingExportSave,
 		setHasPendingExportSave,
 		exporterRef,
