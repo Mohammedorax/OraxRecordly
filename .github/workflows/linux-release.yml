@@ -1,0 +1,164 @@
+# Publishes a Linux release for this fork from a version tag.
+#
+# A tag push is the whole procedure: bump `version` in package.json, commit it,
+# tag `vX.Y.Z`, push the tag. This workflow builds on ubuntu-latest and publishes
+# the three packages that between them cover the common desktop distributions:
+#
+#   OraxRecordly-linux-x64.AppImage   runs anywhere, no installation, no root
+#   OraxRecordly-linux-x64.deb        Debian, Ubuntu, Mint, Pop!_OS, Kali
+#   OraxRecordly-linux-x64.rpm        Fedora, RHEL, openSUSE
+#   latest-linux.yml                  the feed the auto-updater reads
+#
+# Why this is a separate workflow instead of a job in `release.yml`: that
+# pipeline runs on an already *published* release and, for a stable release, its
+# publish job requires the signed and notarized macOS builds. Without the Apple
+# signing secrets it can never succeed, so a Windows-and-Linux fork release could
+# not be published by it. This path therefore mirrors `windows-release.yml`:
+# small, readable, and triggered by the tag itself.
+#
+# Releases created here use the workflow's own GITHUB_TOKEN. GitHub does not start
+# new workflow runs for events caused by that token, so this does not re-trigger
+# the `release: published` workflow in `release.yml`.
+name: Publish Linux Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Existing tag to rebuild and publish (e.g. v1.13.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-release-${{ github.event.inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish-linux:
+    name: Build and publish Linux packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag_name || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify the tag matches package.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag_name || github.ref_name }}"
+          version="${tag#v}"
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "$version" != "$package_version" ]]; then
+            echo "Release tag version ($version) does not match package.json version ($package_version)."
+            exit 1
+          fi
+
+      - name: Install Linux native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxt-dev libxtst-dev libxkbfile-dev libxi-dev libxrandr-dev libxinerama-dev rpm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install bundled FFmpeg binary
+        run: node scripts/install-ffmpeg-static.mjs
+
+      - name: Verify bundled FFmpeg binary
+        run: |
+          node -e "const fs=require('node:fs'); const ffmpeg=require('ffmpeg-static'); if (typeof ffmpeg !== 'string' || !fs.existsSync(ffmpeg)) { throw new Error('Bundled ffmpeg-static binary is missing: ' + ffmpeg); } console.log('Using bundled ffmpeg binary: ' + ffmpeg);"
+
+      - name: Remove stale uiohook build output
+        run: rm -rf node_modules/uiohook-napi/build
+
+      - name: Install app dependencies
+        run: npx electron-builder install-app-deps
+
+      - name: Build the application inputs
+        run: |
+          npm run build:platform-native-helpers
+          npx tsc
+          npx vite build
+          npm run normalize:electron-main-cjs
+          npm run smoke:electron-main-cjs
+
+      - name: Build Linux packages
+        run: npx electron-builder --linux dir AppImage deb rpm --x64 --publish never
+
+      - name: Smoke test packaged Linux paths
+        run: npm run smoke:packaged-binaries
+
+      - name: Generate checksums
+        run: npm run checksums:release -- SHA256SUMS-linux-x64.txt
+
+      - name: Wait for the release to be published
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag_name || github.ref_name }}"
+          echo "release_tag=$tag" >> "$GITHUB_ENV"
+
+          # The Windows workflow publishes the release for this tag, and its gate
+          # runs the export suite first. Waiting for it keeps one creator for the
+          # release and means a failed export gate blocks this publish too, since
+          # both workflows build the very same commit.
+          for attempt in $(seq 1 50); do
+            if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+              echo "Release $tag exists; publishing Linux packages."
+              exit 0
+            fi
+            echo "Attempt $attempt: release $tag is not published yet; waiting 30s."
+            sleep 30
+          done
+
+          echo "Release $tag was never published, so the Linux packages were not uploaded."
+          exit 1
+
+      - name: Upload Linux packages to the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          assets=(
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/latest-linux.yml
+            release/SHA256SUMS-linux-x64.txt
+          )
+
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No Linux assets were produced."
+            exit 1
+          fi
+
+          printf 'Publishing:\n'
+          printf '  %s\n' "${assets[@]}"
+
+          gh release upload "$release_tag" "${assets[@]}" \
+            --repo "${{ github.repository }}" \
+            --clobber

@@ -120,12 +120,20 @@
     }
   },
   "linux": {
+    // AppImage runs anywhere without installing; the deb and rpm packages give
+    // Debian/Ubuntu and Fedora/openSUSE users real system integration (menu
+    // entry, icon, dependency resolution). Together they cover the common
+    // desktop distributions.
     "target": [
-      "AppImage"
+      "AppImage",
+      "deb",
+      "rpm"
     ],
     "icon": "icons/icons/png",
     "artifactName": "${productName}-linux-x64.${ext}",
-    "category": "AudioVideo"
+    "category": "AudioVideo",
+    "synopsis": "Screen recorder and video editor",
+    "description": "Record your screen, edit it on a timeline, and export without watermarks."
   },
   "win": {
     "target": [

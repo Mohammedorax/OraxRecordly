@@ -523,7 +523,7 @@ jobs:
           npm run build:platform-native-helpers
           npx tsc
           npx vite build
-          npx electron-builder --linux dir AppImage --x64 --publish never
+          npx electron-builder --linux dir AppImage deb rpm --x64 --publish never
 
       - name: Smoke test packaged Linux x64 paths
         run: npm run smoke:packaged-binaries
@@ -542,6 +542,8 @@ jobs:
           name: linux-x64-release
           path: |
             release/*.AppImage
+            release/*.deb
+            release/*.rpm
             release/*.blockmap
             release/latest-linux.yml
             release/SHA256SUMS*.txt
@@ -663,6 +665,8 @@ jobs:
             release-assets/windows-x64/*.exe
             release-assets/windows-x64/*.blockmap
             release-assets/linux-x64/*.AppImage
+            release-assets/linux-x64/*.deb
+            release-assets/linux-x64/*.rpm
             release-assets/linux-x64/*.blockmap
           )
 
