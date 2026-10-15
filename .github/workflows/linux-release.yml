@@ -145,6 +145,7 @@ jobs:
 
           assets=(
             release/*.AppImage
+            release/*.AppImage.blockmap
             release/*.deb
             release/*.rpm
             release/latest-linux.yml
