@@ -202,7 +202,7 @@ jobs:
             echo "ok   rpm: icons shipped"
           fi
 
-          # 3. The AppImage, extracted with its own runtime (no FUSE needed).
+          # The AppImage, extracted with its own runtime (no FUSE needed).
           appimage="$(ls assets/*.AppImage)"
           chmod +x "$appimage"
           appimage_dir="$(mktemp -d)"
@@ -220,9 +220,28 @@ jobs:
             status=1
           else
             echo "ok   AppImage: desktop entry shipped"
-            appimage_binary="$(binary_from_desktop "$appimage_desktop" "$appimage_root" || true)"
-            check_binary "$appimage_binary" "AppImage" || status=1
-            check_launches "$appimage_binary" "AppImage" || status=1
+          fi
+          # The payload binary, not the AppRun wrapper: AppRun is a shell script that
+          # only resolves its target once the runtime (the AppImage itself) is running.
+          appimage_binary="$(find "$appimage_root" -type f -executable -name 'recordly' -not -name 'AppRun' | head -n 1)"
+          check_binary "$appimage_binary" "AppImage" || status=1
+
+          # Launch the AppImage file itself. `--appimage-extract-and-run` is the
+          # runtime's own no-FUSE path, which is also how a user on a distribution
+          # without libfuse2 runs it.
+          appimage_log="$(mktemp)"
+          set +e
+          timeout 60 xvfb-run -a -s "-screen 0 1280x800x24" \
+            "$appimage" --appimage-extract-and-run --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage >"$appimage_log" 2>&1
+          appimage_code=$?
+          set -e
+          if [ $appimage_code -eq 124 ] || [ $appimage_code -eq 0 ]; then
+            echo "ok   AppImage: launched without crashing"
+          else
+            echo "FAIL AppImage: exited with $appimage_code"
+            tail -n 25 "$appimage_log" || true
+            status=1
           fi
 
           exit $status
