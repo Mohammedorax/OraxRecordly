@@ -1,0 +1,164 @@
+# Builds an UNSIGNED macOS disk image, for testing on a Mac without an Apple
+# Developer account.
+#
+# Why this exists: a distributable macOS build normally needs a paid Apple
+# Developer certificate (signing) and notarization, and the full `release.yml`
+# path refuses to publish without those secrets. This workflow deliberately skips
+# both, so the app can be tried on real hardware for free. The consequences are
+# real and are spelled out in the release note it publishes:
+#
+#   * Gatekeeper blocks the first launch: the user opens it with
+#     right-click -> Open, or clears the quarantine flag once with
+#     `xattr -d com.apple.quarantine /Applications/OraxRecordly.app`
+#   * automatic updates are not trustworthy without a signature
+#
+# The app is ad-hoc signed (`codesign --sign -`) before the disk image is built:
+# Apple Silicon refuses to execute a completely unsigned bundle, so the ad-hoc
+# signature is what makes this build runnable at all.
+#
+# Run it against a release tag:
+#   gh workflow run macos-unsigned-release.yml -f tag_name=v1.13.0
+name: Build Unsigned macOS DMG
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to attach the unsigned disk images to (e.g. v1.13.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-unsigned-${{ github.event.inputs.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-unsigned-macos:
+    name: Build unsigned macOS dmg (arm64 + x64)
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # No certificate is available here by design.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify the tag matches package.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag_name }}"
+          version="${tag#v}"
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "$version" != "$package_version" ]]; then
+            echo "Release tag version ($version) does not match package.json version ($package_version)."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install bundled FFmpeg binary
+        run: node scripts/install-ffmpeg-static.mjs
+
+      - name: Install app dependencies
+        run: npx electron-builder install-app-deps
+
+      - name: Build the application inputs
+        run: |
+          npm run build:platform-native-helpers
+          npx tsc
+          npx vite build
+          npm run normalize:electron-main-cjs
+          npm run smoke:electron-main-cjs
+
+      - name: Package the application bundles
+        run: |
+          set -euo pipefail
+          npx electron-builder --mac dir --arm64 --x64 --publish never -c.mac.identity=null
+          ls -la release
+
+      - name: Ad-hoc sign the bundles
+        run: |
+          set -euo pipefail
+          # Apple Silicon will not execute an unsigned bundle; an ad-hoc signature
+          # is what makes this build runnable, and it is stripped of nothing else.
+          for app in "release/mac-arm64/OraxRecordly.app" "release/mac/OraxRecordly.app"; do
+            if [ ! -d "$app" ]; then
+              echo "Missing application bundle: $app"
+              exit 1
+            fi
+            codesign --force --deep --sign - "$app"
+            codesign --verify --verbose=2 "$app" || true
+            echo "ad-hoc signed: $app"
+          done
+
+      - name: Build the disk images
+        run: |
+          set -euo pipefail
+          npx electron-builder --mac dmg --arm64 --prepackaged release/mac-arm64 --publish never
+          npx electron-builder --mac dmg --x64 --prepackaged release/mac --publish never
+          ls -la release/*.dmg
+
+      - name: Name the disk images after what they are
+        run: |
+          set -euo pipefail
+          mv release/*-arm64.dmg release/OraxRecordly-macos-arm64-unsigned.dmg
+          mv release/*-x64.dmg release/OraxRecordly-macos-x64-unsigned.dmg
+          ls -la release/*-unsigned.dmg
+
+      - name: Write the install note
+        run: |
+          set -euo pipefail
+          cat > release/INSTALL-macos-unsigned.txt <<'NOTE'
+          OraxRecordly for macOS - UNSIGNED build
+          =======================================
+
+          This build is not signed or notarized by Apple, because that requires a
+          paid Apple Developer account. macOS will therefore warn about it the
+          first time. To open it:
+
+            1. Open the disk image and drag OraxRecordly into Applications.
+            2. Right-click (or Control-click) the app and choose Open, then Open
+               again in the dialog. macOS remembers the choice.
+               If the app refuses with "is damaged", clear the quarantine flag:
+                 xattr -d com.apple.quarantine /Applications/OraxRecordly.app
+            3. Grant Screen Recording, Microphone and Audio permissions when asked
+               (System Settings -> Privacy & Security).
+
+          Automatic updates are not trustworthy without a signature, so update by
+          downloading a newer disk image.
+
+          Which file do I need?
+            OraxRecordly-macos-arm64-unsigned.dmg   Apple Silicon (M1 and later)
+            OraxRecordly-macos-x64-unsigned.dmg     Intel Macs
+          NOTE
+          cat release/INSTALL-macos-unsigned.txt
+
+      - name: Upload the disk images to the release
+        run: |
+          set -euo pipefail
+          gh release upload "${{ github.event.inputs.tag_name }}" \
+            release/OraxRecordly-macos-arm64-unsigned.dmg \
+            release/OraxRecordly-macos-x64-unsigned.dmg \
+            release/INSTALL-macos-unsigned.txt \
+            --repo "${{ github.repository }}" \
+            --clobber
