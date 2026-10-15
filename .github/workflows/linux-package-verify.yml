@@ -86,54 +86,143 @@ jobs:
       - name: Check every shared library of a package resolves
         run: |
           set -euo pipefail
-          # The same check for the binary of each package: an unresolved library is
-          # exactly the failure a user would hit on their own distribution.
+
+          # The binary is discovered the way the operating system discovers it: from
+          # the desktop entry's Exec= line. Guessing a file name is how the first run
+          # of this workflow reported "no executable" for three healthy packages -
+          # the executable is called `recordly`, not the product name.
+          binary_from_desktop() {
+            local desktop="$1"
+            local root="$2"
+            local exec_line
+            exec_line="$(grep -m1 '^Exec=' "$desktop" | sed 's/^Exec=//' | awk '{print $1}')"
+            if [ -z "$exec_line" ]; then
+              return 1
+            fi
+            if [[ "$exec_line" == /* ]]; then
+              echo "$exec_line"
+              return 0
+            fi
+            if [ -n "$root" ] && [ -f "$root/$exec_line" ]; then
+              echo "$root/$exec_line"
+              return 0
+            fi
+            # A bare command name or a relative AppRun path: look for the payload
+            # binary next to it.
+            local candidate
+            candidate="$(find "$root" -maxdepth 3 -type f -executable -name 'recordly' 2>/dev/null | head -n 1)"
+            if [ -n "$candidate" ]; then
+              echo "$candidate"
+              return 0
+            fi
+            command -v "$exec_line" || return 1
+          }
+
           check_binary() {
             local binary="$1"
             local label="$2"
-            if [ ! -f "$binary" ]; then
-              echo "FAIL $label: no executable at $binary"
+            if [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
+              echo "FAIL $label: no executable at ${binary:-<none>}"
               return 1
             fi
-            echo "--- $label: $binary"
             local missing
-            missing="$(ldd "$binary" 2>&1 | grep "not found" || true)"
+            missing="$(ldd "$binary" 2>&1 | grep 'not found' || true)"
             if [ -n "$missing" ]; then
               echo "FAIL $label: unresolved shared libraries:"
               echo "$missing"
               return 1
             fi
-            echo "ok   $label: all shared libraries resolve ($(ldd "$binary" | wc -l) entries)"
+            echo "ok   $label: all $(ldd "$binary" | wc -l) shared libraries resolve"
             return 0
+          }
+
+          # Launches the packaged app on a virtual display. A crash on start is the
+          # failure this catches; staying up until the timeout is the pass (an
+          # Electron app has no --version to answer with).
+          check_launches() {
+            local binary="$1"
+            local label="$2"
+            local log
+            log="$(mktemp)"
+            set +e
+            timeout 30 xvfb-run -a -s "-screen 0 1280x800x24" \
+              "$binary" --no-sandbox --disable-gpu --disable-dev-shm-usage >"$log" 2>&1
+            local code=$?
+            set -e
+            if [ $code -eq 124 ] || [ $code -eq 0 ]; then
+              echo "ok   $label: launched without crashing"
+              return 0
+            fi
+            echo "FAIL $label: exited with $code"
+            tail -n 25 "$log" || true
+            return 1
           }
 
           status=0
 
           # 1. The .deb, installed the way a user installs it.
           deb="$(ls assets/*.deb)"
+          deb_package="$(dpkg-deb -f "$deb" Package)"
           sudo dpkg -i "$deb" || sudo apt-get -f install -y
-          deb_binary="$(dpkg -L "$(dpkg-deb -f "$deb" Package)" | grep -E '/[Oo]rax[Rr]ecordly$' | head -n 1)"
-          check_binary "$deb_binary" "deb" || status=1
-          desktop_from_deb="$(dpkg -L "$(dpkg-deb -f "$deb" Package)" | grep -E 'share/applications/.*\.desktop$' | head -n 1)"
-          if [ -z "$desktop_from_deb" ]; then echo "FAIL deb: no desktop entry"; status=1; else echo "ok   deb: desktop entry $desktop_from_deb"; fi
-          if [ "$(dpkg -L "$(dpkg-deb -f "$deb" Package)" | grep -c 'share/icons')" -eq 0 ]; then echo "FAIL deb: no icons"; status=1; else echo "ok   deb: icons shipped"; fi
+          deb_desktop="$(dpkg -L "$deb_package" | grep '\.desktop$' | head -n 1)"
+          if [ -z "$deb_desktop" ]; then
+            echo "FAIL deb: no desktop entry"
+            status=1
+          else
+            echo "ok   deb: desktop entry $deb_desktop"
+            deb_binary="$(binary_from_desktop "$deb_desktop" "" || true)"
+            check_binary "$deb_binary" "deb" || status=1
+            check_launches "$deb_binary" "deb" || status=1
+          fi
+          if [ "$(dpkg -L "$deb_package" | grep -c 'share/icons')" -eq 0 ]; then
+            echo "FAIL deb: no icons"
+            status=1
+          else
+            echo "ok   deb: icons shipped"
+          fi
 
           # 2. The .rpm, unpacked without installing (its payload is what matters).
           rpm="$(ls assets/*.rpm)"
           rpm_dir="$(mktemp -d)"
           (cd "$rpm_dir" && rpm2cpio "$OLDPWD/$rpm" | cpio -idm --quiet)
-          rpm_binary="$(find "$rpm_dir" -type f -executable -name '[Oo]rax[Rr]ecordly' -o -type f -executable -name 'oraxrecordly' | head -n 1)"
-          check_binary "$rpm_binary" "rpm" || status=1
-          if [ -z "$(find "$rpm_dir" -path '*share/applications*' -name '*.desktop' | head -n 1)" ]; then echo "FAIL rpm: no desktop entry"; status=1; else echo "ok   rpm: desktop entry shipped"; fi
+          rpm_desktop="$(find "$rpm_dir" -name '*.desktop' | head -n 1)"
+          if [ -z "$rpm_desktop" ]; then
+            echo "FAIL rpm: no desktop entry"
+            status=1
+          else
+            echo "ok   rpm: desktop entry shipped"
+            rpm_binary="$(binary_from_desktop "$rpm_desktop" "$rpm_dir" || true)"
+            check_binary "$rpm_binary" "rpm" || status=1
+            check_launches "$rpm_binary" "rpm" || status=1
+          fi
+          if [ "$(find "$rpm_dir" -path '*share/icons*' | wc -l)" -eq 0 ]; then
+            echo "FAIL rpm: no icons"
+            status=1
+          else
+            echo "ok   rpm: icons shipped"
+          fi
 
           # 3. The AppImage, extracted with its own runtime (no FUSE needed).
           appimage="$(ls assets/*.AppImage)"
           chmod +x "$appimage"
           appimage_dir="$(mktemp -d)"
           (cd "$appimage_dir" && "$OLDPWD/$appimage" --appimage-extract >/dev/null)
-          appimage_binary="$(find "$appimage_dir/squashfs-root" -maxdepth 1 -type f -executable -name '[Oo]rax[Rr]ecordly' | head -n 1)"
-          check_binary "$appimage_binary" "AppImage" || status=1
-          if [ ! -f "$appimage_dir/squashfs-root/AppRun" ]; then echo "FAIL AppImage: no AppRun"; status=1; else echo "ok   AppImage: AppRun present"; fi
-          if [ -z "$(find "$appimage_dir/squashfs-root" -path '*share/applications*' -name '*.desktop' | head -n 1)" ]; then echo "FAIL AppImage: no desktop entry"; status=1; else echo "ok   AppImage: desktop entry shipped"; fi
+          appimage_root="$appimage_dir/squashfs-root"
+          if [ ! -f "$appimage_root/AppRun" ]; then
+            echo "FAIL AppImage: no AppRun"
+            status=1
+          else
+            echo "ok   AppImage: AppRun present"
+          fi
+          appimage_desktop="$(find "$appimage_root" -name '*.desktop' | head -n 1)"
+          if [ -z "$appimage_desktop" ]; then
+            echo "FAIL AppImage: no desktop entry"
+            status=1
+          else
+            echo "ok   AppImage: desktop entry shipped"
+            appimage_binary="$(binary_from_desktop "$appimage_desktop" "$appimage_root" || true)"
+            check_binary "$appimage_binary" "AppImage" || status=1
+            check_launches "$appimage_binary" "AppImage" || status=1
+          fi
 
           exit $status
