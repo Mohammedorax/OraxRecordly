@@ -132,6 +132,9 @@
     "icon": "icons/icons/png",
     "artifactName": "${productName}-linux-x64.${ext}",
     "category": "AudioVideo",
+    // The deb and rpm packages record a maintainer; without an email here the
+    // package step refuses to build them (the AppImage does not need one).
+    "maintainer": "Mohammedorax <orax2004@gmail.com>",
     "synopsis": "Screen recorder and video editor",
     "description": "Record your screen, edit it on a timeline, and export without watermarks."
   },
