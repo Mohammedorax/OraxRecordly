@@ -13,6 +13,7 @@ import {
 	XIcon,
 } from "@/components/ui/icons";
 import { Separator } from "@/components/ui/separator";
+import { isRegionRecordingSupported } from "@/lib/capture/regionRecordingSupport";
 import { useScopedT } from "../../contexts/I18nContext";
 import { useMicrophoneDevices } from "../../hooks/useMicrophoneDevices";
 import { useScreenRecorder } from "../../hooks/useScreenRecorder";
@@ -275,12 +276,16 @@ function LaunchWindowContent() {
 			 */}
 			<ScreenshotButton
 				sourceAvailable={hasSelectedSource || platform === "linux"}
+				// Only offered where the capture helper really crops the frames: on
+				// macOS the ScreenCaptureKit recorder has no source rectangle yet, and
+				// the portal path on Linux cannot crop, so drawing an area there would
+				// silently record the whole screen.
 				onRecordRegion={
-					platform === "linux"
-						? undefined
-						: () => {
+					isRegionRecordingSupported(platform)
+						? () => {
 								void selectCaptureRegion();
 							}
+						: undefined
 				}
 				onClearCaptureRegion={clearCaptureRegion}
 				hasCaptureRegion={captureRegion !== null}

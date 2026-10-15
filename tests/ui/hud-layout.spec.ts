@@ -66,12 +66,15 @@ test("recording HUD uses uniform controls and a readable timer", async ({ page }
 });
 
 test("the idle HUD offers one capture control with every mode inside it", async ({ page }) => {
+	// The default bridge reports macOS, where the capture helper cannot crop a
+	// drawn region yet - the option has to be absent rather than record the whole
+	// screen behind the user's back.
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=hud-overlay");
 	await expect(page.locator(".separator--vertical").first()).toBeVisible();
 
 	// Two buttons used to sit side by side (a camera and a caret); the modes are in
-	// one menu now, and the separate record-a-region button is an entry in it.
+	// one menu now, and the separate record-a-region button no longer exists.
 	const capture = page.getByRole("button", { name: "Take screenshot", exact: true });
 	await expect(capture).toHaveCount(1);
 	await expect(
@@ -80,7 +83,18 @@ test("the idle HUD offers one capture control with every mode inside it", async 
 	await expect(page.getByRole("button", { name: "Record a region", exact: true })).toHaveCount(0);
 
 	await capture.click();
-	// The chooser and the record-a-region entry live in the same popover.
 	await expect(page.getByText("Capture screenshot").first()).toBeVisible();
+	await expect(page.getByText(/Record a region/)).toHaveCount(0);
+});
+
+test("the capture menu offers region recording where the capture can crop", async ({ page }) => {
+	// Windows is the platform whose capture helper crops every frame to the drawn
+	// rectangle, so the entry belongs there.
+	await installDesktopBridge(page, "preview.mp4", "win32");
+	await page.goto("/?windowType=hud-overlay");
+
+	const capture = page.getByRole("button", { name: "Take screenshot", exact: true });
+	await expect(capture).toHaveCount(1);
+	await capture.click();
 	await expect(page.getByText(/Record a region/)).toBeVisible();
 });
