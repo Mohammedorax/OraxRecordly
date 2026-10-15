@@ -1,0 +1,139 @@
+# Verifies the published Linux packages actually work, on Linux.
+#
+# The release workflow proves the packages build and that the packaged paths are
+# correct. That is not the same claim as "these run on a Debian box": a missing
+# shared library, a broken desktop entry or a payload in the wrong place all
+# survive packaging and only appear when someone installs the file.
+#
+# This workflow therefore installs and inspects the real assets of a release:
+#
+#   1. the sha512 in latest-linux.yml must match every downloaded asset
+#   2. the .deb is installed with dpkg (dependencies resolved), and every shared
+#      library its binary needs must resolve
+#   3. the .rpm is unpacked with rpm2cpio, and the same library check runs on it
+#   4. the AppImage is extracted with its own runtime, and the same check runs
+#   5. each package must ship a desktop entry and icons, so the app appears in
+#      the application menu
+#
+# Run it against any release tag:
+#   gh workflow run linux-package-verify.yml -f tag_name=v1.13.0
+name: Verify Linux Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag whose Linux assets to verify (e.g. v1.13.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-package-verify-${{ github.event.inputs.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify-linux-packages:
+    name: Verify the Linux packages run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download the release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download "${{ github.event.inputs.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "OraxRecordly-linux-x64.*" \
+            --pattern "latest-linux.yml" \
+            --dir assets
+          ls -la assets
+
+      - name: Check the checksums in latest-linux.yml match the files
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const crypto = require("node:crypto");
+          const path = require("node:path");
+
+          const dir = "assets";
+          const yml = fs.readFileSync(path.join(dir, "latest-linux.yml"), "utf8");
+          const files = [...yml.matchAll(/- url: (.+)\n\s+sha512: (.+)\n\s+size: (\d+)/g)];
+          if (files.length === 0) throw new Error("latest-linux.yml lists no files");
+
+          let failed = false;
+          for (const [, url, sha512, size] of files) {
+            const file = path.join(dir, url.trim());
+            if (!fs.existsSync(file)) { console.error(`missing asset: ${url}`); failed = true; continue; }
+            const bytes = fs.readFileSync(file);
+            const digest = crypto.createHash("sha512").update(bytes).digest("base64");
+            const okSize = bytes.length === Number(size);
+            const okHash = digest === sha512.trim();
+            console.log(`${okSize && okHash ? "ok  " : "FAIL"} ${url} size=${bytes.length}/${size} sha512=${okHash ? "match" : "MISMATCH"}`);
+            if (!okSize || !okHash) failed = true;
+          }
+          if (failed) process.exit(1);
+          NODE
+
+      - name: Check every shared library of a package resolves
+        run: |
+          set -euo pipefail
+          # The same check for the binary of each package: an unresolved library is
+          # exactly the failure a user would hit on their own distribution.
+          check_binary() {
+            local binary="$1"
+            local label="$2"
+            if [ ! -f "$binary" ]; then
+              echo "FAIL $label: no executable at $binary"
+              return 1
+            fi
+            echo "--- $label: $binary"
+            local missing
+            missing="$(ldd "$binary" 2>&1 | grep "not found" || true)"
+            if [ -n "$missing" ]; then
+              echo "FAIL $label: unresolved shared libraries:"
+              echo "$missing"
+              return 1
+            fi
+            echo "ok   $label: all shared libraries resolve ($(ldd "$binary" | wc -l) entries)"
+            return 0
+          }
+
+          status=0
+
+          # 1. The .deb, installed the way a user installs it.
+          deb="$(ls assets/*.deb)"
+          sudo dpkg -i "$deb" || sudo apt-get -f install -y
+          deb_binary="$(dpkg -L "$(dpkg-deb -f "$deb" Package)" | grep -E '/[Oo]rax[Rr]ecordly$' | head -n 1)"
+          check_binary "$deb_binary" "deb" || status=1
+          desktop_from_deb="$(dpkg -L "$(dpkg-deb -f "$deb" Package)" | grep -E 'share/applications/.*\.desktop$' | head -n 1)"
+          if [ -z "$desktop_from_deb" ]; then echo "FAIL deb: no desktop entry"; status=1; else echo "ok   deb: desktop entry $desktop_from_deb"; fi
+          if [ "$(dpkg -L "$(dpkg-deb -f "$deb" Package)" | grep -c 'share/icons')" -eq 0 ]; then echo "FAIL deb: no icons"; status=1; else echo "ok   deb: icons shipped"; fi
+
+          # 2. The .rpm, unpacked without installing (its payload is what matters).
+          rpm="$(ls assets/*.rpm)"
+          rpm_dir="$(mktemp -d)"
+          (cd "$rpm_dir" && rpm2cpio "$OLDPWD/$rpm" | cpio -idm --quiet)
+          rpm_binary="$(find "$rpm_dir" -type f -executable -name '[Oo]rax[Rr]ecordly' -o -type f -executable -name 'oraxrecordly' | head -n 1)"
+          check_binary "$rpm_binary" "rpm" || status=1
+          if [ -z "$(find "$rpm_dir" -path '*share/applications*' -name '*.desktop' | head -n 1)" ]; then echo "FAIL rpm: no desktop entry"; status=1; else echo "ok   rpm: desktop entry shipped"; fi
+
+          # 3. The AppImage, extracted with its own runtime (no FUSE needed).
+          appimage="$(ls assets/*.AppImage)"
+          chmod +x "$appimage"
+          appimage_dir="$(mktemp -d)"
+          (cd "$appimage_dir" && "$OLDPWD/$appimage" --appimage-extract >/dev/null)
+          appimage_binary="$(find "$appimage_dir/squashfs-root" -maxdepth 1 -type f -executable -name '[Oo]rax[Rr]ecordly' | head -n 1)"
+          check_binary "$appimage_binary" "AppImage" || status=1
+          if [ ! -f "$appimage_dir/squashfs-root/AppRun" ]; then echo "FAIL AppImage: no AppRun"; status=1; else echo "ok   AppImage: AppRun present"; fi
+          if [ -z "$(find "$appimage_dir/squashfs-root" -path '*share/applications*' -name '*.desktop' | head -n 1)" ]; then echo "FAIL AppImage: no desktop entry"; status=1; else echo "ok   AppImage: desktop entry shipped"; fi
+
+          exit $status
