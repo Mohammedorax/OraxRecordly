@@ -21,6 +21,14 @@ export default defineConfig({
 	// keeps memory and encoder sessions predictable.
 	workers: 1,
 	fullyParallel: false,
+	/**
+	 * One retry. Every spec boots its own Electron app, and a machine that is still
+	 * shutting one down can hand the next one a renderer without WebCodecs yet
+	 * ("VideoEncoder is not defined"), which fails the export for environmental
+	 * reasons. A retry is cheap next to publishing from a flaky signal, and a real
+	 * regression fails both attempts.
+	 */
+	retries: 1,
 	reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
 	use: {
 		trace: "retain-on-failure",
