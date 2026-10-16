@@ -266,6 +266,19 @@ export function useExportRunner(input: ExportRunnerInput) {
 					if (exportWasCancelled()) return;
 
 					if (result.success && result.blob) {
+						// A GIF is exported by the same kind of work as an MP4, so it gets
+						// the same report: without it, "the GIF took forever" is a feeling
+						// rather than a number.
+						rememberExportReport({
+							format: "gif",
+							width: settings.gifConfig.width,
+							height: settings.gifConfig.height,
+							frameRate: settings.gifConfig.frameRate,
+							durationSec: result.metrics?.effectiveDurationSec,
+							metrics: result.metrics,
+							retriedForBlackFrames: false,
+						});
+
 						const timestamp = Date.now();
 						const fileName = `export-${timestamp}.gif`;
 						if (options?.destination === "share") {

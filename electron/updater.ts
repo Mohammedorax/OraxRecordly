@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog } from "electron";
 import { autoUpdater } from "electron-updater";
 import { USER_DATA_PATH } from "./appPaths";
 import { readAppSetting, writeAppSetting } from "./appSettingsStore";
+import { isSelfUpdateSupported, readSelfUpdateEnvironment } from "./selfUpdateSupport";
 import { EXPERIMENTAL_UPDATE_DESCRIPTION, getUpdateChannelConfiguration } from "./updateChannel";
 
 const INITIAL_UPDATE_CHECK_DELAY_MS = 15 * 1000;
@@ -315,10 +316,18 @@ export function setExperimentalUpdatesEnabled(enabled: boolean) {
 }
 
 function canUseAutoUpdates() {
-	// Four independent gates, all required: the build must be a packaged
-	// release, must not be a MAS build, must not be force-disabled, and must have
-	// a feed — either the explicit override or the packaged `app-update.yml`.
-	return isAutoUpdateFeatureEnabled() && app.isPackaged && !process.mas && hasUpdateFeed();
+	// Five independent gates, all required: the installation shape must be one the
+	// updater can actually replace (an installed build, a signed macOS bundle, an
+	// AppImage), the build must be a packaged release, must not be a MAS build,
+	// must not be force-disabled, and must have a feed - either the explicit
+	// override or the packaged `app-update.yml`.
+	return (
+		isSelfUpdateSupported(readSelfUpdateEnvironment()) &&
+		isAutoUpdateFeatureEnabled() &&
+		app.isPackaged &&
+		!process.mas &&
+		hasUpdateFeed()
+	);
 }
 
 export function isAutoUpdateFeatureEnabled() {
