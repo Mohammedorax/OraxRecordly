@@ -31,6 +31,7 @@ import {
 	START_MINIMIZED_ARG,
 	shouldStartMinimizedOnLaunch,
 } from "./autoLaunch";
+import * as linuxAutostart from "./linuxAutostart";
 
 afterEach(() => {
 	mocks.state.openAtLogin = false;
@@ -39,10 +40,12 @@ afterEach(() => {
 });
 
 describe("isAutoLaunchSupported", () => {
-	it("supports Windows and macOS only", () => {
+	it("supports all three desktop platforms", () => {
+		// Linux implements it through ~/.config/autostart rather than Electron,
+		// which has no login-item API there.
 		expect(isAutoLaunchSupported("win32")).toBe(true);
 		expect(isAutoLaunchSupported("darwin")).toBe(true);
-		expect(isAutoLaunchSupported("linux")).toBe(false);
+		expect(isAutoLaunchSupported("linux")).toBe(true);
 	});
 });
 
@@ -78,28 +81,41 @@ describe("applyAutoLaunchPreference", () => {
 		expect(result.error).toContain("did not register");
 	});
 
-	it("degrades gracefully on Linux without calling Electron", () => {
-		const result = applyAutoLaunchPreference(true, "linux");
-
-		expect(result).toEqual({
-			success: false,
-			supported: false,
-			openAtLogin: false,
-			error: "Launching Recordly at sign-in is not supported on this platform.",
+	it("writes a desktop entry on Linux instead of calling Electron", () => {
+		const written: string[] = [];
+		const linux = vi.spyOn(linuxAutostart, "applyLinuxAutostart").mockImplementation((open) => {
+			written.push(String(open));
+			return open;
 		});
-		expect(mocks.setLoginItemSettings).not.toHaveBeenCalled();
+
+		try {
+			const result = applyAutoLaunchPreference(true, "linux");
+
+			expect(result).toEqual({ success: true, supported: true, openAtLogin: true });
+			expect(written).toEqual(["true"]);
+			// Electron itself cannot register a Linux login item.
+			expect(mocks.setLoginItemSettings).not.toHaveBeenCalled();
+		} finally {
+			linux.mockRestore();
+		}
 	});
 });
 
 describe("readLoginItemState", () => {
 	it("reports unsupported platforms without reading the OS login item", () => {
-		expect(readLoginItemState("linux")).toEqual({ supported: false, openAtLogin: false });
+		expect(readLoginItemState("freebsd")).toEqual({ supported: false, openAtLogin: false });
 	});
 
 	it("reads the live login item on supported platforms", () => {
 		mocks.state.openAtLogin = true;
 
 		expect(readLoginItemState("win32")).toEqual({ supported: true, openAtLogin: true });
+	});
+
+	it("reads the Linux login item from the autostart file", () => {
+		vi.spyOn(linuxAutostart, "readLinuxAutostartState").mockReturnValue(true);
+
+		expect(readLoginItemState("linux")).toEqual({ supported: true, openAtLogin: true });
 	});
 });
 

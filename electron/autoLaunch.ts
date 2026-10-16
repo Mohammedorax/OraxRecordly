@@ -7,6 +7,7 @@ import {
 	type StartupPreferences,
 	type StartupPreferencesPatch,
 } from "./ipc/settings/startupPreferencesStore";
+import { applyLinuxAutostart, readLinuxAutostartState } from "./linuxAutostart";
 
 /**
  * Optional command-line flag that forces a hidden launch. Recordly does not add
@@ -42,9 +43,12 @@ export interface StartupPreferencesResult {
 	error?: string;
 }
 
-/** Linux has no `setLoginItemSettings` support in Electron; the UI is told so. */
+/**
+ * Electron itself has no `setLoginItemSettings` on Linux, but Linux desktops read
+ * `~/.config/autostart`, so Linux is supported here too - see `linuxAutostart.ts`.
+ */
 export function isAutoLaunchSupported(platform: NodeJS.Platform = process.platform) {
-	return platform === "win32" || platform === "darwin";
+	return platform === "win32" || platform === "darwin" || platform === "linux";
 }
 
 export async function readStartupPreferences(): Promise<StartupPreferences> {
@@ -54,6 +58,15 @@ export async function readStartupPreferences(): Promise<StartupPreferences> {
 export function readLoginItemState(platform: NodeJS.Platform = process.platform): LoginItemState {
 	if (!isAutoLaunchSupported(platform)) {
 		return { supported: false, openAtLogin: false };
+	}
+
+	if (platform === "linux") {
+		try {
+			return { supported: true, openAtLogin: readLinuxAutostartState() };
+		} catch (error) {
+			console.warn("Failed to read the Linux login item:", error);
+			return { supported: true, openAtLogin: false };
+		}
 	}
 
 	try {
@@ -84,6 +97,7 @@ function buildLoginItemSettings(openAtLogin: boolean, platform: NodeJS.Platform)
 export function applyAutoLaunchPreference(
 	openAtLogin: boolean,
 	platform: NodeJS.Platform = process.platform,
+	options: { startMinimized?: boolean } = {},
 ): AutoLaunchResult {
 	if (!isAutoLaunchSupported(platform)) {
 		return {
@@ -92,6 +106,35 @@ export function applyAutoLaunchPreference(
 			openAtLogin: false,
 			error: "Launching Recordly at sign-in is not supported on this platform.",
 		};
+	}
+
+	if (platform === "linux") {
+		try {
+			const applied = applyLinuxAutostart(openAtLogin, {
+				execPath: process.execPath,
+				// Inside an AppImage `execPath` points into a mount that disappears on
+				// reboot, so the image itself is what the login item has to start.
+				appImagePath: process.env.APPIMAGE,
+				startMinimized: options.startMinimized,
+			});
+			if (applied !== openAtLogin) {
+				return {
+					success: false,
+					supported: true,
+					openAtLogin: applied,
+					error: "The desktop environment did not accept the login item.",
+				};
+			}
+
+			return { success: true, supported: true, openAtLogin: applied };
+		} catch (error) {
+			return {
+				success: false,
+				supported: true,
+				openAtLogin: readLoginItemState(platform).openAtLogin,
+				error: String(error),
+			};
+		}
 	}
 
 	try {
@@ -150,7 +193,12 @@ export async function updateStartupPreferences(
 	}
 
 	if (typeof patch.openAtLogin === "boolean") {
-		const applied = applyAutoLaunchPreference(patch.openAtLogin);
+		const applied = applyAutoLaunchPreference(patch.openAtLogin, process.platform, {
+			startMinimized:
+				typeof patch.startMinimized === "boolean"
+					? patch.startMinimized
+					: stored.startMinimized,
+		});
 		supported = applied.supported;
 		if (applied.success) {
 			nextPatch.openAtLogin = patch.openAtLogin;
