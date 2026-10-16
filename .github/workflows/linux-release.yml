@@ -137,6 +137,49 @@ jobs:
           echo "Release $tag was never published, so the Linux packages were not uploaded."
           exit 1
 
+      - name: Write the install note
+        run: |
+          set -euo pipefail
+          cat > release/INSTALL-linux.txt <<'NOTE'
+          OraxRecordly for Linux
+          ======================
+
+          Which file do I need?
+            OraxRecordly-linux-x64.AppImage   any distribution, nothing to install
+            OraxRecordly-linux-x64.deb        Debian, Ubuntu, Mint, Pop!_OS, Kali
+            OraxRecordly-linux-x64.rpm        Fedora, RHEL, openSUSE
+
+          AppImage (no root, no installation):
+            chmod +x OraxRecordly-linux-x64.AppImage
+            ./OraxRecordly-linux-x64.AppImage
+
+          If it refuses to start because FUSE is missing (some distributions ship
+          FUSE 3 only), run it through its own extractor instead:
+            ./OraxRecordly-linux-x64.AppImage --appimage-extract-and-run
+
+          Debian and Ubuntu:
+            sudo apt install ./OraxRecordly-linux-x64.deb
+          Fedora and openSUSE:
+            sudo dnf install ./OraxRecordly-linux-x64.rpm
+
+          Recording uses the system screen-sharing portal, so the desktop asks
+          which screen or window to share the first time - that dialog is the
+          system's, not the app's.
+
+          Starting at login is in Settings: it writes a standard desktop entry to
+          ~/.config/autostart, which every Linux desktop reads.
+
+          Updates: only the AppImage updates itself. A deb or rpm installation is
+          updated by installing the newer package the same way it was installed.
+
+          Ubuntu 24.04 and newer: if the app reports that the SUID sandbox helper
+          is not configured, either start it as
+            ./OraxRecordly-linux-x64.AppImage --no-sandbox
+          or allow unprivileged user namespaces for the whole system:
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          NOTE
+          cat release/INSTALL-linux.txt
+
       - name: Upload Linux packages to the release
         shell: bash
         run: |
@@ -150,6 +193,7 @@ jobs:
             release/*.rpm
             release/latest-linux.yml
             release/SHA256SUMS-linux-x64.txt
+            release/INSTALL-linux.txt
           )
 
           if [ ${#assets[@]} -eq 0 ]; then
