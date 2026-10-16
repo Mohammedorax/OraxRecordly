@@ -2,6 +2,7 @@ export interface GpuSwitches {
 	useAngle?: string;
 	useGl?: string;
 	disableFeatures?: string[];
+	enableFeatures?: string[];
 }
 
 function normalizeLinuxWindowSystem(value: string | undefined): "wayland" | "x11" | null {
@@ -59,6 +60,17 @@ export function getGpuSwitches(
 		return {
 			useGl: shouldForceLinuxEgl(env) ? "egl" : undefined,
 			disableFeatures: ["VaapiVideoDecoder", "VaapiVideoEncoder"],
+			/**
+			 * System audio on Linux, including Wayland.
+			 *
+			 * Chromium captures the desktop through PipeWire and can only offer the
+			 * "share system audio" checkbox when PulseAudio/PipeWire loopback capture is
+			 * compiled in as a feature. Without these two switches the portal stream
+			 * arrives with a video track and no audio track at all, which the recording
+			 * would then silently drop. On X11 the loopback is provided by the same
+			 * PulseAudio module, so this is enabled on both window systems.
+			 */
+			enableFeatures: ["WebRTCPipeWireCapturer", "PulseaudioLoopbackForScreenShare"],
 		};
 	}
 

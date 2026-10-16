@@ -66,9 +66,6 @@ test("recording HUD uses uniform controls and a readable timer", async ({ page }
 });
 
 test("the idle HUD offers one capture control with every mode inside it", async ({ page }) => {
-	// The default bridge reports macOS, where the capture helper cannot crop a
-	// drawn region yet - the option has to be absent rather than record the whole
-	// screen behind the user's back.
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=hud-overlay");
 	await expect(page.locator(".separator--vertical").first()).toBeVisible();
@@ -84,12 +81,12 @@ test("the idle HUD offers one capture control with every mode inside it", async 
 
 	await capture.click();
 	await expect(page.getByText("Capture screenshot").first()).toBeVisible();
-	await expect(page.getByText(/Record a region/)).toHaveCount(0);
+	// macOS records through ScreenCaptureKit, which now crops to the drawn region.
+	await expect(page.getByText(/Record a region/)).toBeVisible();
 });
 
 test("the capture menu offers region recording where the capture can crop", async ({ page }) => {
-	// Windows is the platform whose capture helper crops every frame to the drawn
-	// rectangle, so the entry belongs there.
+	// Windows crops with its capture helper, macOS with the frame cropper.
 	await installDesktopBridge(page, "preview.mp4", "win32");
 	await page.goto("/?windowType=hud-overlay");
 
@@ -97,4 +94,17 @@ test("the capture menu offers region recording where the capture can crop", asyn
 	await expect(capture).toHaveCount(1);
 	await capture.click();
 	await expect(page.getByText(/Record a region/)).toBeVisible();
+});
+
+test("the capture menu hides region recording where the capture cannot crop", async ({ page }) => {
+	// The portal path on Linux cannot crop, so drawing an area there would record
+	// the whole screen behind the user's back.
+	await installDesktopBridge(page, "preview.mp4", "linux");
+	await page.goto("/?windowType=hud-overlay");
+
+	const capture = page.getByRole("button", { name: "Take screenshot", exact: true });
+	await expect(capture).toHaveCount(1);
+	await capture.click();
+	await expect(page.getByText("Capture screenshot").first()).toBeVisible();
+	await expect(page.getByText(/Record a region/)).toHaveCount(0);
 });

@@ -1891,6 +1891,24 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				screenStream.current = screenMediaStream;
 				stream.current = new MediaStream();
 
+				// On Linux the portal may answer a system-audio request with a video-only
+				// stream: whether the checkbox exists at all depends on the compositor and
+				// on xdg-desktop-portal, not on us. Saying so out loud is the difference
+				// between "the recording has no sound" and "the recording silently has no
+				// sound".
+				if (systemAudioEnabled && screenMediaStream.getAudioTracks().length === 0) {
+					console.warn(
+						"System audio was requested but the capture returned no audio track; continuing without it.",
+					);
+					alert(
+						t(
+							"permissions.systemAudioUnavailable",
+							"System audio is not available for this source. Recording will continue without system audio.",
+						),
+					);
+					setSystemAudioEnabled(false);
+				}
+
 				videoTrack = screenMediaStream.getVideoTracks()[0];
 				if (!videoTrack) {
 					throw new Error(

@@ -1,20 +1,17 @@
 /**
  * Which platforms can record a drawn region.
  *
- * "Record a region" crops every captured frame to a rectangle the user draws. That
- * crop is implemented in the Windows capture helper (Windows Graphics Capture),
- * so it is honest there and nowhere else:
+ * "Record a region" crops every captured frame to a rectangle the user draws.
  *
- *   - macOS records with ScreenCaptureKit, which tracks a *window* crop but has no
- *     source rectangle wired up for a drawn area
- *   - the browser/portal capture path used on Linux cannot crop at all
- *
- * The option used to be offered on every platform except Linux, so on macOS a user
- * who drew an area got a full-screen recording and no warning. Until the Swift
- * recorder takes a source rect, the option is shown only where it is real.
+ *   - Windows: the capture helper (Windows Graphics Capture) crops the monitor
+ *     capture to the rectangle.
+ *   - macOS: ScreenCaptureKit sends the full display and the recorder cuts each
+ *     frame with the same cropper it uses for a tracked window.
+ *   - Linux: the portal/browser capture path cannot crop, so the option is not
+ *     offered there rather than silently recording the whole screen.
  */
-export const REGION_RECORDING_PLATFORM = "win32";
+export const REGION_RECORDING_PLATFORMS = ["win32", "darwin"] as const;
 
 export function isRegionRecordingSupported(platform: string | undefined | null): boolean {
-	return platform === REGION_RECORDING_PLATFORM;
+	return platform === "win32" || platform === "darwin";
 }

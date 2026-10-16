@@ -12,6 +12,13 @@ struct CaptureConfig: Codable {
 	let windowY: Double?
 	let windowWidth: Double?
 	let windowHeight: Double?
+	/// A region the user drew, in physical pixels relative to the display's
+	/// top-left corner - the same convention the Windows helper receives. It crops
+	/// the capture the way a tracked window does, through the frame cropper.
+	let regionX: Double?
+	let regionY: Double?
+	let regionWidth: Double?
+	let regionHeight: Double?
 	let outputPath: String?
 	let capturesSystemAudio: Bool?
 	let capturesMicrophone: Bool?
@@ -190,6 +197,41 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			outputHeight = max(2, Int(displayBounds.height) * scaleFactor)
 			streamConfig.width = outputWidth
 			streamConfig.height = outputHeight
+
+			// A region the user drew turns a whole-display capture into a cropped one.
+			// The stream still carries the full display and every frame is cut by the
+			// same cropper the window capture uses, so the region is held for the whole
+			// recording no matter what moves in front of it.
+			//
+			// The region arrives in physical pixels relative to the display; the crop
+			// rectangle is expressed as fractions of the display, which is what the
+			// cropper expects.
+			if let regionX = config.regionX,
+			   let regionY = config.regionY,
+			   let regionWidth = config.regionWidth,
+			   let regionHeight = config.regionHeight,
+			   regionWidth > 1,
+			   regionHeight > 1 {
+				let scale = CGFloat(max(1, scaleFactor))
+				let regionInDisplaySpace = CGRect(
+					x: regionX / Double(scale),
+					y: regionY / Double(scale),
+					width: regionWidth / Double(scale),
+					height: regionHeight / Double(scale)
+				)
+				let clipped = regionInDisplaySpace.intersection(displayBounds)
+				if !clipped.isNull && clipped.width > 0 && clipped.height > 0 {
+					windowCropRect = CGRect(
+						x: (clipped.minX - displayBounds.minX) / displayBounds.width,
+						y: (clipped.minY - displayBounds.minY) / displayBounds.height,
+						width: clipped.width / displayBounds.width,
+						height: clipped.height / displayBounds.height
+					)
+					windowCropDisplayId = display.displayID
+					outputWidth = max(2, Int(clipped.width * scale))
+					outputHeight = max(2, Int(clipped.height * scale))
+				}
+			}
 		}
 
 		let destinationURL: URL

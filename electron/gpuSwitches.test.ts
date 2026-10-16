@@ -55,6 +55,9 @@ describe("getGpuSwitches", () => {
 		).toEqual({
 			useGl: undefined,
 			disableFeatures: ["VaapiVideoDecoder", "VaapiVideoEncoder"],
+			// Without these, a portal capture answers with no audio track at all and
+			// the recording silently has no system sound on Linux.
+			enableFeatures: ["WebRTCPipeWireCapturer", "PulseaudioLoopbackForScreenShare"],
 		});
 	});
 
@@ -62,6 +65,12 @@ describe("getGpuSwitches", () => {
 		expect(getGpuSwitches("linux", { XDG_SESSION_TYPE: "x11" })).toEqual({
 			useGl: "egl",
 			disableFeatures: ["VaapiVideoDecoder", "VaapiVideoEncoder"],
+			enableFeatures: ["WebRTCPipeWireCapturer", "PulseaudioLoopbackForScreenShare"],
 		});
+	});
+
+	it("keeps the other platforms free of the Linux audio switches", () => {
+		expect(getGpuSwitches("win32", {}).enableFeatures).toBeUndefined();
+		expect(getGpuSwitches("darwin", {}).enableFeatures).toBeUndefined();
 	});
 });

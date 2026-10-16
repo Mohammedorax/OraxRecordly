@@ -1108,8 +1108,11 @@ export function registerRecordingHandlers(
 
 				const windowId = parseWindowId(source?.id);
 				const screenId = Number(source?.display_id);
+				const capturesWindow = Boolean(
+					Number.isFinite(windowId) && windowId && source?.id?.startsWith("window:"),
+				);
 
-				if (Number.isFinite(windowId) && windowId && source?.id?.startsWith("window:")) {
+				if (capturesWindow) {
 					config.windowId = windowId;
 					if (visibleWindowBounds) {
 						config.windowX = visibleWindowBounds.x;
@@ -1121,6 +1124,26 @@ export function registerRecordingHandlers(
 					config.displayId = screenId;
 				} else {
 					config.displayId = Number(getScreen().getPrimaryDisplay().id);
+				}
+
+				// A region the user drew crops the display capture, exactly as it does
+				// on Windows: the rectangle arrives in physical pixels relative to that
+				// display, and the recorder cuts every frame to it. Without one the whole
+				// display is recorded. A tracked window keeps its own crop, because the
+				// region is only offered for a monitor source.
+				const requestedRegion = options?.captureRegion;
+				if (
+					!capturesWindow &&
+					requestedRegion &&
+					Number.isFinite(requestedRegion.x) &&
+					Number.isFinite(requestedRegion.y) &&
+					requestedRegion.width > 1 &&
+					requestedRegion.height > 1
+				) {
+					config.regionX = Math.round(requestedRegion.x);
+					config.regionY = Math.round(requestedRegion.y);
+					config.regionWidth = Math.round(requestedRegion.width);
+					config.regionHeight = Math.round(requestedRegion.height);
 				}
 
 				setNativeCaptureOutputBuffer("");
