@@ -111,19 +111,23 @@ jobs:
             echo "ad-hoc signed: $app"
           done
 
-      - name: Build the disk images
+      - name: Build the disk images and archives
         run: |
           set -euo pipefail
-          npx electron-builder --mac dmg --arm64 --prepackaged release/mac-arm64 --publish never
-          npx electron-builder --mac dmg --x64 --prepackaged release/mac --publish never
-          ls -la release/*.dmg
+          npx electron-builder --mac dmg zip --arm64 --prepackaged release/mac-arm64 --publish never
+          npx electron-builder --mac dmg zip --x64 --prepackaged release/mac --publish never
+          ls -la release/*.dmg release/*.zip
 
-      - name: Name the disk images after what they are
+      - name: Name the artifacts after what they are
         run: |
           set -euo pipefail
           mv release/*-arm64.dmg release/OraxRecordly-macos-arm64-unsigned.dmg
           mv release/*-x64.dmg release/OraxRecordly-macos-x64-unsigned.dmg
-          ls -la release/*-unsigned.dmg
+          # The zip is the same bundle without the disk-image step: it can be copied
+          # straight into Applications by anyone who would rather not mount anything.
+          mv release/*-arm64.zip release/OraxRecordly-macos-arm64-unsigned.zip
+          mv release/*-x64.zip release/OraxRecordly-macos-x64-unsigned.zip
+          ls -la release/*-unsigned.dmg release/*-unsigned.zip
 
       - name: Write the install note
         run: |
@@ -150,15 +154,19 @@ jobs:
           Which file do I need?
             OraxRecordly-macos-arm64-unsigned.dmg   Apple Silicon (M1 and later)
             OraxRecordly-macos-x64-unsigned.dmg     Intel Macs
+            (the same two are also published as .zip, if you prefer not to mount a
+            disk image - drag the app out of the zip into Applications)
           NOTE
           cat release/INSTALL-macos-unsigned.txt
 
-      - name: Upload the disk images to the release
+      - name: Upload the macOS artifacts to the release
         run: |
           set -euo pipefail
           gh release upload "${{ github.event.inputs.tag_name }}" \
             release/OraxRecordly-macos-arm64-unsigned.dmg \
             release/OraxRecordly-macos-x64-unsigned.dmg \
+            release/OraxRecordly-macos-arm64-unsigned.zip \
+            release/OraxRecordly-macos-x64-unsigned.zip \
             release/INSTALL-macos-unsigned.txt \
             --repo "${{ github.repository }}" \
             --clobber

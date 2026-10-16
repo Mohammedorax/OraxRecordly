@@ -188,6 +188,13 @@ jobs:
             throw "Missing installer: $installer"
           }
 
+          # The portable build is a second, independent artifact: the same app in a
+          # folder, so a user can run it without installing anything.
+          $portable = 'release/OraxRecordly-windows-x64.zip'
+          if (-not (Test-Path $portable)) {
+            throw "Missing portable archive: $portable"
+          }
+
           # Without latest.yml an installed app never learns that this release
           # exists, so publishing must fail loudly instead of shipping a release
           # that silently breaks updates.
@@ -222,4 +229,5 @@ jobs:
           files: |
             release/OraxRecordly-windows-x64.exe
             release/OraxRecordly-windows-x64.exe.blockmap
+            release/OraxRecordly-windows-x64.zip
             release/latest.yml

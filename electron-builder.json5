@@ -139,8 +139,11 @@
     "description": "Record your screen, edit it on a timeline, and export without watermarks."
   },
   "win": {
+    // The installer is what the updater and most users want; the zip is the
+    // portable build - no installer, no registry, runs from a folder or a stick.
     "target": [
-      "nsis"
+      "nsis",
+      "zip"
     ],
     "icon": "icons/icons/win/icon.ico",
     "executableName": "OraxRecordly",
