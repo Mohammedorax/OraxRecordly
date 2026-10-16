@@ -45,6 +45,20 @@ vi.mock("electron", () => ({
 
 vi.mock("electron-updater", () => ({ autoUpdater: mocks.autoUpdater }));
 
+/**
+ * The updater is gated on the installation shape (an installed build, a signed
+ * macOS bundle, an AppImage). These tests are about the feed and the update flow,
+ * not about that gate, so the environment is pinned to one the updater can replace
+ * itself in - otherwise the same test would pass on Windows and fail on Linux CI.
+ * The gate itself is covered in selfUpdateSupport.test.ts, and `updatesBlocked`
+ * exercises it here.
+ */
+const selfUpdate = vi.hoisted(() => ({ blocked: false }));
+vi.mock("./selfUpdateSupport", () => ({
+	isSelfUpdateSupported: () => !selfUpdate.blocked,
+	readSelfUpdateEnvironment: () => ({ platform: "win32" as NodeJS.Platform }),
+}));
+
 vi.mock("./appSettingsStore", () => ({
 	readAppSetting: (key: string) => (key in mocks.settings ? mocks.settings[key] : null),
 	writeAppSetting: (key: string, value: unknown) => {
@@ -98,6 +112,7 @@ async function flushSetImmediate() {
 
 beforeEach(() => {
 	vi.resetModules();
+	selfUpdate.blocked = false;
 	for (const key of Object.keys(mocks.settings)) {
 		delete mocks.settings[key];
 	}
@@ -258,6 +273,22 @@ describe("setupAutoUpdates", () => {
 			status: "idle",
 			availableVersion: null,
 		});
+	});
+
+	it("stays inert when the installation cannot replace itself", async () => {
+		// A deb or rpm installation is owned by the package manager, and the portable
+		// build cannot replace itself: offering those an update would be a lie.
+		process.env.RECORDLY_UPDATE_FEED = FEED;
+		selfUpdate.blocked = true;
+		const updater = await loadUpdater();
+
+		updater.setupAutoUpdates(
+			() => null,
+			() => true,
+		);
+
+		expect(mocks.autoUpdater.setFeedURL).not.toHaveBeenCalled();
+		expect(mocks.autoUpdater.on).not.toHaveBeenCalled();
 	});
 
 	it("registers the feed and listeners once a feed is configured", async () => {
