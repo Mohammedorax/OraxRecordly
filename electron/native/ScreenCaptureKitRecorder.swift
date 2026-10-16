@@ -130,8 +130,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 
 		let filter: SCContentFilter
-		let outputWidth: Int
-		let outputHeight: Int
+		// `var`, not `let`: the display branch computes the whole-display size and then
+		// narrows it to a drawn region, which is two assignments on one path.
+		var outputWidth: Int
+		var outputHeight: Int
 		excludedProcessIds = Set(config.excludedProcessIds ?? [])
 		let excludedApplications = availableContent.applications.filter {
 			excludedProcessIds.contains($0.processID)
