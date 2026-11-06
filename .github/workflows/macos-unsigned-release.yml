@@ -38,7 +38,10 @@ concurrency:
 jobs:
   build-unsigned-macos:
     name: Build unsigned macOS dmg (arm64 + x64)
-    runs-on: macos-14
+    # `macos-latest` rather than a pinned image: a retired runner label makes the job
+    # return cancelled within a second and with no steps, which is indistinguishable
+    # from a broken workflow in the UI.
+    runs-on: macos-latest
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
