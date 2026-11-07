@@ -162,6 +162,26 @@ jobs:
           NOTE
           cat release/INSTALL-macos-unsigned.txt
 
+      - name: Wait for the release to be published
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag_name }}"
+
+          # The Windows workflow creates the release; on a freshly pushed tag this job
+          # can finish first, and uploading then fails with "release not found".
+          for attempt in $(seq 1 40); do
+            if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+              echo "Release $tag exists; uploading."
+              exit 0
+            fi
+            echo "Attempt $attempt: release $tag is not published yet; waiting 30s."
+            sleep 30
+          done
+
+          echo "Release $tag was never published."
+          exit 1
+
       - name: Upload the macOS artifacts to the release
         run: |
           set -euo pipefail
