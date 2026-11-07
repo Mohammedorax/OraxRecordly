@@ -247,6 +247,17 @@ function toErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error ?? "Unknown renderer init error");
 }
 
+/** Linux detection for the export backend order (the UA carries the platform). */
+function isLinuxRendererPlatform(): boolean {
+	if (typeof navigator === "undefined") {
+		return false;
+	}
+	const userAgentData = (navigator as Navigator & { userAgentData?: { platform?: string } })
+		.userAgentData;
+	const platform = userAgentData?.platform ?? navigator.userAgent;
+	return /linux/i.test(platform);
+}
+
 function summarizeRendererAttempts(attempts: readonly PixiRendererAttempt[]): string {
 	const details = attempts.map((attempt) => `${attempt.backend}: ${attempt.message}`).join(" | ");
 	return `No supported Pixi modern renderer was available. Attempted: ${details}`;
@@ -409,6 +420,22 @@ export class FrameRenderer {
 	private crossfadeTexture: Texture | null = null;
 	private crossfadeSprite: Sprite | null = null;
 	private crossfadeWindowKey: string | null = null;
+	/**
+	 * Textures whose sprites have moved on, destroyed only when the export ends.
+	 *
+	 * Destroying them while the frame that referenced them is still being batched by
+	 * the GPU renderer crashes Pixi with "Cannot read properties of null (reading
+	 * 'alphaMode')". A cross-dissolve ends exactly on the frame that still draws the
+	 * outgoing picture, so the destruction is queued instead of performed mid-render.
+	 */
+	private retiredTextures: Texture[] = [];
+	/**
+	 * Set after a draw threw from inside the filter system. Filters that lose their
+	 * source (an empty bounds rect, a driver-specific batch failure) take the whole
+	 * frame down; dropping them keeps the export alive at a small fidelity cost and
+	 * is far better than failing after forty frames.
+	 */
+	private filtersDisabled = false;
 	private videoTextureUsesStartupStaging = false;
 	private retainedSceneSourceFrame: VideoFrame | null = null;
 	private retainedSceneTextureFrame: VideoFrame | null = null;
@@ -609,14 +636,27 @@ export class FrameRenderer {
 		};
 
 		const preferredRenderBackend = this.config.preferredRenderBackend;
+		/**
+		 * Auto mode on Linux prefers WebGL; everywhere else it prefers WebGPU.
+		 *
+		 * A Fedora report failed on WebGPU with the first frame throwing from inside
+		 * Pixi's bind-group code ("Cannot read properties of undefined (reading
+		 * '_resourceType')") while the exported size was otherwise supported. WebGL is
+		 * the backend the editor preview already uses on that machine, so Linux tries
+		 * it first and keeps WebGPU as the fallback.
+		 *
+		 * Windows and macOS keep their existing order: their WebGPU path is the one the
+		 * export pipeline was tuned and verified on.
+		 */
+		const preferWebGlFirst = isLinuxRendererPlatform();
 		const backendOrder: ExportRenderBackend[] =
 			preferredRenderBackend === "webgl"
 				? ["webgl", "webgpu"]
 				: preferredRenderBackend === "webgpu"
 					? ["webgpu", "webgl"]
-					: typeof navigator !== "undefined" && "gpu" in navigator
-						? ["webgpu", "webgl"]
-						: ["webgl"];
+					: preferWebGlFirst
+						? ["webgl", "webgpu"]
+						: ["webgpu", "webgl"];
 		const failures: PixiRendererAttempt[] = [];
 
 		for (const backend of backendOrder) {
@@ -725,7 +765,9 @@ export class FrameRenderer {
 			const previousTexture = layer.sprite.texture;
 			layer.sprite.texture = nextTexture;
 			layer.textureSource = nextTexture.source as unknown as MutableVideoTextureSource;
-			previousTexture.destroy(true);
+			if (previousTexture !== nextTexture) {
+				this.retiredTextures.push(previousTexture);
+			}
 		} else {
 			layer.sprite = new Sprite(nextTexture);
 			layer.container.addChild(layer.sprite);
@@ -991,8 +1033,33 @@ export class FrameRenderer {
 		const nextTexture = this.createTextureFromSource(source);
 		const previousTexture = sprite.texture;
 		sprite.texture = nextTexture;
-		previousTexture.destroy(true);
+		this.destroyTextureIfUnused(previousTexture, nextTexture);
 		return nextTexture.source as unknown as MutableVideoTextureSource;
+	}
+
+	/**
+	 * Destroys a texture the sprite has moved on from - but never one that is still
+	 * on screen.
+	 *
+	 * The cross-dissolve keeps the outgoing clip's texture in `crossfadeTexture`
+	 * while the sprite moves to a fresh one for the incoming frame. When the staging
+	 * mode then flips (startup staging to live frames) the sprite is re-textured
+	 * again, and destroying the texture it just left would also destroy the held
+	 * outgoing picture that is still being drawn - Pixi then reads
+	 * `source.alphaMode` from a null source and the export dies with
+	 * "Cannot read properties of null (reading 'alphaMode')" mid-dissolve.
+	 */
+	private destroyTextureIfUnused(previous: Texture, next: Texture): void {
+		if (!previous || previous === next) {
+			return;
+		}
+		if (previous === this.crossfadeTexture || previous === this.crossfadeSprite?.texture) {
+			return;
+		}
+		if (previous === this.videoSprite?.texture || previous === this.backgroundSprite?.texture) {
+			return;
+		}
+		this.retiredTextures.push(previous);
 	}
 
 	private createTextureFromSource(source: CanvasImageSource | VideoFrame): Texture {
@@ -1005,6 +1072,33 @@ export class FrameRenderer {
 		);
 	}
 
+	/**
+	 * Copies the picture currently in a canvas into a canvas of its own.
+	 *
+	 * The WebGL path draws every frame onto one shared staging canvas, so by the time
+	 * a cross-dissolve is assembled that canvas may already hold the incoming frame -
+	 * or be reused a moment later, which destroys the outgoing picture's source and
+	 * makes Pixi throw "Cannot read properties of null (reading 'alphaMode')". The
+	 * held frame therefore gets a private copy.
+	 */
+	private copyCanvasForHeldFrame(source: CanvasImageSource | null): HTMLCanvasElement | null {
+		if (!(source instanceof HTMLCanvasElement)) {
+			return null;
+		}
+		if (source.width <= 0 || source.height <= 0) {
+			return null;
+		}
+
+		const copy = document.createElement("canvas");
+		copy.width = source.width;
+		copy.height = source.height;
+		const context = configureHighQuality2DContext(copy.getContext("2d"));
+		if (!context) {
+			return null;
+		}
+		context.drawImage(source, 0, 0);
+		return copy;
+	}
 	private resetBackgroundLayer(): void {
 		this.backgroundForwardFrameSource?.cancel();
 		void this.backgroundForwardFrameSource?.destroy();
@@ -1544,7 +1638,9 @@ export class FrameRenderer {
 			this.crossfadeSprite.destroy({ texture: false, textureSource: false });
 			this.crossfadeSprite = null;
 		}
-		this.crossfadeTexture?.destroy(true);
+		if (this.crossfadeTexture) {
+			this.retiredTextures.push(this.crossfadeTexture);
+		}
 		this.crossfadeTexture = null;
 	}
 
@@ -1555,7 +1651,7 @@ export class FrameRenderer {
 
 		for (const entry of this.annotationSprites) {
 			entry.sprite.destroy({ texture: false, textureSource: false });
-			entry.texture.destroy(true);
+			this.retiredTextures.push(entry.texture);
 		}
 		this.annotationSprites = [];
 		this.annotationContainer.removeChildren();
@@ -1730,7 +1826,7 @@ export class FrameRenderer {
 			const previousTexture = this.captionSprite.texture;
 			this.captionSprite.texture = nextTexture;
 			this.captionTextureSource = nextTexture.source as unknown as MutableVideoTextureSource;
-			previousTexture.destroy(true);
+			this.destroyTextureIfUnused(previousTexture, nextTexture);
 		} else {
 			this.captionSprite = new Sprite(nextTexture);
 			this.captionSprite.anchor.set(0.5);
@@ -2256,10 +2352,26 @@ export class FrameRenderer {
 			this.keycastLayer?.hide();
 			// Gap frames must bypass canvas annotation compositing as well as Pixi layers.
 			this.outputCanvasOverride = null;
-			this.app.render();
+			this.renderStage();
 			return;
 		}
 		if (this.captionContainer) this.captionContainer.visible = true;
+
+		// The dissolve (when selected) keeps the outgoing clip's last decoded frame -
+		// the picture the sprite is holding - and gives the sprite a fresh one for the
+		// incoming frame, so both exist at once.
+		const frameTimelineMs = this.resolveFrameTimeMs(timestamp, backgroundTimelineTimestamp);
+		const crossfadeWindow = this.windowForCrossfade(frameTimelineMs);
+		const crossfadeMix = clipTransitionMixProgress(frameTimelineMs, crossfadeWindow);
+		const crossfadeKey = crossfadeWindow ? String(crossfadeWindow.boundaryMs) : null;
+		const startingCrossfade =
+			crossfadeWindow !== null && this.crossfadeWindowKey !== crossfadeKey;
+
+		// Taken before the new frame is staged: on the WebGL path the staging canvas is
+		// overwritten in place, so afterwards it no longer holds the outgoing picture.
+		const heldFrameCanvas = startingCrossfade
+			? this.copyCanvasForHeldFrame(this.videoTextureSource?.resource ?? null)
+			: null;
 
 		const resolvedVideoSource = await this.resolveDetachedVideoFrameSource(
 			videoFrame,
@@ -2269,15 +2381,6 @@ export class FrameRenderer {
 		);
 		const usesStartupStaging = resolvedVideoSource !== videoFrame;
 
-		// The dissolve (when selected) keeps the texture the sprite is holding -
-		// the outgoing clip's last decoded frame - and gives the sprite a fresh one
-		// for the incoming frame, so both pictures exist at once.
-		const frameTimelineMs = this.resolveFrameTimeMs(timestamp, backgroundTimelineTimestamp);
-		const crossfadeWindow = this.windowForCrossfade(frameTimelineMs);
-		const crossfadeMix = clipTransitionMixProgress(frameTimelineMs, crossfadeWindow);
-		const crossfadeKey = crossfadeWindow ? String(crossfadeWindow.boundaryMs) : null;
-		const startingCrossfade =
-			crossfadeWindow !== null && this.crossfadeWindowKey !== crossfadeKey;
 		this.retireCrossfadeIfFinished(crossfadeWindow);
 		this.crossfadeWindowKey = crossfadeKey;
 
@@ -2288,7 +2391,11 @@ export class FrameRenderer {
 			this.videoContainer.addChildAt(this.videoSprite, 0);
 			this.videoTextureUsesStartupStaging = usesStartupStaging;
 		} else if (startingCrossfade && this.videoSprite.texture) {
-			const outgoing = this.videoSprite.texture;
+			// The held picture is the private copy when there is one; otherwise the
+			// texture the sprite still points at (the WebGPU path keeps the frame alive).
+			const outgoing = heldFrameCanvas
+				? this.createTextureFromSource(heldFrameCanvas)
+				: this.videoSprite.texture;
 			const nextTexture = this.createTextureFromSource(resolvedVideoSource);
 			this.videoSprite.texture = nextTexture;
 			this.videoTextureSource = nextTexture.source as unknown as MutableVideoTextureSource;
@@ -2382,6 +2489,98 @@ export class FrameRenderer {
 		await this.renderOutput(timeMs);
 	}
 
+	/**
+	 * A texture whose source has gone missing crashes the whole render.
+	 *
+	 * Pixi reads `texture.source.alphaMode` while batching, so one orphaned sprite -
+	 * a dissolve that ended, a caption texture that was replaced, an annotation
+	 * canvas swapped mid-frame - takes the entire export down with
+	 * "Cannot read properties of null (reading 'alphaMode')". Walking the stage
+	 * before the draw and hiding any such sprite trades one wrong frame (which the
+	 * black-frame retry already catches) for a finished export, and logs exactly
+	 * which node was orphaned so the cause can be fixed instead of masked.
+	 */
+	private sanitizeStageTextures(): void {
+		// The stage is missing in renderer harnesses and while a teardown runs.
+		if (!this.app?.stage) {
+			return;
+		}
+
+		const orphans: string[] = [];
+		const visit = (container: Container): void => {
+			const children = container.children;
+			if (!children) {
+				return;
+			}
+			for (const child of children) {
+				const sprite = child instanceof Sprite ? child : null;
+				if (sprite) {
+					const texture = sprite.texture as Texture | null | undefined;
+					if (!texture || !texture.source) {
+						orphans.push(sprite.label || "sprite");
+						sprite.visible = false;
+					}
+				}
+				if (child instanceof Container) {
+					visit(child);
+				}
+			}
+		};
+		visit(this.app.stage);
+
+		if (orphans.length > 0) {
+			console.error(
+				`[FrameRenderer] Hidden ${orphans.length} sprite(s) with a destroyed texture before drawing: ${orphans.join(", ")}`,
+			);
+		}
+	}
+
+	/**
+	 * Draws the stage, degrading instead of dying.
+	 *
+	 * Filter pipelines are the most driver-sensitive part of the renderer: on a
+	 * Fedora/WebGPU report the draw threw from Pixi's bind-group code, and the
+	 * cross-dissolve case throws from `FilterSystem` when a filtered container ends
+	 * up with no texture source. Both are recoverable at the cost of the effect, so a
+	 * failing draw is retried once with every filter detached.
+	 */
+	private renderStage(): void {
+		if (!this.app) {
+			return;
+		}
+
+		this.sanitizeStageTextures();
+		if (this.filtersDisabled) {
+			this.renderStage();
+			return;
+		}
+
+		try {
+			this.app.render();
+		} catch (error) {
+			console.error(
+				"[FrameRenderer] The draw failed, retrying this frame without filters:",
+				error,
+			);
+			this.disableFiltersAfterRenderFailure();
+			this.sanitizeStageTextures();
+			this.app.render();
+		}
+	}
+
+	/** Drops every filter from the export stage, once, after a failed draw. */
+	private disableFiltersAfterRenderFailure(): void {
+		this.filtersDisabled = true;
+		if (this.videoEffectsContainer) {
+			this.videoEffectsContainer.filters = null;
+		}
+		if (this.backgroundSprite) {
+			this.backgroundSprite.filters = null;
+		}
+		for (const layer of this.videoShadowLayers) {
+			layer.container.filters = null;
+		}
+	}
 	private async renderOutput(timeMs: number): Promise<void> {
 		this.applyTransitionCoverage(timeMs * 1000);
 		if (this.hasActiveBlurAnnotations(timeMs)) {
@@ -2402,7 +2601,7 @@ export class FrameRenderer {
 				this.transitionOverlay.alpha = 0;
 			}
 
-			this.app!.render();
+			this.renderStage();
 
 			if (this.annotationContainer) {
 				this.annotationContainer.visible = annotationContainerVisible;
@@ -2416,7 +2615,7 @@ export class FrameRenderer {
 		}
 
 		this.outputCanvasOverride = null;
-		this.app!.render();
+		this.renderStage();
 	}
 
 	private updateLayout(): void {
@@ -2672,7 +2871,9 @@ export class FrameRenderer {
 			this.crossfadeSprite.destroy({ texture: false, textureSource: false });
 			this.crossfadeSprite = null;
 		}
-		this.crossfadeTexture?.destroy(true);
+		if (this.crossfadeTexture) {
+			this.retiredTextures.push(this.crossfadeTexture);
+		}
 		this.crossfadeTexture = null;
 		this.crossfadeWindowKey = null;
 
@@ -2687,6 +2888,11 @@ export class FrameRenderer {
 		this.backgroundBlurFilter?.destroy();
 
 		destroyPixiApplication(this.app, "Lightning export renderer");
+
+		for (const texture of this.retiredTextures) {
+			texturesToDestroy.add(texture);
+		}
+		this.retiredTextures = [];
 
 		for (const texture of texturesToDestroy) {
 			try {

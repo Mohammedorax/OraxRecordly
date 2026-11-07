@@ -554,6 +554,47 @@ export function useExportRunner(input: ExportRunnerInput) {
 								retriedForBlackFrames: fellBackToLegacy,
 							});
 
+							// A renderer can also fail *inside* the export and report it as a
+							// failed result rather than throwing: Pixi's batch flush threw on
+							// a destroyed texture ("Cannot read properties of null (reading
+							// 'alphaMode')") on Windows, and its bind group threw on
+							// "Cannot read properties of undefined (reading '_resourceType')"
+							// on a Fedora/Linux WebGPU run. Both are renderer breakages the
+							// legacy pipeline survives, so they get the same single retry as
+							// an initialisation failure instead of being handed to the user.
+							if (
+								!result.success &&
+								shouldFallBackToLegacyPipeline({
+									pipelineModel: activePipelineModel,
+									alreadyFellBack: fellBackToLegacy,
+									errorMessage: result.error ?? "",
+								})
+							) {
+								fellBackToLegacy = true;
+								activePipelineModel = "legacy";
+								exportedPipelineModel = "legacy";
+								exporterRef.current = null;
+								console.warn(
+									"[VideoExporter] The GPU renderer failed mid-export; retrying this export on the legacy pipeline.",
+									result.error,
+								);
+								const renderFallbackCopy = describePipelineFallbackMessage({
+									title: t(
+										"export.gpuFallbackTitle",
+										"Exporting without GPU acceleration",
+									),
+									hint: t(
+										"export.gpuFallbackHint",
+										"Hardware rendering is unavailable on this machine, so frames are rendered on the processor. The export still finishes, just more slowly.",
+									),
+								});
+								toast.info(renderFallbackCopy.title, {
+									description: renderFallbackCopy.hint,
+								});
+								setExportProgress(null);
+								return runMp4Export();
+							}
+
 							// A renderer that ran but produced only black frames yields a
 							// playable file nobody can use. Retry once on the legacy pipeline,
 							// exactly like an initialisation failure, and fall through to the

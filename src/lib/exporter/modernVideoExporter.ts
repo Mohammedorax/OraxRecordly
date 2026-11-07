@@ -1098,6 +1098,21 @@ export class ModernVideoExporter {
 			);
 		}
 
+		// A renderer that throws before the first frame is a driver/backend problem,
+		// not a project problem. The automatic legacy retry usually covers it; when
+		// even that fails, say what to do instead of leaving the user with a stack.
+		if (
+			/_resourceType|bind ?group|pixi|webgpu|webgl|shader/i.test(message) &&
+			!/VideoDecoder failure/i.test(message)
+		) {
+			guidance.add(
+				"The GPU renderer crashed before the first frame was drawn; Recordly retries the export on the software pipeline automatically.",
+			);
+			guidance.add(
+				"On Linux, updating Mesa and the GPU driver, or starting Recordly with software rendering, makes the GPU path stable again.",
+			);
+		}
+
 		if (
 			/not supported on this system|H\.264 encoding|encoder path .* is not supported|Video encoding/i.test(
 				message,
@@ -1147,6 +1162,19 @@ export class ModernVideoExporter {
 			...(failureCode ? [`Failure code: ${failureCode}`] : []),
 			...(isVideoDecodeFailure ? ["Failure stage: Input video decoding"] : []),
 			`Reason: ${message}`,
+			// The renderer crashes from inside a dependency (Pixi's bind-group code on
+			// the Linux/WebGPU report that motivated this line) are only diagnosable
+			// with the call site, so the first frames of the stack are kept.
+			...(error instanceof Error && error.stack
+				? [
+						`Stack: ${error.stack
+							.split("\n")
+							.map((line) => line.trim())
+							.filter((line) => line.length > 0)
+							.slice(1, 5)
+							.join(" <- ")}`,
+					]
+				: []),
 			`Platform: ${this.getPlatformLabel()}`,
 			`Requested backend mode: ${this.config.backendPreference ?? "auto"}`,
 			`Output: ${this.config.width}x${this.config.height} @ ${this.config.frameRate} FPS; ${(this.config.bitrate / 1_000_000).toFixed(2)} Mbps; mode=${this.config.encodingMode ?? "default"}`,
@@ -2745,6 +2773,15 @@ export class ModernVideoExporter {
 
 		if (typeof window === "undefined" || !window.electronAPI?.nativeVideoExportStart) {
 			this.lastNativeExportError = `${NATIVE_EXPORT_ENGINE_NAME} export is not available in this build.`;
+			return false;
+		}
+
+		// The native path hands H.264 Annex B to FFmpeg through WebCodecs. Linux builds
+		// of Chromium do not implement that encoder profile at all, so the attempt is
+		// skipped with the real reason instead of failing a support probe and reporting
+		// "Annex B is not supported at 1364x768", which reads like a size problem.
+		if (this.getPlatformLabel() === "linux") {
+			this.lastNativeExportError = `${NATIVE_EXPORT_ENGINE_NAME} native H.264 Annex B export is a Windows path; Linux exports use WebCodecs.`;
 			return false;
 		}
 
